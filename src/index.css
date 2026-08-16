@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #0A0A0A;
+  color: #F2F0EA;
+  font-family: 'Inter', sans-serif;
+}
+
+/* This is the critical font class that makes it look like the logo */
+.font-logo {
+  font-family: 'Russo One', sans-serif !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Remove number input spinners for cleaner PIN field */
+input[type="password"]::-webkit-outer-spin-button,
+input[type="password"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

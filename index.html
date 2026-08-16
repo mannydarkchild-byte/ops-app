@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- CORRECT TAB TITLE -->
+    <title>OPS-Warrior2100</title>
+    <!-- FORCE FAVICON TO LOAD -->
+    <link rel="icon" type="image/png" href="/logo.png?v=2" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+      <script>
+      // Expose the Supabase client globally so the console can read it
+      window.__SUPABASE__ = supabase;
+    </script>
+</body>
+</html>
