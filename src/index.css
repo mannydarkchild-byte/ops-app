@@ -4,17 +4,51 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
+/* ═══════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════ */
+html,
+body,
+#root {
   background-color: #0A0A0A;
   color: #F2F0EA;
   font-family: 'Inter', sans-serif;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
 }
 
-/* This is the critical font class that makes it look like the logo */
+body {
+  overflow-x: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent horizontal scroll on small screens */
+* {
+  min-width: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TYPOGRAPHY
+   ═══════════════════════════════════════════════════════════════ */
 .font-logo {
   font-family: 'Russo One', sans-serif !important;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FORM INPUTS — mobile safe
+   ═══════════════════════════════════════════════════════════════ */
+/* Prevent iOS Safari auto-zoom on input focus (needs 16px minimum) */
+@media screen and (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 /* Remove number input spinners for cleaner PIN field */
@@ -22,4 +56,110 @@ input[type="password"]::-webkit-outer-spin-button,
 input[type="password"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Remove iOS default input styling */
+input,
+textarea,
+select,
+button {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE UTILITIES
+   ═══════════════════════════════════════════════════════════════ */
+/* Safe area helpers for notched phones */
+.mobile-safe-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+.mobile-safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 24px);
+}
+
+/* Smooth momentum scrolling on iOS */
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TAP TARGETS
+   ═══════════════════════════════════════════════════════════════ */
+button {
+  min-height: 40px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SCROLLBAR (subtle)
+   ═══════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2A2A2A;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3A3A3A;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SELECTION
+   ═══════════════════════════════════════════════════════════════ */
+::selection {
+  background: #F5C518;
+  color: #0A0A0A;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PREVENT TEXT SELECTION GLITCH ON BUTTONS
+   ═══════════════════════════════════════════════════════════════ */
+button,
+.font-logo {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.animate-pulse-soft {
+  animation: pulseSoft 2s ease-in-out infinite;
 }
