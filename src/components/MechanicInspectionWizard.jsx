@@ -24,6 +24,10 @@ export function MechanicInspectionWizard({
   setResults,
   setRemarks,
   setPhotos,
+  step: stepProp,
+  setStep: setStepProp,
+  mode: modeProp,
+  setMode: setModeProp,
   onComplete,
   onCancel,
   busy = false,
@@ -32,9 +36,13 @@ export function MechanicInspectionWizard({
     () => (groups ? getMechanicItemsFromGroups(groups) : getMechanicInspectionItems()),
     [groups]
   );
-  const [step, setStep] = useState(0);
+  const [stepLocal, setStepLocal] = useState(0);
+  const [modeLocal, setModeLocal] = useState("walk");
+  const step = stepProp ?? stepLocal;
+  const setStep = setStepProp ?? setStepLocal;
+  const mode = modeProp ?? modeLocal;
+  const setMode = setModeProp ?? setModeLocal;
   const [showExtras, setShowExtras] = useState(false);
-  const [mode, setMode] = useState("walk"); // walk | review
 
   const doneCount = items.filter((i) => results[i.item_name]).length;
   const current = items[step];

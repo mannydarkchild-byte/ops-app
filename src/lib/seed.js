@@ -1,9 +1,12 @@
-import { saveLocal, readTable } from "./db.js";
+import { saveLocal, readTable, ensureDB } from "./db.js";
 import { WARRIOR_PARTS_CATALOG } from "./constants.js";
 import { defaultSiteSettings } from "./siteConfig.js";
 
+export const BOOTSTRAP_SITE_ID = "00000000-0000-0000-0000-000000000001";
+export const BOOTSTRAP_MACHINE_ID = "W2100-001";
+
 const DEFAULT_SITE = {
-  id: "00000000-0000-0000-0000-000000000001",
+  id: BOOTSTRAP_SITE_ID,
   name: "Malekaskraal",
   code: "MLK",
   timezone: "Africa/Johannesburg",
@@ -13,7 +16,7 @@ const DEFAULT_SITE = {
 };
 
 const DEFAULT_MACHINE = {
-  id: "W2100-001",
+  id: BOOTSTRAP_MACHINE_ID,
   site_id: DEFAULT_SITE.id,
   name: "Powerscreen Warrior 2100",
   code: "W2100",
@@ -25,16 +28,38 @@ const DEFAULT_MACHINE = {
   updated_at: new Date().toISOString(),
 };
 
+/** Local-only bootstrap rows — already on server via migration; do not push from operators */
+const LOCAL_BOOTSTRAP = {
+  sites: [BOOTSTRAP_SITE_ID],
+  machines: [BOOTSTRAP_MACHINE_ID],
+  inventory_items: WARRIOR_PARTS_CATALOG.map((p) => `INV-${p.sku}`),
+};
+
+/** Clear stale sync queue entries for offline bootstrap catalog rows */
+export async function reconcileBootstrapSyncQueue() {
+  const database = await ensureDB();
+  for (const [table, ids] of Object.entries(LOCAL_BOOTSTRAP)) {
+    for (const id of ids) {
+      const row = await database[table]?.get(id);
+      if (!row) continue;
+      if (row._sync_status !== "synced") {
+        await database[table].update(id, { _sync_status: "synced" });
+      }
+      await database.sync_queue.where({ table, record_id: id }).delete();
+    }
+  }
+}
+
 /** Ensure default site/machine exist locally for offline-first boot */
 export async function seedLocalDefaults() {
   const sites = await readTable("sites");
   if (!sites.length) {
-    await saveLocal("sites", { ...DEFAULT_SITE, _sync_status: "pending" });
+    await saveLocal("sites", { ...DEFAULT_SITE, _sync_status: "synced" }, { enqueue: false });
   }
 
   const machines = await readTable("machines");
   if (!machines.length) {
-    await saveLocal("machines", { ...DEFAULT_MACHINE, _sync_status: "pending" });
+    await saveLocal("machines", { ...DEFAULT_MACHINE, _sync_status: "synced" }, { enqueue: false });
   }
 
   const siteId = sites[0]?.id || DEFAULT_SITE.id;
@@ -44,7 +69,7 @@ export async function seedLocalDefaults() {
   if (!siteSettings.some((s) => s.site_id === siteId)) {
     const settings = defaultSiteSettings(siteId);
     settings.primary_machine_id = machineId;
-    await saveLocal("site_settings", { ...settings, _sync_status: "pending" });
+    await saveLocal("site_settings", { ...settings, _sync_status: "synced" }, { enqueue: false });
   }
   const inventory = await readTable("inventory_items");
   if (!inventory.length) {
@@ -61,8 +86,10 @@ export async function seedLocalDefaults() {
         reorder_level: 1,
         created_at: now,
         updated_at: now,
-        _sync_status: "pending",
-      });
+        _sync_status: "synced",
+      }, { enqueue: false });
     }
   }
+
+  await reconcileBootstrapSyncQueue();
 }

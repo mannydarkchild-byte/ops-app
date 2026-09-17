@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { initDB, readTable, saveLocal, getPendingCount } from "../lib/db.js";
-import { loadProfile, signIn, signOut } from "../lib/auth.js";
+import { loadProfile, signIn, signOut, readCachedAuthUser, cacheAuthUser } from "../lib/auth.js";
 import { runSync, scheduleSync, initSyncListeners, onSyncStateChange } from "../lib/sync/engine.js";
 import { syncMachineLocks } from "../lib/machineLock.js";
 import { fetchMachineStatus, isBlockedByOther } from "../lib/machineStatus.js";
@@ -47,26 +47,36 @@ export function OpsProvider({ children }) {
   const activeMachineRef = useRef(null);
 
   const refreshLocal = useCallback(async () => {
-    const [
-      s, m, p, sh, ev, ex, ins, iss, msgs, ws, fl, subs, hr, bd, mj, inv, settings,
-    ] = await Promise.all([
-      readTable("sites"), readTable("machines"), readTable("profiles"),
-      readTable("shifts"), readTable("events"), readTable("expenses"),
-      readTable("inspections"), readTable("issues"), readTable("issue_messages"),
-      readTable("work_sessions"), readTable("fuel_logs"), readTable("shift_submissions"),
-      readTable("machine_hour_readings"), readTable("breakdowns"),
-      readTable("maintenance_jobs"), readTable("inventory_items"), readTable("site_settings"),
-    ]);
-    setSites(s); setMachines(m); setProfiles(p);
-    setShifts(sh); setEvents(ev); setExpenses(ex); setInspections(ins);
-    setIssues(iss); setIssueMessages(msgs); setWorkSessions(ws); setFuelLogs(fl);
-    setSubmissions(subs); setHourReadings(hr); setBreakdowns(bd);
-    setMaintenanceJobs(mj); setInventoryItems(inv); setSiteSettings(settings);
-    const pending = await getPendingCount();
-    setSyncState((prev) => ({ ...prev, pending }));
-    if (activeMachineRef.current?.id) {
-      const status = await fetchMachineStatus(activeMachineRef.current.id);
-      setMachineStatus(status);
+    try {
+      const [
+        s, m, p, sh, ev, ex, ins, iss, msgs, ws, fl, subs, hr, bd, mj, inv, settings,
+      ] = await Promise.all([
+        readTable("sites"), readTable("machines"), readTable("profiles"),
+        readTable("shifts"), readTable("events"), readTable("expenses"),
+        readTable("inspections"), readTable("issues"), readTable("issue_messages"),
+        readTable("work_sessions"), readTable("fuel_logs"), readTable("shift_submissions"),
+        readTable("machine_hour_readings"), readTable("breakdowns"),
+        readTable("maintenance_jobs"), readTable("inventory_items"), readTable("site_settings"),
+      ]);
+      setSites(s); setMachines(m); setProfiles(p);
+      setShifts(sh); setEvents(ev); setExpenses(ex); setInspections(ins);
+      setIssues(iss); setIssueMessages(msgs); setWorkSessions(ws); setFuelLogs(fl);
+      setSubmissions(subs); setHourReadings(hr); setBreakdowns(bd);
+      setMaintenanceJobs(mj); setInventoryItems(inv); setSiteSettings(settings);
+      const pending = await getPendingCount();
+      setSyncState((prev) => ({
+        ...prev,
+        pending,
+        status: navigator.onLine ? prev.status : "offline",
+      }));
+      if (activeMachineRef.current?.id) {
+        try {
+          const status = await fetchMachineStatus(activeMachineRef.current.id);
+          setMachineStatus(status);
+        } catch {}
+      }
+    } catch (e) {
+      console.warn("refreshLocal:", e);
     }
   }, []);
 
@@ -83,7 +93,10 @@ export function OpsProvider({ children }) {
   useEffect(() => { activeMachineRef.current = activeMachine; }, [activeMachine]);
 
   const machineRun = useMemo(
-    () => shifts.find((s) => s.machine_id === activeMachine?.id && s.shift_status === SHIFT.RUNNING),
+    () => shifts.find((s) =>
+      s.machine_id === activeMachine?.id &&
+      (s.shift_status === SHIFT.RUNNING || s.status === SHIFT.RUNNING)
+    ),
     [shifts, activeMachine]
   );
 
@@ -136,7 +149,9 @@ export function OpsProvider({ children }) {
           setAuthError("This account has been deactivated. Contact your admin.");
           return;
         }
-        setUser({ ...s.user, ...profile });
+        const merged = { ...s.user, ...profile };
+        setUser(merged);
+        cacheAuthUser(s.user.id, profile, s.user.email);
       }
     } catch (e) {
       setAuthError(e.message || "Sign in failed");
@@ -162,38 +177,86 @@ export function OpsProvider({ children }) {
     return res;
   }, [refreshLocal, activeSite]);
 
-  // Auth bootstrap
+  // Auth bootstrap — must never hang on "Loading…" when offline
   useEffect(() => {
     let mounted = true;
+
+    const applyUser = (s, profile) => {
+      if (!mounted || !s || !profile) return;
+      if (profile.active === false) return false;
+      setSession(s);
+      setUser({ ...s.user, ...profile });
+      cacheAuthUser(s.user.id, profile, s.user.email);
+      return true;
+    };
+
     (async () => {
-      await initDB();
-      await seedLocalDefaults();
-      const { data: { session: s } } = await supabase.auth.getSession();
-      if (s && mounted) {
-        setSession(s);
-        const profile = await loadProfile(s.user.id, s.user.email);
-        if (profile.active === false) {
-          await signOut();
-          setUser(null);
-          setSession(null);
-          return;
+      try {
+        await initDB();
+        await seedLocalDefaults();
+
+        let session = null;
+        try {
+          const { data: { session: s } } = await supabase.auth.getSession();
+          session = s;
+        } catch {}
+
+        if (session?.user) {
+          try {
+            const profile = await loadProfile(session.user.id, session.user.email);
+            if (profile.active === false) {
+              await signOut();
+              setUser(null);
+              setSession(null);
+            } else {
+              applyUser(session, profile);
+            }
+          } catch {
+            const cached = readCachedAuthUser();
+            if (cached?.userId === session.user.id) {
+              applyUser(session, cached.profile);
+            }
+          }
+        } else if (!navigator.onLine) {
+          const cached = readCachedAuthUser();
+          if (cached?.profile) {
+            setUser({ id: cached.userId, email: cached.email, ...cached.profile });
+          }
         }
-        setUser({ ...s.user, ...profile });
+
+        if (mounted) {
+          setSyncState((prev) => ({
+            ...prev,
+            status: navigator.onLine ? prev.status : "offline",
+          }));
+        }
+      } catch (e) {
+        console.warn("Auth bootstrap:", e);
+        const cached = readCachedAuthUser();
+        if (cached?.profile && mounted) {
+          setUser({ id: cached.userId, email: cached.email, ...cached.profile });
+        }
+      } finally {
+        if (mounted) setLoading(false);
       }
-      if (mounted) setLoading(false);
     })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        setSession(s);
-        const profile = await loadProfile(s.user.id, s.user.email);
-        if (profile.active === false) {
-          await signOut();
-          setUser(null);
-          setSession(null);
-          return;
+        if (!s?.user) return;
+        try {
+          const profile = await loadProfile(s.user.id, s.user.email);
+          if (profile.active === false) {
+            await signOut();
+            setUser(null);
+            setSession(null);
+            return;
+          }
+          applyUser(s, profile);
+        } catch {
+          const cached = readCachedAuthUser();
+          if (cached?.userId === s.user.id) applyUser(s, cached.profile);
         }
-        setUser({ ...s.user, ...profile });
       } else if (event === "SIGNED_OUT") {
         setSession(null);
         setUser(null);
@@ -210,10 +273,19 @@ export function OpsProvider({ children }) {
     let cleanupSync = () => {};
 
     (async () => {
-      await refreshLocal();
-      await runSync({ silent: true, siteId: activeSite?.id });
-      await refreshLocal();
-      cleanupSync = initSyncListeners({ siteId: activeSite?.id });
+      try {
+        await refreshLocal();
+        if (navigator.onLine) {
+          await runSync({ silent: true, siteId: activeSite?.id });
+          await refreshLocal();
+        } else {
+          setSyncState((prev) => ({ ...prev, status: "offline" }));
+        }
+        cleanupSync = initSyncListeners({ siteId: activeSite?.id });
+      } catch (e) {
+        console.warn("Data bootstrap:", e);
+        try { await refreshLocal(); } catch {}
+      }
     })();
 
     const unsub = onSyncStateChange((state) => {

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
+import { useInspectionDraft } from "../hooks/useInspectionDraft.js";
+import { mechanicDraftKey } from "../lib/inspectionDraft.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { RequestPartsModal } from "../components/RequestPartsModal.jsx";
 import { MechanicInspectionWizard } from "../components/MechanicInspectionWizard.jsx";
@@ -42,9 +44,27 @@ export function MechanicApp() {
 
   const [inspectionFlow, setInspectionFlow] = useState(null);
   const [inspectionMachineId, setInspectionMachineId] = useState("");
-  const [inspectionResults, setInspectionResults] = useState({});
-  const [inspectionRemarks, setInspectionRemarks] = useState({});
-  const [inspectionPhotos, setInspectionPhotos] = useState({});
+
+  const mechanicDraftStorageKey = useMemo(
+    () => mechanicDraftKey(user?.id, inspectionMachineId),
+    [user?.id, inspectionMachineId]
+  );
+
+  const {
+    results: inspectionResults,
+    setResults: setInspectionResults,
+    remarks: inspectionRemarks,
+    setRemarks: setInspectionRemarks,
+    photos: inspectionPhotos,
+    setPhotos: setInspectionPhotos,
+    step: inspectionStep,
+    setStep: setInspectionStep,
+    mode: inspectionMode,
+    setMode: setInspectionMode,
+    clearDraft: clearMechanicDraft,
+  } = useInspectionDraft(mechanicDraftStorageKey, {
+    enabled: inspectionFlow === "wizard",
+  });
 
   const showAlert = (title, message) => setAlert({ isOpen: true, title, message, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -95,9 +115,6 @@ export function MechanicApp() {
   };
 
   const openNewInspection = () => {
-    setInspectionResults({});
-    setInspectionRemarks({});
-    setInspectionPhotos({});
     const defaultId = siteMachines[0]?.id || "";
     setInspectionMachineId(defaultId);
     setInspectionFlow(siteMachines.length > 1 ? "pick-machine" : "wizard");
@@ -125,9 +142,7 @@ export function MechanicApp() {
         photos: inspectionPhotos,
       });
       setInspectionFlow(null);
-      setInspectionResults({});
-      setInspectionRemarks({});
-      setInspectionPhotos({});
+      clearMechanicDraft();
       await refreshLocal();
       showAlert("Inspection saved", "Full inspection recorded. Open it below to view the report.");
     } catch (e) {
@@ -389,8 +404,12 @@ export function MechanicApp() {
           setResults={setInspectionResults}
           setRemarks={setInspectionRemarks}
           setPhotos={setInspectionPhotos}
+          step={inspectionStep}
+          setStep={setInspectionStep}
+          mode={inspectionMode}
+          setMode={setInspectionMode}
           onComplete={handleSubmitInspection}
-          onCancel={() => setInspectionFlow(null)}
+          onCancel={() => { clearMechanicDraft(); setInspectionFlow(null); }}
           busy={busy}
         />
       )}

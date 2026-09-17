@@ -1,4 +1,5 @@
 import { getPendingCount, getSyncMeta, ensureDB } from "../db.js";
+import { syncMachineLocks } from "../machineLock.js";
 import { pushPendingQueue } from "./push.js";
 import { pullIncremental, pullBootstrap } from "./pull.js";
 import { uploadPendingMedia } from "../media.js";
@@ -53,6 +54,8 @@ export async function runSync({ silent = true, forceBootstrap = false, siteId = 
     const media = await uploadPendingMedia();
     state.mediaUploaded = media.uploaded;
     if (media.errors?.length) state.errors.push(...media.errors);
+
+    await syncMachineLocks();
 
     const push = await pushPendingQueue();
     state.pushed = push.pushed;

@@ -21,7 +21,7 @@ export function OperatorStepBar({ currentStep }) {
                   : "bg-[#141414] border-[#2A2A2A] text-[#F2F0EA]/30"
             }`}>
             <div className="text-base leading-none">{done ? "✓" : step.icon}</div>
-            <div className="font-logo text-[8px] tracking-wider mt-1">{step.label}</div>
+            <div className="font-logo text-[10px] sm:text-xs tracking-wider mt-1">{step.label}</div>
           </div>
         );
       })}

@@ -51,7 +51,7 @@ export async function ensureSiteSettings(siteId) {
   let row = all.find((s) => s.site_id === siteId);
   if (!row) {
     row = defaultSiteSettings(siteId);
-    await saveLocal("site_settings", row);
+    await saveLocal("site_settings", { ...row, _sync_status: "synced" }, { enqueue: false });
   }
   return resolveSiteSettings(row);
 }

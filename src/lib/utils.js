@@ -1,4 +1,4 @@
-import { ISSUE, PRESTART_INSPECTION_ITEMS, PRIMARY_MACHINE_CODE, ROLES } from "./constants.js";
+import { ISSUE, PRESTART_INSPECTION_ITEMS, PRIMARY_MACHINE_CODE, ROLES, SHIFT } from "./constants.js";
 
 export const nowISO = () => new Date().toISOString();
 export const money = (n) => `R${Number(n || 0).toFixed(2)}`;
@@ -52,6 +52,15 @@ export function suggestSupervisor(supervisors, at = new Date()) {
     supervisors.find((s) => s.shift_band === "any" || !s.shift_band) ||
     supervisors[0]
   );
+}
+
+/** RUNNING shift that belongs to the operator's current clock-in session */
+export function shiftBelongsToWorkSession(shift, workSession, userId) {
+  if (!shift || !workSession || !userId) return false;
+  const status = shift.shift_status || shift.status;
+  if (status !== SHIFT.RUNNING) return false;
+  if (shift.operator_id !== userId) return false;
+  return new Date(shift.started_at).getTime() >= new Date(workSession.clock_in).getTime();
 }
 
 /** Pre-start done for current work session (persisted in inspections, survives refresh) */

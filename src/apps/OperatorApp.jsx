@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { useLiveTimer } from "../hooks/useLiveTimer.js";
+import { useInspectionDraft } from "../hooks/useInspectionDraft.js";
+import { prestartDraftKey } from "../lib/inspectionDraft.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { PreStartInspectionChecklist } from "../components/PreStartInspectionChecklist.jsx";
 import { OperatorActionBar } from "../components/OperatorActionBar.jsx";
@@ -10,7 +12,7 @@ import { FormSection } from "../components/ui/FormSection.jsx";
 import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
 import { STOP_REASONS, ISSUE, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS } from "../lib/constants.js";
-import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, stopReasonToIssueArea } from "../lib/utils.js";
+import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea } from "../lib/utils.js";
 import { shiftDowntimeMinutes, formatDurationSeconds } from "../lib/shiftMetrics.js";
 import { SupervisorPicker, SupervisorWhatsAppButtons } from "../components/SupervisorPicker.jsx";
 import * as wf from "../services/workflows.js";
@@ -29,10 +31,6 @@ export function OperatorApp() {
     () => getSettingsForSite(activeSite?.id),
     [getSettingsForSite, activeSite?.id]
   );
-
-  const [inspectionResults, setInspectionResults] = useState({});
-  const [inspectionRemarks, setInspectionRemarks] = useState({});
-  const [inspectionPhotos, setInspectionPhotos] = useState({});
 
   const [startHour, setStartHour] = useState("");
   const [startPhotoRef, setStartPhotoRef] = useState(null);
@@ -60,21 +58,10 @@ export function OperatorApp() {
   const [endPhotoError, setEndPhotoError] = useState(false);
 
   const [submittedShift, setSubmittedShift] = useState(null);
-  const [selectedSupervisorId, setSelectedSupervisorId] = useState("");
+  const [clockInSupervisorId, setClockInSupervisorId] = useState("");
 
   const [alert, setAlert] = useState({ isOpen: false });
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
-
-  const runningSeconds = useLiveTimer(machineRun?.started_at, !!machineRun);
-  const operatorSeconds = useLiveTimer(workSession?.clock_in, workSession?.status === "active");
-  const downtimeSeconds = useLiveTimer(downtime?.stopped_at, !!downtime);
-  const openingMeter = machineRun ? Number(machineRun.start_hour_meter).toFixed(1) : Number(hourMeter).toFixed(1);
-  const fuelMeterHint = machineRun ? openingMeter : openingMeter;
-
-  const shiftDowntimeMin = useMemo(
-    () => (machineRun ? shiftDowntimeMinutes(events, machineRun.id) : 0),
-    [events, machineRun]
-  );
 
   const prestartDone = useMemo(
     () => hasCompletedPrestart(
@@ -82,6 +69,45 @@ export function OperatorApp() {
     ),
     [inspections, user?.id, activeMachine?.id, workSession?.clock_in, siteConfig.prestart_items.length]
   );
+
+  /** Shift for this clock-in only — never skip pre-start for stale or in-progress RUNNING rows */
+  const sessionShift = useMemo(() => {
+    if (!machineRun || !workSession || !user?.id || !prestartDone) return null;
+    return shiftBelongsToWorkSession(machineRun, workSession, user.id) ? machineRun : null;
+  }, [machineRun, workSession, user?.id, prestartDone]);
+
+  const sessionDowntime = useMemo(() => {
+    if (!sessionShift) return null;
+    return events.find((e) => e.shift_id === sessionShift.id && e.type === "STOP" && e.status === "open") || null;
+  }, [events, sessionShift]);
+
+  const runningSeconds = useLiveTimer(sessionShift?.started_at, !!sessionShift);
+  const operatorSeconds = useLiveTimer(workSession?.clock_in, workSession?.status === "active");
+  const downtimeSeconds = useLiveTimer(sessionDowntime?.stopped_at, !!sessionDowntime);
+  const openingMeter = sessionShift ? Number(sessionShift.start_hour_meter).toFixed(1) : Number(hourMeter).toFixed(1);
+  const fuelMeterHint = sessionShift ? openingMeter : openingMeter;
+
+  const shiftDowntimeMin = useMemo(
+    () => (sessionShift ? shiftDowntimeMinutes(events, sessionShift.id) : 0),
+    [events, sessionShift]
+  );
+
+  const prestartDraftStorageKey = useMemo(
+    () => prestartDraftKey(user?.id, activeMachine?.id, workSession?.clock_in),
+    [user?.id, activeMachine?.id, workSession?.clock_in]
+  );
+
+  const {
+    results: inspectionResults,
+    setResults: setInspectionResults,
+    remarks: inspectionRemarks,
+    setRemarks: setInspectionRemarks,
+    photos: inspectionPhotos,
+    setPhotos: setInspectionPhotos,
+    clearDraft: clearPrestartDraft,
+  } = useInspectionDraft(prestartDraftStorageKey, {
+    enabled: !!workSession && !prestartDone,
+  });
 
   const inboxCount = useMemo(() =>
     issues.filter((i) => i.reporter_id === user?.id && i.status !== ISSUE.RESOLVED).length,
@@ -98,25 +124,48 @@ export function OperatorApp() {
     [siteSupervisors, workSession?.clock_in]
   );
 
-  const blocked = machineBlocked && !machineRun && !downtime;
+  const shiftSupervisor = useMemo(() => {
+    if (workSession?.assigned_supervisor_id) {
+      return siteSupervisors.find((s) => s.id === workSession.assigned_supervisor_id) || {
+        id: workSession.assigned_supervisor_id,
+        name: workSession.assigned_supervisor_name || "Supervisor",
+      };
+    }
+    // Legacy sessions clocked in before supervisor-at-clock-in
+    if (workSession && suggestedSupervisor) return suggestedSupervisor;
+    return null;
+  }, [workSession, siteSupervisors, suggestedSupervisor]);
+
+  useEffect(() => {
+    if (!workSession && suggestedSupervisor?.id && !clockInSupervisorId) {
+      setClockInSupervisorId(suggestedSupervisor.id);
+    }
+  }, [workSession, suggestedSupervisor?.id, clockInSupervisorId]);
+
+  const blocked = machineBlocked && !sessionShift && !sessionDowntime;
 
   const currentStep = useMemo(() => {
     if (submittedShift) return "end";
-    if (machineRun || downtime) return "run";
+    if (sessionShift || sessionDowntime) return "run";
     if (workSession && prestartDone) return "start";
     if (workSession) return "inspect";
     return "clock";
-  }, [submittedShift, machineRun, downtime, workSession, prestartDone]);
+  }, [submittedShift, sessionShift, sessionDowntime, workSession, prestartDone]);
 
   const handleClockIn = async () => {
     if (blocked) {
       showAlert("Machine In Use", `${machineBlocked.operator_name || "Another operator"} is running ${activeMachine?.name}.`, "warning");
       return;
     }
+    const sup = siteSupervisors.find((s) => s.id === clockInSupervisorId);
+    if (!sup) {
+      showAlert("Select Supervisor", "Choose who is supervising your shift before clocking in.", "warning");
+      return;
+    }
     try {
-      await wf.clockIn(user, activeMachine, activeSite);
+      await wf.clockIn(user, activeMachine, activeSite, { assignedSupervisor: sup });
       await refreshLocal();
-      showAlert("Clocked In", `Welcome ${user.name}! Complete pre-start inspection next.`, "success");
+      showAlert("Clocked In", `Welcome ${user.name}! Supervisor: ${sup.name}. Complete pre-start next.`, "success");
     } catch (e) { showAlert("Error", e.message, "error"); }
   };
 
@@ -133,9 +182,7 @@ export function OperatorApp() {
       setShowEarlyClockOut(false);
       setEarlyClockOutReason("");
       setEarlyClockOutNote("");
-      setInspectionResults({});
-      setInspectionRemarks({});
-      setInspectionPhotos({});
+      clearPrestartDraft();
       await refreshLocal();
       showAlert("Clocked Out", "Your time on site was recorded. No shift was started.", "success");
     } catch (e) {
@@ -148,9 +195,7 @@ export function OperatorApp() {
       await wf.completeInspection(user, activeMachine, activeSite, {
         results: inspectionResults, remarks: inspectionRemarks, photos: inspectionPhotos,
       });
-      setInspectionResults({});
-      setInspectionRemarks({});
-      setInspectionPhotos({});
+      clearPrestartDraft();
       await refreshLocal();
       showAlert("Inspection Complete", "Pre-start saved. Tap Start Machine below.", "success");
     } catch (e) { showAlert("Incomplete", e.message, "warning"); }
@@ -167,6 +212,7 @@ export function OperatorApp() {
         hourMeter: startHour,
         photoRef: startPhotoRef,
         verifiedShifts: shifts.filter((s) => s.machine_id === activeMachine?.id),
+        workSessionClockIn: workSession?.clock_in,
       });
       setStartHour(""); setStartPhotoRef(null); setStartPhotoPreview(null);
       await refreshLocal();
@@ -178,7 +224,7 @@ export function OperatorApp() {
     const reason = stopReason;
     const note = stopNote;
     try {
-      await wf.stopMachine(user, activeMachine, activeSite, machineRun, { reason, note });
+      await wf.stopMachine(user, activeMachine, activeSite, sessionShift, { reason, note });
       setShowStop(false); setStopReason(""); setStopNote("");
       await refreshLocal();
       showAlert("Machine Stopped", reason, "info");
@@ -194,7 +240,7 @@ export function OperatorApp() {
 
   const handleRestart = async () => {
     try {
-      await wf.restartMachine(user, activeMachine, activeSite, machineRun, downtime, { note: restartNote });
+      await wf.restartMachine(user, activeMachine, activeSite, sessionShift, sessionDowntime, { note: restartNote });
       setShowRestart(false); setRestartNote("");
       await refreshLocal();
       showAlert("Restarted", "Machine running again.", "success");
@@ -202,9 +248,9 @@ export function OperatorApp() {
   };
 
   const handleEndDay = async () => {
-    const sup = siteSupervisors.find((s) => s.id === selectedSupervisorId);
-    if (!sup) {
-      showAlert("Select Supervisor", "Choose who is supervising this shift.", "warning");
+    const sup = shiftSupervisor;
+    if (!sup?.id) {
+      showAlert("No Supervisor", "This shift has no supervisor assigned. Clock in again tomorrow with a supervisor selected.", "warning");
       return;
     }
     if (!endPhotoRef) {
@@ -213,7 +259,7 @@ export function OperatorApp() {
       return;
     }
     try {
-      const { ended } = await wf.endMachineDay(user, activeMachine, activeSite, machineRun, {
+      const { ended } = await wf.endMachineDay(user, activeMachine, activeSite, sessionShift, {
         endHour, photoRef: endPhotoRef, assignedSupervisor: sup,
       });
       if (workSession) await wf.clockOut(user, workSession, { note: "End of machine day" });
@@ -221,14 +267,16 @@ export function OperatorApp() {
       setShowRestart(false);
       setShowStop(false);
       setEndHour(""); setEndPhotoRef(null); setEndPhotoPreview(null);
-      setSelectedSupervisorId("");
       setSubmittedShift(ended);
       await refreshLocal();
     } catch (e) { showAlert("Error", e.message, "error"); }
   };
 
   const openEndDay = () => {
-    if (suggestedSupervisor?.id) setSelectedSupervisorId(suggestedSupervisor.id);
+    if (!shiftSupervisor?.id) {
+      showAlert("No Supervisor", "No supervisor was assigned at clock-in. Contact your supervisor or admin.", "warning");
+      return;
+    }
     setShowEndDay(true);
   };
 
@@ -236,13 +284,14 @@ export function OperatorApp() {
 
   const headerContext = useMemo(() => {
     const parts = [activeSite?.name, activeMachine?.name].filter(Boolean);
+    if (shiftSupervisor?.name) parts.push(`Sup: ${shiftSupervisor.name}`);
     if (workSession) {
       parts.push(`${Math.floor(operatorSeconds / 3600)}h ${Math.floor((operatorSeconds % 3600) / 60)}m on site`);
     }
     return parts.join(" · ");
-  }, [activeSite?.name, activeMachine?.name, workSession, operatorSeconds]);
+  }, [activeSite?.name, activeMachine?.name, shiftSupervisor?.name, workSession, operatorSeconds]);
 
-  const machineStatus = machineRun ? "running" : downtime ? "stopped" : null;
+  const machineStatus = sessionShift ? "running" : sessionDowntime ? "stopped" : null;
 
   return (
     <AppPage
@@ -250,6 +299,7 @@ export function OperatorApp() {
       context={headerContext}
       showSite={false}
       maxWidth="max-w-2xl"
+      outdoor
       alert={<AlertModal {...alert} confirmText="OK" />}
       banner={blocked && !submittedShift ? (
         <div className="bg-[#EF4444]/10 border-b border-[#EF4444]/30 px-4 py-2.5">
@@ -260,6 +310,12 @@ export function OperatorApp() {
       ) : null}
     >
         <OperatorStepBar currentStep={currentStep} />
+
+        {!submittedShift && (activeSite?.name || activeMachine?.name) && (
+          <p className="sm:hidden font-body text-xs text-[#F2F0EA]/80 mb-3 text-center truncate px-1">
+            {[activeSite?.name, activeMachine?.name].filter(Boolean).join(" · ")}
+          </p>
+        )}
 
         {workSession && !submittedShift && (
           <OperatorActionBar
@@ -312,15 +368,25 @@ export function OperatorApp() {
         {!submittedShift && (
           <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-5 sm:p-6 shadow-lg">
             {!workSession && (
-              <FormSection step={1} title="Clock in on site" description="Confirm you are on site and ready to begin today's shift." accent="#22C55E">
-                <button type="button" onClick={handleClockIn} disabled={blocked}
-                  className="w-full bg-[#22C55E] text-black py-5 rounded-2xl font-logo font-bold text-xl tracking-wider active:scale-95 disabled:opacity-40">
-                  ⏱ CLOCK IN
-                </button>
-              </FormSection>
+              <>
+                <FormSection step={1} title="Supervisor on duty" description="Select who will verify your shift today — required before clock-in." accent="#F5C518">
+                  <SupervisorPicker
+                    supervisors={siteSupervisors}
+                    value={clockInSupervisorId}
+                    onChange={setClockInSupervisorId}
+                    suggestedId={suggestedSupervisor?.id}
+                  />
+                </FormSection>
+                <FormSection step={2} title="Clock in on site" description="Confirm you are on site and ready to begin today's shift." accent="#22C55E">
+                  <button type="button" onClick={handleClockIn} disabled={blocked || !clockInSupervisorId}
+                    className="w-full bg-[#22C55E] text-black py-5 rounded-2xl font-logo font-bold text-xl tracking-wider active:scale-95 disabled:opacity-40">
+                    ⏱ CLOCK IN
+                  </button>
+                </FormSection>
+              </>
             )}
 
-            {workSession && !prestartDone && !machineRun && !downtime && !blocked && (
+            {workSession && !prestartDone && !sessionShift && !sessionDowntime && (
               <>
                 <PreStartInspectionChecklist
                   items={siteConfig.prestart_items}
@@ -339,21 +405,7 @@ export function OperatorApp() {
               </>
             )}
 
-            {workSession && blocked && !machineRun && !prestartDone && (
-              <div className="text-center py-8">
-                <div className="text-5xl mb-4">🔒</div>
-                <p className="font-body text-sm text-[#F2F0EA]/60 mb-4">{machineBlocked.operator_name} is running this machine.</p>
-                <button
-                  type="button"
-                  onClick={() => setShowEarlyClockOut(true)}
-                  className="w-full border border-[#2A2A2A] text-[#F2F0EA]/60 py-3 rounded-xl font-logo text-xs tracking-wider"
-                >
-                  CLOCK OUT — NOT STARTING TODAY
-                </button>
-              </div>
-            )}
-
-            {workSession && prestartDone && !machineRun && !downtime && !blocked && (
+            {workSession && prestartDone && !sessionShift && !sessionDowntime && !blocked && (
               <>
                 <FormSection step={3} title="Opening hour meter" description={`Pre-start complete. Photo of meter is mandatory. Last verified reading: ${hourMeter}h.`} accent="#22C55E">
                   <MeterPhoto
@@ -377,7 +429,7 @@ export function OperatorApp() {
               </>
             )}
 
-            {machineRun && !downtime && (
+            {sessionShift && !sessionDowntime && (
               <FormSection step={4} title="Machine running" description="Billable hours come from meter at end of day — not this timer." accent="#22C55E">
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   <div className="bg-[#141414] rounded-xl p-3 text-center">
@@ -399,8 +451,8 @@ export function OperatorApp() {
               </FormSection>
             )}
 
-            {machineRun && downtime && (
-              <FormSection step={4} title="Machine stopped" description={`Reason: ${downtime.reason}. Restart when ready, or End Day if shift is over.`} accent="#EF4444">
+            {sessionShift && sessionDowntime && (
+              <FormSection step={4} title="Machine stopped" description={`Reason: ${sessionDowntime.reason}. Restart when ready, or End Day if shift is over.`} accent="#EF4444">
                 <p className="font-logo text-2xl text-[#F2F0EA]/80 mb-4">{Math.floor(downtimeSeconds / 60)} min downtime</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button type="button" onClick={() => setShowRestart(true)} className="bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold active:scale-95">▶ RESTART</button>
@@ -430,7 +482,7 @@ export function OperatorApp() {
         </Modal>
       )}
       {showFuel && (
-        <FuelModal onClose={() => setShowFuel(false)} currentMeter={fuelMeterHint} user={user} machine={activeMachine} site={activeSite} shiftId={machineRun?.id} onDone={refreshLocal} />
+        <FuelModal onClose={() => setShowFuel(false)} currentMeter={fuelMeterHint} user={user} machine={activeMachine} site={activeSite} shiftId={sessionShift?.id} onDone={refreshLocal} />
       )}
       {showInbox && (
         <IssueInboxModal onClose={() => setShowInbox(false)} user={user} issues={issues} issueMessages={issueMessages} onDone={refreshLocal} scope="mine" machines={activeMachine ? [activeMachine] : []} />
@@ -484,15 +536,11 @@ export function OperatorApp() {
       )}
       {showEndDay && (
         <Modal title="END DAY — SUBMIT SHIFT" color="yellow" onClose={() => setShowEndDay(false)}>
-          <FormSection step={1} title="Supervisor on duty" description="Who will verify this shift today?" accent="#F5C518">
-            <SupervisorPicker
-              supervisors={siteSupervisors}
-              value={selectedSupervisorId}
-              onChange={setSelectedSupervisorId}
-              suggestedId={suggestedSupervisor?.id}
-            />
-          </FormSection>
-          <FormSection step={2} title="Closing hour meter" description="Photo of meter is mandatory. Enter reading from the photo." accent="#F5C518">
+          <div className="mb-4 px-4 py-3 rounded-xl bg-[#F5C518]/10 border border-[#F5C518]/40">
+            <p className="font-logo text-[10px] text-[#F5C518] tracking-wider mb-1">SUPERVISOR FOR THIS SHIFT</p>
+            <p className="font-logo text-base text-[#F2F0EA]">{shiftSupervisor?.name || "—"}</p>
+          </div>
+          <FormSection step={1} title="Closing hour meter" description="Photo of meter is mandatory. Enter reading from the photo." accent="#F5C518">
             <MeterPhoto
               value={endHour}
               onValue={setEndHour}
@@ -501,8 +549,8 @@ export function OperatorApp() {
               showPhotoError={endPhotoError}
             />
           </FormSection>
-          <button type="button" onClick={handleEndDay} disabled={!selectedSupervisorId || !endHour || !endPhotoRef}
-            className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40">
+          <button type="button" onClick={handleEndDay} disabled={!shiftSupervisor?.id || !endHour || !endPhotoRef}
+            className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold text-base disabled:opacity-40">
             SUBMIT & CLOCK OUT
           </button>
         </Modal>

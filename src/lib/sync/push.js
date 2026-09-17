@@ -3,6 +3,23 @@ import { supabase } from "../supabase.js";
 import { ALLOWED_COLUMNS } from "../constants.js";
 import { resolveMediaRefsInRecord } from "../media.js";
 import { uploadPendingMedia } from "../media.js";
+import { BOOTSTRAP_MACHINE_ID, BOOTSTRAP_SITE_ID } from "../seed.js";
+
+const CATALOG_TABLES = new Set(["sites", "machines", "inventory_items"]);
+const CATALOG_WRITE_ROLES = new Set(["admin", "manager"]);
+const BOOTSTRAP_IDS = {
+  sites: new Set([BOOTSTRAP_SITE_ID]),
+  machines: new Set([BOOTSTRAP_MACHINE_ID]),
+};
+
+async function shouldSkipCatalogPush(table, recordId) {
+  if (!CATALOG_TABLES.has(table)) return false;
+  if (BOOTSTRAP_IDS[table]?.has(recordId)) return true;
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const profile = session?.user?.id ? await getDB().profiles.get(session.user.id) : null;
+  return !CATALOG_WRITE_ROLES.has(profile?.role);
+}
 
 function buildPayload(table, row) {
   const allowed = ALLOWED_COLUMNS[table];
@@ -38,6 +55,12 @@ export async function pushOneQueueItem(item) {
   if (resolved.photo_ref && !resolved.photo) resolved.photo = resolved.photo_ref;
   if (resolved.media_ref && !resolved.media_url) resolved.media_url = resolved.media_ref;
   if (resolved.supervisor_signature_ref && !resolved.supervisor_signature) resolved.supervisor_signature = resolved.supervisor_signature_ref;
+  if (await shouldSkipCatalogPush(item.table, item.record_id)) {
+    await db[item.table].update(item.record_id, { _sync_status: "synced" });
+    await db.sync_queue.delete(item.queue_id);
+    return { ok: true, skipped: true };
+  }
+
   const payload = buildPayload(item.table, resolved);
 
   const { error } = await supabase.from(item.table).upsert(payload, { onConflict: "id" });

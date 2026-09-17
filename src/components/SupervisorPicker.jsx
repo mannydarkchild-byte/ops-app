@@ -14,7 +14,7 @@ export function SupervisorPicker({ supervisors, value, onChange, suggestedId = n
 
   return (
     <div className="space-y-2">
-      <p className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider mb-2">WHO IS SUPERVISING THIS SHIFT?</p>
+      <p className="font-logo text-xs text-[#F2F0EA]/90 tracking-wider mb-2">WHO IS SUPERVISING THIS SHIFT?</p>
       {supervisors.map((sup) => {
         const selected = value === sup.id;
         const suggested = sup.id === suggestedId;
@@ -30,8 +30,8 @@ export function SupervisorPicker({ supervisors, value, onChange, suggestedId = n
           >
             <div className="flex justify-between items-start gap-2">
               <div>
-                <p className="font-logo text-sm text-[#F2F0EA]">{sup.name}</p>
-                <p className="font-body text-[10px] text-[#F2F0EA]/50 mt-0.5">
+                <p className="font-logo text-base text-[#F2F0EA]">{sup.name}</p>
+                <p className="font-body text-xs text-[#F2F0EA]/80 mt-0.5">
                   {BAND_LABEL[sup.shift_band] || BAND_LABEL.any}
                   {suggested && !selected && <span className="text-[#F5C518] ml-2">· suggested</span>}
                 </p>

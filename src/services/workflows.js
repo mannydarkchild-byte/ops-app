@@ -8,14 +8,19 @@ import { makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
 import { getPrestartConfigForSite, getInspectionConfigForSite } from "../lib/siteConfig.js";
 import { fetchMachineStatus, isBlockedByOther } from "../lib/machineStatus.js";
-import { meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
-export async function clockIn(user, machine, site) {
+import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
+export async function clockIn(user, machine, site, { assignedSupervisor } = {}) {
+  if (!assignedSupervisor?.id) {
+    throw new Error("Select the supervisor on duty before clocking in");
+  }
   const s = {
     id: makeId("WORK"),
     site_id: site?.id,
     machine_id: machine?.id,
     operator_id: user.id,
     operator_name: user.name,
+    assigned_supervisor_id: assignedSupervisor.id,
+    assigned_supervisor_name: assignedSupervisor.name,
     clock_in: nowISO(),
     clock_out: null,
     status: "active",
@@ -140,7 +145,7 @@ export async function completeMechanicInspection(user, machine, site, { results,
   });
 }
 
-export async function startMachine(user, machine, site, { hourMeter, photoRef, verifiedShifts }) {
+export async function startMachine(user, machine, site, { hourMeter, photoRef, verifiedShifts, workSessionClockIn } = {}) {
   if (!photoRef) throw new Error("Hour meter photo is required");
   const h = Number(hourMeter);
   if (!Number.isFinite(h) || h < 0) throw new Error("Enter a valid hour meter reading");
@@ -148,6 +153,21 @@ export async function startMachine(user, machine, site, { hourMeter, photoRef, v
   const remoteStatus = await fetchMachineStatus(machine.id);
   if (isBlockedByOther(remoteStatus, user.id)) {
     throw new Error(`${remoteStatus.operator_name || "Another operator"} is already running ${machine.name || machine.id}`);
+  }
+
+  const existingShifts = await readTable("shifts");
+  const existingRun = existingShifts.find(
+    (s) => s.machine_id === machine.id && s.shift_status === SHIFT.RUNNING
+  );
+  if (existingRun) {
+    if (existingRun.operator_id !== user.id) {
+      throw new Error(`${existingRun.operator_name || "Another operator"} already has an active shift on this machine`);
+    }
+    const stale = workSessionClockIn && new Date(existingRun.started_at) < new Date(workSessionClockIn);
+    if (stale) {
+      throw new Error("A previous shift is still open on this machine. Ask your supervisor to close it before starting a new one.");
+    }
+    return { run: existingRun, lock: { accepted: true }, alreadyRunning: true };
   }
 
   let baseline = Number(machine.start_hour_meter || 0);
@@ -187,6 +207,23 @@ export async function startMachine(user, machine, site, { hourMeter, photoRef, v
 export async function stopMachine(user, machine, site, machineRun, { reason, note }) {
   if (!reason) throw new Error("Select a stop reason");
   const now = nowISO();
+  const events = await readTable("events");
+  const openStop = findOpenStopForShift(events, machineRun.id);
+  if (openStop) {
+    if (openStop.reason === reason && (openStop.note || "") === (note || "")) {
+      return openStop;
+    }
+    const updated = {
+      ...openStop,
+      reason,
+      note: note || openStop.note || "",
+      updated_at: now,
+    };
+    await saveLocal("events", updated);
+    scheduleSync();
+    return updated;
+  }
+
   const down = {
     id: makeId("DOWN"),
     site_id: site?.id,
@@ -210,6 +247,9 @@ export async function stopMachine(user, machine, site, machineRun, { reason, not
 }
 
 export async function restartMachine(user, machine, site, machineRun, downtime, { note }) {
+  if (!downtime) throw new Error("No open stop to restart from");
+  if (downtime.status === "closed") return downtime;
+
   const lock = await acquireMachineLock(machine.id, machineRun.id, user.id);
   if (!lock.accepted) throw new Error(lock.reason || "Could not restart");
 
@@ -643,6 +683,13 @@ export async function reportIssue(user, machine, site, profiles, { area, priorit
 }
 
 async function addEvent(user, machine, site, type, details = {}) {
+  const shiftScoped = new Set(["MACHINE_STARTED", "MACHINE_ENDED", "METER_END_CAPTURED"]);
+  if (details.shift_id && shiftScoped.has(type)) {
+    const events = await readTable("events");
+    const existing = events.find((e) => e.shift_id === details.shift_id && e.type === type);
+    if (existing) return existing;
+  }
+
   const ev = {
     id: makeId("EV"),
     site_id: site?.id,

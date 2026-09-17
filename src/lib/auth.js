@@ -1,6 +1,45 @@
 import { supabase } from "./supabase.js";
 import { saveLocal, readTable, ensureDB } from "./db.js";
 
+const AUTH_CACHE_KEY = "ops-auth-cache";
+
+export function cacheAuthUser(userId, profile, email) {
+  try {
+    sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
+      userId,
+      profile,
+      email,
+      savedAt: Date.now(),
+    }));
+  } catch {}
+}
+
+export function readCachedAuthUser() {
+  try {
+    const raw = sessionStorage.getItem(AUTH_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCachedAuthUser() {
+  try { sessionStorage.removeItem(AUTH_CACHE_KEY); } catch {}
+}
+
+function offlineProfile(userId, userEmail, cached) {
+  if (cached) return { ...cached, email: cached.email || userEmail };
+  return {
+    id: userId,
+    email: userEmail || "",
+    name: (userEmail || "").split("@")[0] || "Operator",
+    role: "operator",
+    site_id: "00000000-0000-0000-0000-000000000001",
+    machine_id: "W2100-001",
+    active: true,
+  };
+}
+
 export async function signIn(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -8,6 +47,7 @@ export async function signIn(email, password) {
 }
 
 export async function signOut() {
+  clearCachedAuthUser();
   try { await supabase.auth.signOut(); } catch {}
 }
 
@@ -22,8 +62,8 @@ export async function loadProfile(userId, userEmail) {
   const localProfiles = await readTable("profiles");
   const cached = localProfiles.find((p) => p.id === userId);
 
-  if (!navigator.onLine && cached) {
-    return { ...cached, email: cached.email || userEmail };
+  if (!navigator.onLine) {
+    return offlineProfile(userId, userEmail, cached);
   }
 
   try {
@@ -36,11 +76,11 @@ export async function loadProfile(userId, userEmail) {
     if (error && error.code !== "PGRST116") throw error;
 
     if (existing) {
-      await saveLocal("profiles", { ...existing, _sync_status: "synced" }, { enqueue: false });
-      return { ...existing, email: existing.email || userEmail };
+      const profile = { ...existing, email: existing.email || userEmail };
+      await saveLocal("profiles", { ...profile, _sync_status: "synced" }, { enqueue: false });
+      cacheAuthUser(userId, profile, userEmail);
+      return profile;
     }
-
-    if (!navigator.onLine && cached) return cached;
 
     const defaultName = (userEmail || "").split("@")[0] || "Operator";
     const newProfile = {
@@ -59,15 +99,16 @@ export async function loadProfile(userId, userEmail) {
       const { error: insErr } = await supabase.from("profiles").insert(newProfile);
       if (!insErr) {
         await saveLocal("profiles", { ...newProfile, _sync_status: "synced" }, { enqueue: false });
+        cacheAuthUser(userId, newProfile, userEmail);
         return newProfile;
       }
     }
 
     await saveLocal("profiles", newProfile);
+    cacheAuthUser(userId, newProfile, userEmail);
     return newProfile;
   } catch (e) {
-    if (cached) return cached;
-    throw e;
+    return offlineProfile(userId, userEmail, cached);
   }
 }
 

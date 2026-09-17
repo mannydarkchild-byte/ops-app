@@ -366,22 +366,22 @@ export function ManagerApp() {
           <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-xl px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="font-logo text-[10px] text-[#EF4444] tracking-wider">NEEDS ATTENTION</span>
             {partsRequests.length > 0 && (
-              <button type="button" onClick={() => setTab("issues")} className="font-logo text-[10px] text-[#F97316] hover:underline">
+              <button type="button" onClick={() => setTab("issues")} className="btn-link font-logo text-[10px] text-[#F97316] hover:underline">
                 {partsRequests.length} parts request{partsRequests.length !== 1 ? "s" : ""}
               </button>
             )}
             {assignedToMe.length > 0 && (
-              <button type="button" onClick={() => setTab("issues")} className="font-logo text-[10px] text-[#F5C518] hover:underline">
+              <button type="button" onClick={() => setTab("issues")} className="btn-link font-logo text-[10px] text-[#F5C518] hover:underline">
                 {assignedToMe.length} issue{assignedToMe.length !== 1 ? "s" : ""} assigned to you
               </button>
             )}
             {criticalWarriorIssues.length > 0 && (
-              <button type="button" onClick={() => setTab("issues")} className="font-logo text-[10px] text-[#EF4444] hover:underline">
+              <button type="button" onClick={() => setTab("issues")} className="btn-link font-logo text-[10px] text-[#EF4444] hover:underline">
                 {criticalWarriorIssues.length} critical
               </button>
             )}
             {fleetStatus?.isStopped && (
-              <button type="button" onClick={() => setTab("overview")} className="font-logo text-[10px] text-[#F97316] hover:underline">
+              <button type="button" onClick={() => setTab("overview")} className="btn-link font-logo text-[10px] text-[#F97316] hover:underline">
                 Warrior stopped — {fleetStatus.openStop?.reason}
               </button>
             )}

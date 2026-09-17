@@ -108,13 +108,33 @@ export function pickMedia(kind, onResult) {
     input.type = "file";
     input.accept = kind === "photo" ? "image/*" : kind === "audio" ? "audio/*" : "*/*";
     input.capture = kind === "photo" ? "environment" : undefined;
+    input.style.display = "none";
+    input.setAttribute("aria-hidden", "true");
+
+    const cleanup = () => {
+      window.setTimeout(() => {
+        try { input.remove(); } catch {}
+      }, 30000);
+    };
+
     input.onchange = async () => {
       const file = input.files?.[0];
-      if (!file) return;
-      const ref = await storeMediaBlob(file, { mimeType: file.type, kind });
-      const url = URL.createObjectURL(file);
-      onResult({ ref, data: url, type: file.type, file });
+      if (!file) {
+        cleanup();
+        return;
+      }
+      try {
+        const ref = await storeMediaBlob(file, { mimeType: file.type, kind });
+        const url = URL.createObjectURL(file);
+        onResult({ ref, data: url, type: file.type, file });
+      } finally {
+        input.value = "";
+        cleanup();
+      }
     };
+
+    input.oncancel = cleanup;
+    document.body.appendChild(input);
     input.click();
   } catch (e) {
     console.warn("pickMedia failed:", e);

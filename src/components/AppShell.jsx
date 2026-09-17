@@ -29,18 +29,18 @@ function LogoFallback() {
 
 export function LogoMark({ size = "md" }) {
   const [imgFailed, setImgFailed] = useState(false);
-  const dim = size === "sm" ? "w-8 h-8" : size === "lg" ? "w-14 h-14" : "w-9 h-9";
+  const dim = size === "sm" ? "w-9 h-9" : size === "lg" ? "w-16 h-16" : "w-10 h-10";
 
   return (
     <div
-      className={`${dim} rounded-lg border border-[#F5C518]/80 bg-[#141414] flex items-center justify-center shrink-0 overflow-hidden`}
+      className={`${dim} rounded-xl border border-[#F5C518]/80 bg-[#141414] flex items-center justify-center shrink-0 overflow-hidden p-1.5`}
       aria-hidden
     >
       {!imgFailed ? (
         <img
           src="/logo.png"
           alt=""
-          className="w-full h-full object-contain p-0.5"
+          className="max-w-full max-h-full w-auto h-auto object-contain"
           onError={() => setImgFailed(true)}
         />
       ) : (
@@ -54,8 +54,8 @@ export function OfflineBanner() {
   const { syncState } = useOps();
   if (syncState.status !== "offline") return null;
   return (
-    <div className="bg-[#F5C518]/10 border-b border-[#F5C518]/30 px-4 py-2 text-center">
-      <p className="font-logo text-[10px] text-[#F5C518] tracking-wider">OFFLINE — CHANGES SAVE LOCALLY</p>
+    <div className="bg-[#F5C518]/20 border-b-2 border-[#F5C518] px-4 py-2.5 text-center">
+      <p className="font-logo text-xs text-[#F5C518] tracking-wider font-bold">OFFLINE — WORKING FROM LOCAL DATA</p>
     </div>
   );
 }
@@ -81,7 +81,7 @@ function SyncButton() {
     <button
       type="button"
       onClick={() => syncNow()}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#141414] border border-[#2A2A2A] hover:border-[#3A3A3A] active:scale-95 min-h-0"
+      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#141414] border border-[#2A2A2A] hover:border-[#3A3A3A] active:scale-95 min-h-[36px]"
       title="Sync now"
     >
       <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
@@ -118,10 +118,12 @@ export function RoleBadge() {
 export function AppHeader({ right, subtitle, context, showSite = true }) {
   const { user, signOut, activeSite } = useOps();
   const role = (user?.role || "operator").toLowerCase();
-  const roleLabel = subtitle || role;
+  const roleLabel = subtitle || role.charAt(0).toUpperCase() + role.slice(1);
   const colors = ROLE_COLORS[role] || ROLE_COLORS.operator;
 
   const contextLine = context ?? (showSite && activeSite ? activeSite.name : null);
+  const userName = user?.name || user?.email?.split("@")[0] || "User";
+  const mobileContext = `${userName} · ${roleLabel}`;
 
   return (
     <header className="sticky top-0 z-30 bg-[#0A0A0A]/95 backdrop-blur-md border-b border-[#2A2A2A] mobile-safe-top">
@@ -131,15 +133,14 @@ export function AppHeader({ right, subtitle, context, showSite = true }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-logo text-sm sm:text-base text-[#F5C518] tracking-widest shrink-0">OPS</span>
-              <span className={`font-logo text-[9px] px-2 py-0.5 rounded-full border shrink-0 ${colors.bg} ${colors.text} ${colors.border}`}>
+              <span className={`hidden sm:inline font-logo text-[9px] px-2 py-0.5 rounded-full border shrink-0 ${colors.bg} ${colors.text} ${colors.border}`}>
                 {roleLabel}
               </span>
             </div>
-            {contextLine && (
-              <p className="font-body text-[10px] sm:text-[11px] text-[#F2F0EA]/50 truncate mt-0.5 leading-snug">
-                {contextLine}
-              </p>
-            )}
+            <p className="font-body text-xs sm:text-[11px] text-[#F2F0EA]/90 sm:text-[#F2F0EA]/50 truncate mt-0.5 leading-snug">
+              <span className="sm:hidden">{mobileContext}</span>
+              {contextLine && <span className="hidden sm:inline">{contextLine}</span>}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -148,7 +149,7 @@ export function AppHeader({ right, subtitle, context, showSite = true }) {
           <button
             type="button"
             onClick={signOut}
-            className="px-2.5 py-1.5 rounded-lg bg-[#141414] border border-[#2A2A2A] font-logo text-[9px] text-[#F2F0EA]/60 hover:text-[#EF4444] hover:border-[#EF4444]/40 active:scale-95 min-h-0 tracking-wider"
+            className="px-3 py-2 rounded-lg bg-[#141414] border border-[#2A2A2A] font-logo text-[10px] text-[#F2F0EA]/60 hover:text-[#EF4444] hover:border-[#EF4444]/40 active:scale-95 min-h-[36px] tracking-wider"
             title="Sign out"
           >
             OUT
@@ -173,7 +174,7 @@ export function AppTabBar({ tabs, activeTab, onTabChange, onSync, footer }) {
               key={t.id}
               type="button"
               onClick={() => onTabChange(t.id)}
-              className={`shrink-0 px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider whitespace-nowrap transition-colors ${
+              className={`shrink-0 px-3 py-2.5 rounded-lg font-logo text-[11px] leading-tight tracking-wide whitespace-nowrap transition-colors min-h-[40px] ${
                 activeTab === t.id
                   ? "bg-[#F5C518] text-black"
                   : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70 hover:border-[#3A3A3A]"
@@ -192,7 +193,7 @@ export function AppTabBar({ tabs, activeTab, onTabChange, onSync, footer }) {
           <button
             type="button"
             onClick={onSync}
-            className="shrink-0 px-3 py-2 rounded-lg font-logo text-[10px] bg-[#00A4A6] text-white hover:bg-[#00A4A6]/90 active:scale-95 min-h-0"
+            className="shrink-0 px-3 py-2.5 rounded-lg font-logo text-sm bg-[#00A4A6] text-white hover:bg-[#00A4A6]/90 active:scale-95 min-h-[40px] min-w-[40px]"
           >
             ↻
           </button>
@@ -221,9 +222,10 @@ export function AppPage({
   children,
   alert,
   banner,
+  outdoor = false,
 }) {
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-[#F2F0EA] pb-8 mobile-safe-bottom">
+    <div className={`min-h-screen bg-[#0A0A0A] text-[#F2F0EA] pb-8 mobile-safe-bottom ${outdoor ? "operator-outdoor" : ""}`}>
       {alert}
       <AppHeader subtitle={subtitle} context={context} showSite={showSite} />
       <OfflineBanner />

@@ -49,7 +49,7 @@ export function PreStartInspectionChecklist({
               <div className="flex flex-wrap gap-1 mb-2">
                 {statusOptions.map((opt) => (
                   <button key={opt} type="button" onClick={() => setResults((p) => ({ ...p, [item]: opt }))}
-                    className={`px-2.5 py-1.5 rounded text-[10px] font-logo tracking-wide ${
+                    className={`px-3 py-2 rounded-lg text-[11px] font-semibold leading-tight ${
                       results[item] === opt
                         ? opt === "Needs attention" || opt === statusOptions[statusOptions.length - 1] ? "bg-[#F5C518] text-black" : opt === "Action taken" ? "bg-[#00A4A6] text-white" : "bg-[#22C55E] text-black"
                         : "bg-[#2A2A2A] text-[#F2F0EA]/70"

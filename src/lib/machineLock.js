@@ -1,5 +1,7 @@
 import { getDB } from "./db.js";
 import { supabase } from "./supabase.js";
+import { SHIFT } from "./constants.js";
+import { findOpenStopForShift } from "./shiftMetrics.js";
 import { fetchMachineStatus, isBlockedByOther } from "./machineStatus.js";
 
 /**
@@ -70,19 +72,33 @@ export async function releaseMachineLock(machineId) {
   return { released: true, pendingSync: !navigator.onLine };
 }
 
-/** Retry pending lock RPCs during sync */
+/** Retry pending lock RPCs during sync — skip stale locks that would fight stop state */
 export async function syncMachineLocks() {
   if (!navigator.onLine) return;
   const db = getDB();
   const locks = await db.machine_locks.where("synced").equals(0).toArray();
   for (const lock of locks) {
     try {
+      const shift = lock.shift_id ? await db.shifts.get(lock.shift_id) : null;
+      if (!shift || shift.shift_status !== SHIFT.RUNNING) {
+        await db.machine_locks.delete(lock.machine_id);
+        continue;
+      }
+
+      const events = await db.events.where("shift_id").equals(lock.shift_id).toArray();
+      if (findOpenStopForShift(events, lock.shift_id)) {
+        await db.machine_locks.delete(lock.machine_id);
+        continue;
+      }
+
       const { data, error } = await supabase.rpc("start_machine", {
         p_machine_id: lock.machine_id,
         p_shift_id: lock.shift_id,
       });
       if (!error && data !== false) {
         await db.machine_locks.update(lock.machine_id, { synced: true });
+      } else if (data === false) {
+        await db.machine_locks.delete(lock.machine_id);
       }
     } catch {}
   }

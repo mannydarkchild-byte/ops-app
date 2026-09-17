@@ -1,6 +1,6 @@
 import { SHIFT } from "../lib/constants.js";
 import { resolveMediaUrl } from "../lib/media.js";
-import { formatDurationMinutes } from "../lib/shiftMetrics.js";
+import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinutes } from "../lib/shiftMetrics.js";
 import { esc, fmtDate, fmtDateShort, money, shiftBillableValue } from "../lib/utils.js";
 
 function shiftWindow(shift) {
@@ -98,21 +98,26 @@ async function resolveInspectionPhotoMap(items) {
 }
 
 export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls = {} }) {
-  const shiftEvents = events
-    .filter((e) => e.shift_id === shift.id)
-    .sort((a, b) => new Date(a.timestamp || a.stopped_at || 0) - new Date(b.timestamp || b.stopped_at || 0));
-  const stops = shiftEvents.filter((e) => e.type === "STOP");
+  const { milestones, periods } = buildShiftActivityTimeline(shift, events);
+  const stops = consolidateShiftStops(events, shift);
   const shiftFuel = fuelLogs.filter((f) => f.shift_id === shift.id);
   const prestart = shiftPrestart(inspections, shift);
   const titleDate = fmtDateShort(shift.started_at);
 
-  const timelineRows = shiftEvents.map((e) => {
-    const when = fmtDate(e.timestamp || e.stopped_at);
-    if (e.type === "STOP") {
-      const dur = e.status === "closed" ? `${e.downtime_minutes || 0} min` : "open";
-      return `<tr><td>${when}</td><td>Stop</td><td>${esc(e.reason)}</td><td>${esc(e.note || "")} (${dur})</td></tr>`;
+  const timelineItems = [
+    ...milestones.map((m) => ({ kind: "milestone", at: new Date(m.at).getTime(), ...m })),
+    ...periods.map((p) => ({ kind: "period", at: p.start, ...p })),
+  ].sort((a, b) => a.at - b.at);
+
+  const timelineRows = timelineItems.map((item) => {
+    if (item.kind === "milestone") {
+      return `<tr><td>${fmtDate(item.at)}</td><td>${esc(item.label)}</td><td colspan="2">${esc(item.detail || "—")}</td></tr>`;
     }
-    return `<tr><td>${when}</td><td>${esc(e.type?.replace(/_/g, " "))}</td><td colspan="2">${esc(e.note || "")}</td></tr>`;
+    const range = `${fmtDate(new Date(item.start).toISOString())} – ${fmtDate(new Date(item.end).toISOString())}`;
+    if (item.state === "stopped") {
+      return `<tr><td>${range}</td><td>Stopped</td><td>${esc(item.reason || "Downtime")}</td><td>${formatDurationMinutes(item.minutes)}${item.note ? ` · ${esc(item.note)}` : ""}</td></tr>`;
+    }
+    return `<tr><td>${range}</td><td>Running</td><td>—</td><td>${formatDurationMinutes(item.minutes)}</td></tr>`;
   }).join("");
 
   const statusBadge = (status) => {
@@ -215,16 +220,20 @@ ${prestart.length
 
     <section>
       <h2>Shift activity</h2>
-      <table><thead><tr><th>Time</th><th>Event</th><th>Detail</th><th>Notes</th></tr></thead><tbody>
+      <table><thead><tr><th>Time</th><th>Event</th><th>Detail</th><th>Duration</th></tr></thead><tbody>
 ${timelineRows || '<tr class="empty"><td colspan="4">No activity logged</td></tr>'}
       </tbody></table>
+      <p class="note">Repeated stop/start logs within 30 seconds are merged into single running or downtime periods with calculated duration.</p>
     </section>
 
     <section>
       <h2>Downtime</h2>
       <table><thead><tr><th>Reason</th><th>Stopped</th><th>Duration</th><th>Notes</th></tr></thead><tbody>
 ${stops.length
-    ? stops.map((s) => `<tr><td>${esc(s.reason)}</td><td>${fmtDate(s.stopped_at)}</td><td>${s.downtime_minutes != null ? `${s.downtime_minutes} min` : "—"}</td><td>${esc(s.note || "")}</td></tr>`).join("")
+    ? stops.map((s) => {
+      const endLabel = s.restarted_at ? fmtDate(s.restarted_at) : (shift.ended_at ? fmtDate(shift.ended_at) : "—");
+      return `<tr><td>${esc(s.reason)}</td><td>${fmtDate(s.stopped_at)}${s.restarted_at ? ` → ${endLabel}` : ""}</td><td>${formatDurationMinutes(s.downtime_minutes || 0)}</td><td>${esc(s.note || "")}</td></tr>`;
+    }).join("")
     : '<tr class="empty"><td colspan="4">No stops recorded</td></tr>'}
       </tbody></table>
     </section>

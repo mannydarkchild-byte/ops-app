@@ -30,8 +30,7 @@ export function LoginScreen({ onLogin, error, loading }) {
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center p-4 mobile-safe-top mobile-safe-bottom">
       <LogoMark size="lg" />
-      <h1 className="font-logo text-2xl text-[#F5C518] tracking-widest mt-4 mb-1">OPS</h1>
-      <p className="font-body text-sm text-[#F2F0EA]/50 mb-8">Mine Operations</p>
+      <h1 className="font-logo text-3xl text-[#F5C518] tracking-widest mt-5 mb-8">OPS</h1>
 
       <div className="w-full max-w-sm bg-[#141414] border border-[#2A2A2A] rounded-2xl p-6">
         {mode === "login" ? (
@@ -43,10 +42,10 @@ export function LoginScreen({ onLogin, error, loading }) {
               className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl mb-4 text-[#F2F0EA] outline-none focus:border-[#F5C518]" />
             {error && <p className="text-[#EF4444] text-sm mb-3">{error}</p>}
             <button onClick={submitLogin} disabled={busy || loading}
-              className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold tracking-wider disabled:opacity-50">
+              className="w-full bg-[#F5C518] text-black py-3.5 px-4 rounded-xl font-logo text-sm tracking-wider disabled:opacity-50">
               {busy ? "SIGNING IN…" : "SIGN IN"}
             </button>
-            <button onClick={() => setMode("reset")} className="w-full mt-3 text-[#F2F0EA]/50 text-sm">Forgot password?</button>
+            <button type="button" onClick={() => setMode("reset")} className="btn-link w-full mt-3 text-[#F2F0EA]/50 text-sm">Forgot password?</button>
           </>
         ) : (
           <>
@@ -54,8 +53,8 @@ export function LoginScreen({ onLogin, error, loading }) {
               className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl mb-4 text-[#F2F0EA] outline-none focus:border-[#F5C518]" />
             {resetErr && <p className="text-[#EF4444] text-sm mb-3">{resetErr}</p>}
             {resetMsg && <p className="text-[#22C55E] text-sm mb-3">{resetMsg}</p>}
-            <button onClick={submitReset} disabled={busy} className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold">SEND RESET</button>
-            <button onClick={() => setMode("login")} className="w-full mt-3 text-[#F2F0EA]/50 text-sm">Back to sign in</button>
+            <button onClick={submitReset} disabled={busy} className="w-full bg-[#00A4A6] text-white py-3.5 px-4 rounded-xl font-logo text-sm tracking-wider">SEND RESET</button>
+            <button type="button" onClick={() => setMode("login")} className="btn-link w-full mt-3 text-[#F2F0EA]/50 text-sm">Back to sign in</button>
           </>
         )}
       </div>
