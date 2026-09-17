@@ -11,8 +11,9 @@ import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
 import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
-import { STOP_REASONS, ISSUE, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS } from "../lib/constants.js";
-import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea } from "../lib/utils.js";
+import { STOP_REASONS, ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS } from "../lib/constants.js";
+import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
+import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
 import { shiftDowntimeMinutes, formatDurationSeconds } from "../lib/shiftMetrics.js";
 import { SupervisorPicker, SupervisorWhatsAppButtons } from "../components/SupervisorPicker.jsx";
 import * as wf from "../services/workflows.js";
@@ -22,7 +23,7 @@ import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 
 export function OperatorApp() {
   const {
-    user, activeMachine, activeSite, machineRun, workSession, downtime, hourMeter, events,
+    user, activeMachine, activeSite, machines, machineRun, workSession, downtime, hourMeter, events,
     shifts, profiles, issues, issueMessages, inspections, refreshLocal, machineBlocked,
     getSettingsForSite,
   } = useOps();
@@ -114,6 +115,19 @@ export function OperatorApp() {
     [issues, user?.id]
   );
 
+  /** Shift sent back by supervisor — operator must fix and resubmit before starting again */
+  const correctionShift = useMemo(() => {
+    if (!user?.id) return null;
+    return shifts
+      .filter((s) => s.operator_id === user.id && getShiftStatus(s) === SHIFT.CORRECTION_REQUIRED)
+      .sort((a, b) => new Date(b.updated_at || b.ended_at || 0) - new Date(a.updated_at || a.ended_at || 0))[0] || null;
+  }, [shifts, user?.id]);
+
+  const correctionMachine = useMemo(
+    () => machines.find((m) => m.id === correctionShift?.machine_id) || activeMachine,
+    [machines, correctionShift?.machine_id, activeMachine]
+  );
+
   const siteSupervisors = useMemo(
     () => getSiteSupervisors(profiles, activeSite?.id),
     [profiles, activeSite?.id]
@@ -145,12 +159,13 @@ export function OperatorApp() {
   const blocked = machineBlocked && !sessionShift && !sessionDowntime;
 
   const currentStep = useMemo(() => {
+    if (correctionShift && !submittedShift) return "correct";
     if (submittedShift) return "end";
     if (sessionShift || sessionDowntime) return "run";
     if (workSession && prestartDone) return "start";
     if (workSession) return "inspect";
     return "clock";
-  }, [submittedShift, sessionShift, sessionDowntime, workSession, prestartDone]);
+  }, [correctionShift, submittedShift, sessionShift, sessionDowntime, workSession, prestartDone]);
 
   const handleClockIn = async () => {
     if (blocked) {
@@ -301,23 +316,42 @@ export function OperatorApp() {
       maxWidth="max-w-2xl"
       outdoor
       alert={<AlertModal {...alert} confirmText="OK" />}
-      banner={blocked && !submittedShift ? (
-        <div className="bg-[#EF4444]/10 border-b border-[#EF4444]/30 px-4 py-2.5">
-          <p className="font-logo text-[10px] text-[#EF4444] tracking-wider text-center">
-            🔒 {machineBlocked.operator_name} is running {activeMachine?.name}
-          </p>
-        </div>
-      ) : null}
+      banner={
+        correctionShift && !submittedShift ? (
+          <div className="bg-[#F97316]/15 border-b border-[#F97316]/40 px-4 py-3">
+            <p className="font-logo text-sm text-[#F97316] text-center">
+              Supervisor requested a correction — fix and resubmit below before starting a new shift.
+            </p>
+          </div>
+        ) : blocked && !submittedShift && !correctionShift ? (
+          <div className="bg-[#EF4444]/10 border-b border-[#EF4444]/30 px-4 py-2.5">
+            <p className="font-logo text-[10px] text-[#EF4444] tracking-wider text-center">
+              🔒 {machineBlocked.operator_name} is running {activeMachine?.name}
+            </p>
+          </div>
+        ) : null
+      }
     >
-        <OperatorStepBar currentStep={currentStep} />
+        {!correctionShift && <OperatorStepBar currentStep={currentStep} />}
 
-        {!submittedShift && (activeSite?.name || activeMachine?.name) && (
+        {correctionShift && !submittedShift && (
+          <ShiftCorrectionPanel
+            shift={correctionShift}
+            machine={correctionMachine}
+            site={activeSite}
+            user={user}
+            onDone={refreshLocal}
+            onResubmitted={(updated) => setSubmittedShift(updated)}
+          />
+        )}
+
+        {!submittedShift && !correctionShift && (activeSite?.name || activeMachine?.name) && (
           <p className="sm:hidden font-body text-xs text-[#F2F0EA]/80 mb-3 text-center truncate px-1">
             {[activeSite?.name, activeMachine?.name].filter(Boolean).join(" · ")}
           </p>
         )}
 
-        {workSession && !submittedShift && (
+        {workSession && !submittedShift && !correctionShift && (
           <OperatorActionBar
             inboxCount={inboxCount}
             onReport={() => setShowReportIssue(true)}
@@ -338,9 +372,15 @@ export function OperatorApp() {
 
         {/* Day complete — WhatsApp supervisor */}
         {submittedShift && (
-          <div className="bg-[#141414] border-2 border-[#22C55E] rounded-2xl p-6 text-center">
-            <div className="text-5xl mb-3">✅</div>
-            <h2 className="font-logo text-2xl text-[#22C55E] tracking-wider mb-2">Day Submitted</h2>
+          <div className={`bg-[#141414] border-2 rounded-2xl p-6 text-center ${
+            getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "border-[#F97316]" : "border-[#22C55E]"
+          }`}>
+            <div className="text-5xl mb-3">{getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "↩" : "✅"}</div>
+            <h2 className={`font-logo text-2xl tracking-wider mb-2 ${
+              getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "text-[#F97316]" : "text-[#22C55E]"
+            }`}>
+              {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "Correction Resubmitted" : "Day Submitted"}
+            </h2>
             <p className="font-body text-sm text-[#F2F0EA]/70 mb-1">
               Meter hours: {Number(submittedShift.hours_worked || 0).toFixed(1)}h ({submittedShift.start_hour_meter}h → {submittedShift.end_hour_meter}h)
             </p>
@@ -349,8 +389,10 @@ export function OperatorApp() {
                 Runtime {Math.round(submittedShift.runtime_minutes || 0)}m · Downtime {Math.round(submittedShift.downtime_minutes || 0)}m
               </p>
             )}
-            <p className="font-body text-xs text-[#F2F0EA]/50 mb-4">
-              Clocked out · assigned to {submittedShift.assigned_supervisor_name || "supervisor"}
+            <p className="font-body text-sm text-[#F2F0EA]/60 mb-4">
+              {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED
+                ? "Sent back to supervisor for review."
+                : `Waiting for ${submittedShift.assigned_supervisor_name || "supervisor"} to verify.`}
             </p>
             <SupervisorWhatsAppButtons
               supervisors={siteSupervisors}
@@ -365,7 +407,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {!submittedShift && (
+        {!submittedShift && !correctionShift && (
           <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-5 sm:p-6 shadow-lg">
             {!workSession && (
               <>

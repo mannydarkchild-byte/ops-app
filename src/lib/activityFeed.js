@@ -4,6 +4,7 @@ const EVENT_META = {
   MACHINE_STARTED: { icon: "▶", label: "Machine started" },
   STOP: { icon: "⏹", label: "Machine stopped" },
   MACHINE_ENDED: { icon: "📋", label: "Day submitted" },
+  SHIFT_RESUBMITTED: { icon: "↩", label: "Shift resubmitted" },
   METER_END_CAPTURED: { icon: "📸", label: "Closing meter photo" },
 };
 

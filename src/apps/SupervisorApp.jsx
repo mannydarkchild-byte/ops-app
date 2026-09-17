@@ -198,7 +198,33 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
 
 
+  const awaitingCorrectionShifts = useMemo(
+
+    () => shifts
+
+      .filter((r) => getShiftStatus(r) === SHIFT.CORRECTION_REQUIRED && r.site_id === user?.site_id)
+
+      .sort((a, b) => new Date(b.updated_at || b.ended_at || 0) - new Date(a.updated_at || a.ended_at || 0)),
+
+    [shifts, user?.site_id]
+
+  );
+
+
+
+  const displayedAwaitingCorrection = useMemo(() => {
+
+    if (verifyScope === "all") return awaitingCorrectionShifts;
+
+    return awaitingCorrectionShifts.filter((s) => s.assigned_supervisor_id === user?.id);
+
+  }, [awaitingCorrectionShifts, verifyScope, user?.id]);
+
+
+
   const myPendingVerify = pendingShifts.filter((s) => s.assigned_supervisor_id === user?.id).length;
+
+  const myAwaitingCorrection = awaitingCorrectionShifts.filter((s) => s.assigned_supervisor_id === user?.id).length;
 
   const criticalIssues = openSiteIssues.filter((i) => i.priority === "Critical").length;
 
@@ -554,7 +580,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
       await refreshLocal();
 
-      showAlert("Sent Back", action === "correct" ? "Operator notified to correct." : "Escalated.", "success");
+      showAlert("Sent Back", action === "correct" ? "Operator will see your correction note and must resubmit before starting a new shift." : "Escalated.", "success");
 
     } catch (e) {
 
@@ -850,7 +876,61 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
             )}
 
-            {displayedPendingShifts.length === 0 ? <p className="text-sm text-[#F2F0EA]/40">No shifts pending verification{verifyScope === "mine" ? " assigned to you" : ""}.</p> : displayedPendingShifts.map((r) => (
+            {displayedAwaitingCorrection.length > 0 && (
+
+              <div className="mb-4">
+
+                <p className="font-logo text-sm text-[#F97316] mb-2">Waiting for operator correction ({displayedAwaitingCorrection.length})</p>
+
+                <div className="space-y-2">
+
+                  {displayedAwaitingCorrection.map((r) => (
+
+                    <div key={r.id} className="bg-[#F97316]/5 border border-[#F97316]/40 rounded-xl p-4">
+
+                      <p className="font-logo text-sm text-[#F97316] mb-1">With operator — correction requested</p>
+
+                      <p className="text-base text-[#F2F0EA]">{fmtDateShort(r.started_at)} · {r.operator_name} · {machineName(r.machine_id)}</p>
+
+                      <p className="text-sm text-[#F2F0EA]/60 mt-1">
+
+                        Meter: {r.start_hour_meter}h → {r.end_hour_meter}h · {Number(r.hours_worked || 0).toFixed(1)}h billable
+
+                      </p>
+
+                      {r.supervisor_comment && (
+
+                        <p className="text-sm text-[#F2F0EA]/75 mt-2 leading-relaxed">
+
+                          Your note: {r.supervisor_comment}
+
+                        </p>
+
+                      )}
+
+                      <button type="button" onClick={() => handleViewReport(r)} className="w-full mt-3 border border-[#00A4A6] text-[#00A4A6] py-3 rounded-lg font-logo text-sm">
+
+                        VIEW REPORT
+
+                      </button>
+
+                    </div>
+
+                  ))}
+
+                </div>
+
+              </div>
+
+            )}
+
+
+
+            <p className="font-logo text-sm text-[#F5C518] mb-2">Ready to verify ({displayedPendingShifts.length})</p>
+
+
+
+            {displayedPendingShifts.length === 0 ? <p className="text-sm text-[#F2F0EA]/40">No shifts ready to verify{verifyScope === "mine" ? " assigned to you" : ""}.</p> : displayedPendingShifts.map((r) => (
 
               <div
 

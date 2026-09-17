@@ -751,6 +751,85 @@ export async function verifyShift(shift, supervisor, { action, reason, signature
     updated_at: now,
   };
   await saveLocal("shifts", updated);
+
+  const submissions = await readTable("shift_submissions");
+  const submission = submissions.find((s) => s.shift_id === shift.id);
+  if (submission) {
+    if (action === "verify") {
+      await saveLocal("shift_submissions", {
+        ...submission,
+        status: SHIFT.VERIFIED,
+        verified_at: now,
+        verified_by: supervisor.id,
+        updated_at: now,
+      });
+    } else {
+      await saveLocal("shift_submissions", {
+        ...submission,
+        status: SHIFT.CORRECTION_REQUIRED,
+        updated_at: now,
+      });
+    }
+  }
+
+  scheduleSync();
+  return updated;
+}
+
+/** Operator fixes a shift after supervisor requested correction */
+export async function resubmitShiftAfterCorrection(user, machine, site, shift, { endHour, photoRef, operatorNote }) {
+  if (!photoRef) throw new Error("Closing hour meter photo is required");
+  const h = Number(endHour);
+  if (!Number.isFinite(h) || h < Number(shift.start_hour_meter)) {
+    throw new Error("Enter a valid closing meter reading");
+  }
+
+  const now = nowISO();
+  const events = await readTable("events");
+  const downtimeMinutes = shiftDowntimeMinutes(events, shift.id);
+  const runtimeMinutes = shiftRuntimeMinutes(shift.started_at, shift.ended_at || now, downtimeMinutes);
+  const hoursWorked = meterHoursWorked(shift.start_hour_meter, h);
+
+  const updated = {
+    ...shift,
+    end_hour_meter: h,
+    hours_worked: hoursWorked,
+    runtime_minutes: runtimeMinutes,
+    downtime_minutes: downtimeMinutes,
+    shift_status: SHIFT.RESUBMITTED,
+    verification_token: crypto.randomUUID?.() || makeId("TOK"),
+    notes: [shift.notes, operatorNote ? `Resubmit: ${operatorNote}` : "Resubmitted after correction"].filter(Boolean).join(" | "),
+    updated_at: now,
+  };
+  await saveLocal("shifts", updated);
+
+  const endEv = events.find((e) => e.shift_id === shift.id && e.type === "METER_END_CAPTURED");
+  if (endEv) {
+    await saveLocal("events", {
+      ...endEv,
+      photo_ref: photoRef,
+      note: `Corrected ending meter ${h}h`,
+      updated_at: now,
+    });
+  }
+
+  await addEvent(user, machine, site, "SHIFT_RESUBMITTED", {
+    shift_id: shift.id,
+    note: operatorNote || "Shift resubmitted after supervisor correction",
+  });
+
+  const submissions = await readTable("shift_submissions");
+  const submission = submissions.find((s) => s.shift_id === shift.id);
+  if (submission) {
+    await saveLocal("shift_submissions", {
+      ...submission,
+      status: SHIFT.RESUBMITTED,
+      submitted_at: now,
+      correction_number: Number(submission.correction_number || 0) + 1,
+      updated_at: now,
+    });
+  }
+
   scheduleSync();
   return updated;
 }
