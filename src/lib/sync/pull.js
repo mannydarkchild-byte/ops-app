@@ -98,9 +98,15 @@ export async function pullIncremental({ tables = SYNC_TABLES, siteId = null } = 
 
       totalPulled += merged;
     } catch (e) {
-      // Table may not exist yet in Supabase — skip gracefully
-      if (!e.message?.includes("does not exist") && e.code !== "PGRST205") {
-        errors.push(`${table}: ${e.message}`);
+      const msg = e.message || "";
+      const skip =
+        msg.includes("does not exist") ||
+        e.code === "PGRST205" ||
+        e.code === "42P01" ||
+        msg.includes("permission denied") ||
+        msg.includes("JWT");
+      if (!skip) {
+        errors.push(`${table}: ${msg}`);
       }
     }
   }
@@ -142,8 +148,15 @@ export async function pullBootstrap({ siteId = null, daysBack = 90 } = {}) {
       }, null);
       if (maxTs) await setSyncMeta(`watermark_${table}${siteId ? `_${siteId}` : ""}`, maxTs);
     } catch (e) {
-      if (!e.message?.includes("does not exist") && e.code !== "PGRST205") {
-        errors.push(`${table}: ${e.message}`);
+      const msg = e.message || "";
+      const skip =
+        msg.includes("does not exist") ||
+        e.code === "PGRST205" ||
+        e.code === "42P01" ||
+        msg.includes("permission denied") ||
+        msg.includes("JWT");
+      if (!skip) {
+        errors.push(`${table}: ${msg}`);
       }
     }
   }

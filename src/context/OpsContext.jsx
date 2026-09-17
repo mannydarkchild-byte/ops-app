@@ -170,12 +170,14 @@ export function OpsProvider({ children }) {
     scheduleSync();
   }, [refreshLocal]);
 
+  const siteIdForSync = user?.site_id || activeSite?.id || null;
+
   const syncNow = useCallback(async () => {
     await syncMachineLocks();
-    const res = await runSync({ silent: false, siteId: activeSite?.id });
+    const res = await runSync({ silent: false, siteId: siteIdForSync });
     await refreshLocal();
     return res;
-  }, [refreshLocal, activeSite]);
+  }, [refreshLocal, siteIdForSync]);
 
   // Auth bootstrap — must never hang on "Loading…" when offline
   useEffect(() => {
@@ -275,13 +277,14 @@ export function OpsProvider({ children }) {
     (async () => {
       try {
         await refreshLocal();
+        const siteId = user?.site_id || activeSite?.id || null;
         if (navigator.onLine) {
-          await runSync({ silent: true, siteId: activeSite?.id });
+          await runSync({ silent: true, siteId });
           await refreshLocal();
         } else {
           setSyncState((prev) => ({ ...prev, status: "offline" }));
         }
-        cleanupSync = initSyncListeners({ siteId: activeSite?.id });
+        cleanupSync = initSyncListeners({ siteId });
       } catch (e) {
         console.warn("Data bootstrap:", e);
         try { await refreshLocal(); } catch {}
@@ -306,7 +309,7 @@ export function OpsProvider({ children }) {
     });
 
     return () => { cleanupSync(); unsub(); };
-  }, [user?.id, activeSite?.id, refreshLocal]);
+  }, [user?.id, user?.site_id, activeSite?.id, refreshLocal]);
 
   const value = {
     user, session, loading, authError,

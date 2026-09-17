@@ -8,6 +8,8 @@ let syncInProgress = false;
 let syncListeners = new Set();
 let debounceTimer = null;
 let syncSiteId = null;
+/** @type {Promise<any> | null} */
+let activeSyncPromise = null;
 
 export function onSyncStateChange(fn) {
   syncListeners.add(fn);
@@ -18,70 +20,86 @@ function notify(state) {
   syncListeners.forEach((fn) => { try { fn(state); } catch {} });
 }
 
+function finishState(state, { silent = true } = {}) {
+  notify({ ...state, complete: true, silent });
+  return state;
+}
+
 export async function runSync({ silent = true, forceBootstrap = false, siteId = null } = {}) {
-  if (syncInProgress) return { ok: false, skipped: true };
+  if (syncInProgress && activeSyncPromise) {
+    return activeSyncPromise;
+  }
+
   const effectiveSiteId = siteId ?? syncSiteId;
   syncInProgress = true;
 
-  const state = {
-    status: navigator.onLine ? "syncing" : "offline",
-    pushed: 0,
-    pulled: 0,
-    mediaUploaded: 0,
-    pending: 0,
-    errors: [],
-    lastSyncAt: null,
-  };
+  activeSyncPromise = (async () => {
+    const state = {
+      status: navigator.onLine ? "syncing" : "offline",
+      pushed: 0,
+      pulled: 0,
+      mediaUploaded: 0,
+      pending: 0,
+      errors: [],
+      lastSyncAt: null,
+    };
 
-  notify(state);
-
-  if (!navigator.onLine) {
-    state.status = "offline";
-    state.pending = await getPendingCount();
-    syncInProgress = false;
     notify(state);
-    return { ok: false, ...state };
-  }
 
-  try {
-    await ensureDB();
-
-    const bootstrapped = await getSyncMeta("bootstrapped_at");
-    if (!bootstrapped || forceBootstrap) {
-      const boot = await pullBootstrap({ siteId: effectiveSiteId });
-      state.pulled += boot.pulled;
-      if (boot.errors?.length) state.errors.push(...boot.errors);
+    if (!navigator.onLine) {
+      state.status = "offline";
+      state.pending = await getPendingCount();
+      syncInProgress = false;
+      notify(state);
+      return { ok: false, ...state };
     }
 
-    const media = await uploadPendingMedia();
-    state.mediaUploaded = media.uploaded;
-    if (media.errors?.length) state.errors.push(...media.errors);
+    try {
+      await ensureDB();
 
-    await syncMachineLocks();
+      const bootstrapped = await getSyncMeta("bootstrapped_at");
+      if (!bootstrapped || forceBootstrap) {
+        const boot = await pullBootstrap({ siteId: effectiveSiteId });
+        state.pulled += boot.pulled;
+        if (boot.errors?.length) state.errors.push(...boot.errors);
+      }
 
-    const push = await pushPendingQueue();
-    state.pushed = push.pushed;
-    if (push.errors?.length) state.errors.push(...push.errors);
+      const media = await uploadPendingMedia();
+      state.mediaUploaded = media.uploaded;
+      if (media.errors?.length) state.errors.push(...media.errors);
 
-    const pull = await pullIncremental({ siteId: effectiveSiteId });
-    state.pulled += pull.pulled;
-    if (pull.errors?.length) state.errors.push(...pull.errors);
+      await syncMachineLocks();
 
-    state.pending = await getPendingCount();
-    state.lastSyncAt = new Date().toISOString();
-    state.status = state.errors.length ? "error" : "synced";
+      const push = await pushPendingQueue();
+      state.pushed = push.pushed;
+      if (push.errors?.length) state.errors.push(...push.errors);
 
-    notify({ ...state, complete: true, silent });
-    return { ok: state.errors.length === 0, ...state };
-  } catch (e) {
-    state.status = "error";
-    state.errors.push(e.message);
-    state.pending = await getPendingCount();
-    notify(state);
-    return { ok: false, ...state };
-  } finally {
-    syncInProgress = false;
-  }
+      const pull = await pullIncremental({ siteId: effectiveSiteId });
+      state.pulled += pull.pulled;
+      if (pull.errors?.length) state.errors.push(...pull.errors);
+
+      state.pending = await getPendingCount();
+      state.lastSyncAt = new Date().toISOString();
+      // Data still refreshed even if one table failed — only mark error when nothing moved and queue stuck
+      const hardFail = state.errors.length > 0 && state.pushed === 0 && state.pulled === 0 && state.pending > 0;
+      state.status = hardFail ? "error" : "synced";
+
+      finishState(state, { silent });
+      return { ok: !hardFail, ...state };
+    } catch (e) {
+      state.status = "error";
+      state.errors.push(e.message);
+      state.pending = await getPendingCount();
+      state.lastSyncAt = new Date().toISOString();
+      finishState(state, { silent });
+      return { ok: false, ...state };
+    } finally {
+      syncInProgress = false;
+      activeSyncPromise = null;
+    }
+  })();
+
+  return activeSyncPromise;
 }
 
 export function scheduleSync(delayMs = 3000) {
@@ -96,7 +114,6 @@ export function initSyncListeners({ siteId = null } = {}) {
   const onOnline = () => runSync({ silent: true, siteId: syncSiteId });
   window.addEventListener("online", onOnline);
 
-  // Sync when app becomes visible after being hidden (not on every tab switch)
   let hiddenAt = null;
   const onVis = () => {
     if (document.visibilityState === "hidden") {

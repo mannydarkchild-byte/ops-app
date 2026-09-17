@@ -320,7 +320,7 @@ export function OperatorApp() {
         correctionShift && !submittedShift ? (
           <div className="bg-[#F97316]/15 border-b border-[#F97316]/40 px-4 py-3">
             <p className="font-logo text-sm text-[#F97316] text-center">
-              Supervisor requested a correction — fix and resubmit below before starting a new shift.
+              Supervisor sent your shift back — fix it below before you can clock in again.
             </p>
           </div>
         ) : blocked && !submittedShift && !correctionShift ? (
@@ -379,7 +379,7 @@ export function OperatorApp() {
             <h2 className={`font-logo text-2xl tracking-wider mb-2 ${
               getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "text-[#F97316]" : "text-[#22C55E]"
             }`}>
-              {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "Correction Resubmitted" : "Day Submitted"}
+              {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "Sent Back to Supervisor" : "Shift Sent"}
             </h2>
             <p className="font-body text-sm text-[#F2F0EA]/70 mb-1">
               Meter hours: {Number(submittedShift.hours_worked || 0).toFixed(1)}h ({submittedShift.start_hour_meter}h → {submittedShift.end_hour_meter}h)
@@ -391,8 +391,8 @@ export function OperatorApp() {
             )}
             <p className="font-body text-sm text-[#F2F0EA]/60 mb-4">
               {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED
-                ? "Sent back to supervisor for review."
-                : `Waiting for ${submittedShift.assigned_supervisor_name || "supervisor"} to verify.`}
+                ? "Waiting for supervisor to sign off."
+                : `Waiting for ${submittedShift.assigned_supervisor_name || "supervisor"} to sign off.`}
             </p>
             <SupervisorWhatsAppButtons
               supervisors={siteSupervisors}

@@ -33,13 +33,13 @@ import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 
 const TABS = [
 
-  { id: "live", label: "Live", icon: "📡" },
+  { id: "live", label: "Site Now", icon: "📡" },
 
-  { id: "verify", label: "Verify", icon: "✅" },
+  { id: "verify", label: "Sign Off", icon: "✅" },
 
-  { id: "reports", label: "Signed", icon: "📋" },
+  { id: "reports", label: "Signed Off", icon: "📋" },
 
-  { id: "issues", label: "Issues", icon: "💬" },
+  { id: "issues", label: "Problems", icon: "💬" },
 
 ];
 
@@ -59,7 +59,7 @@ const REPORT_FILTERS = [
 
 export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
-  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, inspections, activeSite, user, refreshLocal, syncNow, getSettingsForSite } = useOps();
+  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, inspections, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
 
   const siteConfig = useMemo(
     () => getSettingsForSite(user?.site_id || activeSite?.id),
@@ -103,16 +103,21 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
-  // Keep live dashboard fresh while supervisor is watching
+  // Refresh screen often; full upload/download less often so sync does not pile up
   useEffect(() => {
-    if (!user?.site_id || !navigator.onLine) return;
-    const tick = () => {
-      if (document.visibilityState === "visible") syncNow().catch(() => {});
+    if (!user?.site_id) return;
+    const refreshTick = () => {
+      if (document.visibilityState === "visible") refreshLocal().catch(() => {});
     };
-    tick();
-    const id = setInterval(tick, 30000);
-    return () => clearInterval(id);
-  }, [user?.site_id, syncNow]);
+    const syncTick = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) syncNow().catch(() => {});
+    };
+    refreshTick();
+    syncTick();
+    const refreshId = setInterval(refreshTick, 15000);
+    const syncId = setInterval(syncTick, 45000);
+    return () => { clearInterval(refreshId); clearInterval(syncId); };
+  }, [user?.site_id, refreshLocal, syncNow]);
 
   const siteMachines = useMemo(
 
@@ -538,9 +543,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
       reason: "",
 
-      title: action === "correct" ? "REASON FOR CORRECTION" : "REASON FOR ESCALATION",
+      title: action === "correct" ? "Why are you sending this back?" : "Why escalate?",
 
-      placeholder: action === "correct" ? "Explain what needs correcting…" : "Explain why this is being escalated…",
+      placeholder: action === "correct" ? "Tell the operator what to fix…" : "Explain the problem…",
 
     });
 
@@ -580,7 +585,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
       await refreshLocal();
 
-      showAlert("Sent Back", action === "correct" ? "Operator will see your correction note and must resubmit before starting a new shift." : "Escalated.", "success");
+      showAlert("Sent Back", action === "correct" ? "Operator will see your note and must fix their shift report before starting again." : "Escalated to manager.", "success");
 
     } catch (e) {
 
@@ -680,17 +685,31 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
+        {(syncState.status === "error" || syncState.errors?.length > 0) && (
+
+          <div className="bg-[#EF4444]/10 border border-[#EF4444]/40 rounded-xl px-4 py-3 mb-4">
+
+            <p className="font-logo text-sm text-[#EF4444]">Not fully updated — tap Update in the header</p>
+
+            <p className="text-sm text-[#F2F0EA]/70 mt-1">{syncState.errors?.[0] || "Some data did not download from the server."}</p>
+
+          </div>
+
+        )}
+
+
+
         {(myPendingVerify > 0 || criticalIssues > 0 || stoppedMachines > 0) && (
 
           <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-xl px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1">
 
-            <span className="font-logo text-[10px] text-[#EF4444] tracking-wider">NEEDS ATTENTION</span>
+            <span className="font-logo text-sm text-[#EF4444]">Needs attention</span>
 
             {myPendingVerify > 0 && (
 
-              <button type="button" onClick={() => setTab("verify")} className="font-logo text-[10px] text-[#F5C518] hover:underline">
+              <button type="button" onClick={() => setTab("verify")} className="font-logo text-sm text-[#F5C518] hover:underline">
 
-                {myPendingVerify} to verify
+                {myPendingVerify} to sign off
 
               </button>
 
@@ -730,7 +749,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
               <Kpi label="Signed Reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
 
-              <Kpi label="Billable Hours" value={`${signedHours.toFixed(1)}h`} sub="Hour meter · filtered" color="#22C55E" />
+              <Kpi label="Meter Hours" value={`${signedHours.toFixed(1)}h`} sub="Hour meter · filtered" color="#22C55E" />
 
               <Kpi label="Runtime" value={formatDurationMinutes(signedRuntimeMin)} sub="App-tracked · filtered" color="#00A4A6" />
 
@@ -742,13 +761,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
             <>
 
-              <Kpi label="Billable Hours" value={`${dashboardStats.hours.toFixed(1)}h`} sub={`${dashboardStats.reports} signed · ${billingPeriod.label}`} color="#22C55E" />
+              <Kpi label="Meter Hours" value={`${dashboardStats.hours.toFixed(1)}h`} sub={`${dashboardStats.reports} signed off · ${billingPeriod.label}`} color="#22C55E" />
 
-              <Kpi label="Runtime" value={formatDurationMinutes(dashboardStats.runtimeMin)} sub="App-tracked this cycle" color="#00A4A6" />
+              <Kpi label="Run Time" value={formatDurationMinutes(dashboardStats.runtimeMin)} sub="Machine running this cycle" color="#00A4A6" />
 
-              <Kpi label="Downtime" value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="App-tracked this cycle" color="#EF4444" />
+              <Kpi label="Stoppage" value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Machine stopped this cycle" color="#EF4444" />
 
-              <Kpi label="Pending Verify" value={String(myPendingVerify)} sub="Assigned to you" color="#F5C518" />
+              <Kpi label="To Sign Off" value={String(myPendingVerify)} sub="Assigned to you" color="#F5C518" />
 
             </>
 
@@ -816,7 +835,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
 
-              <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-3 tracking-wider">OPERATOR ACTIVITY</p>
+              <p className="font-logo text-sm text-[#F2F0EA]/50 mb-3">What operators did today</p>
 
               <ActivityFeed
 
@@ -880,7 +899,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
               <div className="mb-4">
 
-                <p className="font-logo text-sm text-[#F97316] mb-2">Waiting for operator correction ({displayedAwaitingCorrection.length})</p>
+                <p className="font-logo text-sm text-[#F97316] mb-2">With operator — fixing ({displayedAwaitingCorrection.length})</p>
 
                 <div className="space-y-2">
 
@@ -888,7 +907,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
                     <div key={r.id} className="bg-[#F97316]/5 border border-[#F97316]/40 rounded-xl p-4">
 
-                      <p className="font-logo text-sm text-[#F97316] mb-1">With operator — correction requested</p>
+                      <p className="font-logo text-sm text-[#F97316] mb-1">Sent back to operator</p>
 
                       <p className="text-base text-[#F2F0EA]">{fmtDateShort(r.started_at)} · {r.operator_name} · {machineName(r.machine_id)}</p>
 
@@ -926,11 +945,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
 
 
-            <p className="font-logo text-sm text-[#F5C518] mb-2">Ready to verify ({displayedPendingShifts.length})</p>
+            <p className="font-logo text-sm text-[#F5C518] mb-2">Needs your sign-off ({displayedPendingShifts.length})</p>
 
 
 
-            {displayedPendingShifts.length === 0 ? <p className="text-sm text-[#F2F0EA]/40">No shifts ready to verify{verifyScope === "mine" ? " assigned to you" : ""}.</p> : displayedPendingShifts.map((r) => (
+            {displayedPendingShifts.length === 0 ? <p className="text-sm text-[#F2F0EA]/40">No shifts waiting for sign-off{verifyScope === "mine" ? " on your name" : ""}.</p> : displayedPendingShifts.map((r) => (
 
               <div
 
@@ -954,7 +973,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
                 {getShiftStatus(r) === SHIFT.RESUBMITTED && (
 
-                  <p className="font-logo text-[10px] text-[#F97316] mb-2 tracking-wider">↩ RESUBMITTED — operator corrected and resubmitted</p>
+                  <p className="font-logo text-sm text-[#F97316] mb-2">Operator fixed this — check again</p>
 
                 )}
 
@@ -990,9 +1009,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
                   </button>
 
-                  <button onClick={() => openVerifyModal(r)} disabled={verifyBusy === r.id} className="flex-1 min-w-[120px] bg-[#22C55E] text-black py-3 rounded-lg font-logo text-xs font-bold">✅ VERIFY & SIGN</button>
+                  <button onClick={() => openVerifyModal(r)} disabled={verifyBusy === r.id} className="flex-1 min-w-[120px] bg-[#22C55E] text-black py-3 rounded-lg font-logo text-sm font-bold">Sign Off</button>
 
-                  <button onClick={() => openReasonModal(r, "correct")} disabled={verifyBusy === r.id} className="flex-1 min-w-[80px] bg-[#F5C518] text-black py-3 rounded-lg font-logo text-xs font-bold">↩ CORRECT</button>
+                  <button onClick={() => openReasonModal(r, "correct")} disabled={verifyBusy === r.id} className="flex-1 min-w-[80px] bg-[#F5C518] text-black py-3 rounded-lg font-logo text-sm font-bold">Send Back</button>
 
                 </div>
 
@@ -1286,7 +1305,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
       {verifyTarget && (
 
-        <Modal title="VERIFY SHIFT" color="green" onClose={() => { setVerifyTarget(null); setSignature(null); }}>
+        <Modal title="Sign Off Shift" color="green" onClose={() => { setVerifyTarget(null); setSignature(null); }}>
 
           <p className="font-body text-sm text-[#F2F0EA]/70 mb-4">
 

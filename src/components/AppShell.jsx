@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
+import { SYNC_LABELS } from "../lib/labels.js";
 
 const ROLE_COLORS = {
   operator: { bg: "bg-[#22C55E]/15", text: "text-[#22C55E]", border: "border-[#22C55E]/40" },
@@ -10,11 +11,11 @@ const ROLE_COLORS = {
 };
 
 const SYNC_META = {
-  synced: { label: "Synced", color: "text-[#22C55E]", dot: "bg-[#22C55E]" },
-  syncing: { label: "Syncing", color: "text-[#00A4A6]", dot: "bg-[#00A4A6] animate-pulse" },
-  offline: { label: "Offline", color: "text-[#F5C518]", dot: "bg-[#F5C518]" },
-  error: { label: "Sync error", color: "text-[#EF4444]", dot: "bg-[#EF4444]" },
-  idle: { label: "Ready", color: "text-[#F2F0EA]/40", dot: "bg-[#2A2A2A]" },
+  synced: { label: SYNC_LABELS.synced, color: "text-[#22C55E]", dot: "bg-[#22C55E]" },
+  syncing: { label: SYNC_LABELS.syncing, color: "text-[#00A4A6]", dot: "bg-[#00A4A6] animate-pulse" },
+  offline: { label: SYNC_LABELS.offline, color: "text-[#F5C518]", dot: "bg-[#F5C518]" },
+  error: { label: SYNC_LABELS.error, color: "text-[#EF4444]", dot: "bg-[#EF4444]" },
+  idle: { label: SYNC_LABELS.idle, color: "text-[#F2F0EA]/40", dot: "bg-[#2A2A2A]" },
 };
 
 function LogoFallback() {
@@ -67,7 +68,13 @@ export function SyncDot() {
     <button
       type="button"
       onClick={() => syncNow()}
-      title={syncState.pending ? `${syncState.pending} pending — tap to sync` : `${meta.label} — tap to sync`}
+      title={
+        syncState.errors?.length
+          ? `${syncState.errors[0]} — tap to retry`
+          : syncState.pending
+            ? `${syncState.pending} not uploaded — tap to update`
+            : `${meta.label} — tap to update`
+      }
       className={`w-2.5 h-2.5 rounded-full shrink-0 ${meta.dot}`}
       aria-label="Sync status"
     />
@@ -82,11 +89,11 @@ function SyncButton() {
       type="button"
       onClick={() => syncNow()}
       className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#141414] border border-[#2A2A2A] hover:border-[#3A3A3A] active:scale-95 min-h-[36px]"
-      title="Sync now"
+      title={syncState.errors?.[0] || "Tap to update from server"}
     >
       <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
       <span className={`font-logo text-[9px] tracking-wider hidden sm:inline ${meta.color}`}>
-        {syncState.pending > 0 ? `${syncState.pending} pending` : meta.label}
+        {syncState.pending > 0 ? `${syncState.pending} waiting` : meta.label}
       </span>
     </button>
   );
