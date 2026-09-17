@@ -289,8 +289,20 @@ export function OpsProvider({ children }) {
     })();
 
     const unsub = onSyncStateChange((state) => {
+      if (state.complete) {
+        if (state.lastSyncAt) {
+          setSyncState((prev) => ({
+            ...prev,
+            status: state.status ?? prev.status,
+            pending: state.pending ?? prev.pending,
+            lastSyncAt: state.lastSyncAt,
+            errors: state.errors?.length ? state.errors : prev.errors,
+          }));
+        }
+        refreshLocal();
+        return;
+      }
       setSyncState((prev) => ({ ...prev, ...state }));
-      refreshLocal();
     });
 
     return () => { cleanupSync(); unsub(); };

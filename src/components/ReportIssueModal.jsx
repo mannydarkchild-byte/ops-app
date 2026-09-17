@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Modal } from "./ui/Modal.jsx";
-import { FormSection } from "./ui/FormSection.jsx";
 import { VoiceInput } from "./ui/VoiceInput.jsx";
 import { ISSUE_AREA_GROUPS, ISSUE_PRIORITIES, ROLES, issueAreaRequiresMachine } from "../lib/constants.js";
 import { pickMedia, resolveMediaUrl } from "../lib/media.js";
 import * as wf from "../services/workflows.js";
 
 const SITE_WIDE_MACHINE = "__site__";
+const fieldClass = "w-full bg-[#0A0A0A] border border-[#444] p-4 rounded-xl text-[#F2F0EA] text-base mb-4";
+const labelClass = "block font-logo text-sm text-[#F2F0EA] mb-2";
 
 export function ReportIssueModal({
   onClose, user, machine, machines, site, profiles, onDone,
@@ -27,7 +28,6 @@ export function ReportIssueModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  // Restore draft after camera / page handoff
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(draftKey);
@@ -77,9 +77,6 @@ export function ReportIssueModal({
     return true;
   }, [area, needsMachine, selectedMachine]);
 
-  const isManager = user?.role === ROLES.MANAGER;
-  const isSupervisor = user?.role === ROLES.SUPERVISOR;
-
   const handleAreaChange = (nextArea) => {
     setArea(nextArea);
     if (!issueAreaRequiresMachine(nextArea)) {
@@ -121,39 +118,25 @@ export function ReportIssueModal({
 
   return (
     <Modal title="REPORT PROBLEM" color="red" onClose={onClose}>
-      <FormSection
-        step={1}
-        title="What kind of problem?"
-        description="Pick the closest match — mechanical, site, staffing, etc."
-        accent="#EF4444"
-      >
-        <select value={area} onChange={(e) => handleAreaChange(e.target.value)} className="w-full bg-[#0A0A0A] border border-[#444] p-3.5 rounded-xl text-[#F2F0EA] text-base">
-          <option value="">Select type…</option>
-          {ISSUE_AREA_GROUPS.map((group) => (
-            <optgroup key={group.label} label={group.label}>
-              {group.areas.map((x) => (
-                <option key={x} value={x}>{x}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </FormSection>
+      <label className={labelClass}>What kind of problem?</label>
+      <select value={area} onChange={(e) => handleAreaChange(e.target.value)} className={fieldClass}>
+        <option value="">Select type…</option>
+        {ISSUE_AREA_GROUPS.map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.areas.map((x) => (
+              <option key={x} value={x}>{x}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
 
       {showMachinePicker && (
-        <FormSection
-          step={2}
-          title={needsMachine ? "Which machine?" : "Related to a machine?"}
-          description={
-            needsMachine
-              ? "This problem type needs a machine."
-              : "Optional — link to a machine or leave site-wide."
-          }
-          accent="#EF4444"
-        >
+        <>
+          <label className={labelClass}>{needsMachine ? "Which machine?" : "Related machine (optional)"}</label>
           <select
             value={needsMachine && !selectedMachine ? "" : machineId}
             onChange={(e) => setMachineId(e.target.value)}
-            className="w-full bg-[#0A0A0A] border border-[#444] p-3.5 rounded-xl text-[#F2F0EA] text-base"
+            className={fieldClass}
             disabled={needsMachine && machineOptions.length === 1 && !!defaultMachineId}
           >
             {!needsMachine && allowSiteWide && (
@@ -166,47 +149,40 @@ export function ReportIssueModal({
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
           </select>
-        </FormSection>
+        </>
       )}
 
-      <FormSection step={3} title="How urgent?" description="Critical = immediate attention." accent="#EF4444">
-        <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full bg-[#0A0A0A] border border-[#444] p-3.5 rounded-xl text-[#F2F0EA] text-base">
-          {ISSUE_PRIORITIES.map((x) => <option key={x}>{x}</option>)}
-        </select>
-      </FormSection>
+      <label className={labelClass}>How urgent?</label>
+      <select value={priority} onChange={(e) => setPriority(e.target.value)} className={fieldClass}>
+        {ISSUE_PRIORITIES.map((x) => <option key={x}>{x}</option>)}
+      </select>
 
-      <FormSection
-        step={4}
-        title="Describe the problem"
-        description={
-          isManager
-            ? "Downward issues go to the operator on site."
-            : isSupervisor
-              ? "Log what is happening on site."
-              : "What happened? What support is needed?"
-        }
-        accent="#EF4444"
+      <label className={labelClass}>Describe the problem</label>
+      <VoiceInput value={description} onChange={setDescription} placeholder="What happened? What help is needed?" rows={4} />
+
+      <button
+        type="button"
+        onClick={attachPhoto}
+        className={`w-full mt-3 mb-4 py-4 rounded-xl font-logo text-base border-2 ${
+          mediaPreview
+            ? "bg-[#22C55E]/20 border-[#22C55E] text-[#22C55E]"
+            : "bg-[#0A0A0A] border-[#444] text-[#F2F0EA]"
+        }`}
       >
-        <VoiceInput value={description} onChange={setDescription} placeholder="Describe the problem…" rows={3} />
-        <button
-          type="button"
-          onClick={attachPhoto}
-          className={`w-full mt-3 py-4 rounded-xl font-logo text-sm tracking-wider border-2 active:scale-[0.99] ${
-            mediaPreview
-              ? "bg-[#22C55E]/20 border-[#22C55E] text-[#22C55E]"
-              : "bg-[#0A0A0A] border-[#444] text-[#F2F0EA]"
-          }`}
-        >
-          {mediaPreview ? "✓ PHOTO ATTACHED — TAP TO REPLACE" : "📷 ADD PHOTO (OPTIONAL)"}
-        </button>
-        {mediaPreview && (
-          <img src={mediaPreview} alt="" className="w-full max-h-44 object-contain rounded-xl mt-2 border border-[#444]" />
-        )}
-      </FormSection>
+        {mediaPreview ? "PHOTO ATTACHED — TAP TO REPLACE" : "ADD PHOTO (OPTIONAL)"}
+      </button>
+      {mediaPreview && (
+        <img src={mediaPreview} alt="" className="w-full max-h-52 object-contain rounded-xl mb-4 border border-[#444]" />
+      )}
 
-      {error && <p className="text-[#EF4444] text-sm mb-3 font-body">{error}</p>}
+      {error && <p className="text-[#EF4444] text-base mb-4">{error}</p>}
 
-      <button type="button" onClick={submit} disabled={busy || !canSubmit} className="w-full bg-[#EF4444] text-white py-4 rounded-xl font-logo font-bold text-base disabled:opacity-40">
+      <button
+        type="button"
+        onClick={submit}
+        disabled={busy || !canSubmit}
+        className="w-full bg-[#EF4444] text-white py-4 rounded-xl font-logo font-bold text-base disabled:opacity-40"
+      >
         {busy ? "SUBMITTING…" : "SUBMIT PROBLEM"}
       </button>
     </Modal>

@@ -54,10 +54,15 @@ export function suggestSupervisor(supervisors, at = new Date()) {
   );
 }
 
+/** Resolve shift status from current or legacy field */
+export function getShiftStatus(shift) {
+  return shift?.shift_status || shift?.status || null;
+}
+
 /** RUNNING shift that belongs to the operator's current clock-in session */
 export function shiftBelongsToWorkSession(shift, workSession, userId) {
   if (!shift || !workSession || !userId) return false;
-  const status = shift.shift_status || shift.status;
+  const status = getShiftStatus(shift);
   if (status !== SHIFT.RUNNING) return false;
   if (shift.operator_id !== userId) return false;
   return new Date(shift.started_at).getTime() >= new Date(workSession.clock_in).getTime();

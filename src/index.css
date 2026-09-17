@@ -106,12 +106,8 @@ select:focus {
    TAP TARGETS
    ═══════════════════════════════════════════════════════════════ */
 button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
   min-height: 44px;
-  line-height: 1.2;
+  line-height: 1.35;
   cursor: pointer;
   touch-action: manipulation;
 }

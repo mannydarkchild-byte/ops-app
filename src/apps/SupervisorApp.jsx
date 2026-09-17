@@ -16,7 +16,7 @@ import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
 import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 
-import { fmtDateShort, getBillingPeriod, getDatePresets, hoursBetween, inPeriod } from "../lib/utils.js";
+import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod } from "../lib/utils.js";
 
 import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
 
@@ -27,6 +27,7 @@ import { AlertModal, Modal } from "../components/ui/Modal.jsx";
 import { SignaturePad } from "../components/ui/SignaturePad.jsx";
 
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
+import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 
 
 
@@ -98,10 +99,20 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
   const [reasonModal, setReasonModal] = useState(null);
 
   const [alert, setAlert] = useState({ isOpen: false });
+  const [reportPreview, setReportPreview] = useState(null);
 
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
-
+  // Keep live dashboard fresh while supervisor is watching
+  useEffect(() => {
+    if (!user?.site_id || !navigator.onLine) return;
+    const tick = () => {
+      if (document.visibilityState === "visible") syncNow().catch(() => {});
+    };
+    tick();
+    const id = setInterval(tick, 30000);
+    return () => clearInterval(id);
+  }, [user?.site_id, syncNow]);
 
   const siteMachines = useMemo(
 
@@ -135,7 +146,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
   const fleetStatus = useMemo(() => siteMachines.map((machine) => {
 
-    const runningShift = shifts.find((s) => s.machine_id === machine.id && s.shift_status === SHIFT.RUNNING);
+    const runningShift = shifts.find((s) => s.machine_id === machine.id && getShiftStatus(s) === SHIFT.RUNNING);
 
     const openStop = events.find((e) => e.machine_id === machine.id && e.type === "STOP" && e.status === "open");
 
@@ -163,7 +174,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
   const pendingShifts = shifts
 
-    .filter((r) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(r.shift_status) && r.site_id === user?.site_id)
+    .filter((r) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(getShiftStatus(r)) && r.site_id === user?.site_id)
 
     .sort((a, b) => {
 
@@ -215,7 +226,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
       .filter((s) =>
 
-        s.shift_status === SHIFT.VERIFIED &&
+        getShiftStatus(s) === SHIFT.VERIFIED &&
 
         s.site_id === user?.site_id &&
 
@@ -272,7 +283,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
     () => shifts.filter(
 
-      (s) => s.shift_status === SHIFT.VERIFIED && s.site_id === user?.site_id && inPeriod(s.verified_at || s.ended_at, billingPeriod)
+      (s) => getShiftStatus(s) === SHIFT.VERIFIED && s.site_id === user?.site_id && inPeriod(s.verified_at || s.ended_at, billingPeriod)
 
     ),
 
@@ -342,7 +353,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
     try {
 
-      await openShiftDailyReport(shift, { ...reportContext, machine });
+      const doc = await openShiftDailyReport(shift, { ...reportContext, machine });
+      setReportPreview(doc);
 
     } catch (e) {
 
@@ -468,7 +480,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
     const tokenOk = !verifyToken || shift.verification_token === verifyToken || !shift.verification_token;
 
-    if (tokenOk && [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(shift.shift_status)) {
+    if (tokenOk && [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(getShiftStatus(shift))) {
 
       setTab("verify");
 
@@ -846,7 +858,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
                 className={`bg-[#141414] border rounded-xl p-4 ${
 
-                  r.shift_status === SHIFT.RESUBMITTED
+                  getShiftStatus(r) === SHIFT.RESUBMITTED
 
                     ? "border-[#F97316] bg-[#F97316]/5"
 
@@ -860,7 +872,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
               >
 
-                {r.shift_status === SHIFT.RESUBMITTED && (
+                {getShiftStatus(r) === SHIFT.RESUBMITTED && (
 
                   <p className="font-logo text-[10px] text-[#F97316] mb-2 tracking-wider">↩ RESUBMITTED — operator corrected and resubmitted</p>
 
@@ -1214,6 +1226,14 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
         </Modal>
 
+      )}
+
+      {reportPreview && (
+        <ReportPreviewModal
+          html={reportPreview.html}
+          title={reportPreview.title}
+          onClose={() => setReportPreview(null)}
+        />
       )}
 
     </AppPage>

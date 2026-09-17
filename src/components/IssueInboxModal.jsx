@@ -9,6 +9,8 @@ import * as wf from "../services/workflows.js";
 
 const PRIORITY_COLOR = { Critical: "#EF4444", High: "#F97316", Medium: "#F5C518", Low: "#22C55E" };
 
+const actionBtn = "w-full py-4 rounded-xl font-logo text-base font-bold";
+
 export function IssueInboxModal({
   onClose,
   user,
@@ -84,76 +86,101 @@ export function IssueInboxModal({
 
   if (selected) {
     return (
-      <Modal title={`PROBLEM · ${selected.area}`} color="red" onClose={() => setSelectedId(null)}>
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <span className="px-2 py-0.5 rounded text-[10px] font-logo" style={{ backgroundColor: `${PRIORITY_COLOR[selected.priority] || "#F5C518"}22`, color: PRIORITY_COLOR[selected.priority] }}>
-            {selected.priority}
-          </span>
-          <span className="text-[10px] text-[#F2F0EA]/40 font-logo">{issueStatusLabel(selected.status)}</span>
-          <span className="text-[10px] text-[#F2F0EA]/40 font-logo">· {machineName(selected.machine_id)}</span>
+      <Modal title={selected.area} color="red" onClose={() => setSelectedId(null)}>
+        <div className="space-y-2 mb-4">
+          <p className="text-base font-logo" style={{ color: PRIORITY_COLOR[selected.priority] || "#F5C518" }}>
+            {selected.priority} priority
+          </p>
+          <p className="text-base text-[#F2F0EA]/70">{issueStatusLabel(selected.status)}</p>
+          <p className="text-base text-[#F2F0EA]/70">{machineName(selected.machine_id)}</p>
+          <p className="text-sm text-[#F2F0EA]/50">Reported by {selected.reporter_name}</p>
         </div>
-        <p className="font-body text-sm text-[#F2F0EA]/80 mb-2">{selected.description}</p>
-        <p className="text-[10px] text-[#F2F0EA]/40 mb-4">Reported by {selected.reporter_name}</p>
+
+        <p className="text-base text-[#F2F0EA] leading-relaxed mb-4">{selected.description}</p>
 
         <IssueTimeline issue={selected} messages={threadMessages} />
 
         {selected.status !== ISSUE.RESOLVED && (
-          <>
+          <div className="space-y-3">
             {!showClose ? (
               <>
-                <VoiceInput value={reply} onChange={setReply} placeholder="Reply…" rows={2} />
-                <button onClick={sendReply} disabled={busy || !reply.trim()} className="w-full mt-3 bg-[#EF4444] text-white py-3 rounded font-logo font-bold disabled:opacity-50">
+                <VoiceInput value={reply} onChange={setReply} placeholder="Type a reply…" rows={3} />
+                <button
+                  type="button"
+                  onClick={sendReply}
+                  disabled={busy || !reply.trim()}
+                  className={`${actionBtn} bg-[#EF4444] text-white disabled:opacity-50`}
+                >
                   {busy ? "SENDING…" : "SEND REPLY"}
                 </button>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {onSendTo && (
-                    <button type="button" onClick={() => { onSendTo(selected); setSelectedId(null); }}
-                      className="flex-1 min-w-[120px] border border-[#00A4A6] text-[#00A4A6] py-2.5 rounded-lg font-logo text-xs tracking-wider">
-                      SEND TO…
-                    </button>
-                  )}
-                  {onSendToMechanic && issueAreaRequiresMachine(selected.area) && selected.status !== ISSUE.WITH_MECHANIC && selected.status !== ISSUE.WAITING_FOR_PARTS && (
-                    <button type="button" onClick={() => { onSendToMechanic(selected); setSelectedId(null); }}
-                      className="flex-1 min-w-[120px] border border-[#F5C518] text-[#F5C518] py-2.5 rounded-lg font-logo text-xs tracking-wider">
-                      SEND TO MECHANIC
-                    </button>
-                  )}
-                  {onMarkPartsOrdered && selected.status === ISSUE.WAITING_FOR_PARTS && (
-                    <button type="button" onClick={async () => { setBusy(true); try { await onMarkPartsOrdered(selected); await onDone?.(); } finally { setBusy(false); } }}
-                      className="flex-1 min-w-[120px] border border-[#F5C518] text-[#F5C518] py-2.5 rounded-lg font-logo text-xs tracking-wider">
-                      PARTS ORDERED
-                    </button>
-                  )}
-                  {onMarkPartsOnSite && selected.status === ISSUE.WAITING_FOR_PARTS && (
-                    <button type="button" onClick={async () => { setBusy(true); try { await onMarkPartsOnSite(selected); await onDone?.(); } finally { setBusy(false); } }}
-                      className="flex-1 min-w-[120px] border border-[#22C55E] text-[#22C55E] py-2.5 rounded-lg font-logo text-xs tracking-wider">
-                      PARTS ON SITE
-                    </button>
-                  )}
-                  {userCanClose && (
-                    <button type="button" onClick={() => setShowClose(true)}
-                      className="flex-1 min-w-[120px] border border-[#22C55E] text-[#22C55E] py-2.5 rounded-lg font-logo text-xs tracking-wider">
-                      CLOSE PROBLEM
-                    </button>
-                  )}
-                </div>
+
+                {onSendTo && (
+                  <button
+                    type="button"
+                    onClick={() => { onSendTo(selected); setSelectedId(null); }}
+                    className={`${actionBtn} border-2 border-[#00A4A6] text-[#00A4A6]`}
+                  >
+                    SEND TO SOMEONE
+                  </button>
+                )}
+                {onSendToMechanic && issueAreaRequiresMachine(selected.area) && selected.status !== ISSUE.WITH_MECHANIC && selected.status !== ISSUE.WAITING_FOR_PARTS && (
+                  <button
+                    type="button"
+                    onClick={() => { onSendToMechanic(selected); setSelectedId(null); }}
+                    className={`${actionBtn} border-2 border-[#F5C518] text-[#F5C518]`}
+                  >
+                    SEND TO MECHANIC
+                  </button>
+                )}
+                {onMarkPartsOrdered && selected.status === ISSUE.WAITING_FOR_PARTS && (
+                  <button
+                    type="button"
+                    onClick={async () => { setBusy(true); try { await onMarkPartsOrdered(selected); await onDone?.(); } finally { setBusy(false); } }}
+                    className={`${actionBtn} border-2 border-[#F5C518] text-[#F5C518]`}
+                  >
+                    PARTS ORDERED
+                  </button>
+                )}
+                {onMarkPartsOnSite && selected.status === ISSUE.WAITING_FOR_PARTS && (
+                  <button
+                    type="button"
+                    onClick={async () => { setBusy(true); try { await onMarkPartsOnSite(selected); await onDone?.(); } finally { setBusy(false); } }}
+                    className={`${actionBtn} border-2 border-[#22C55E] text-[#22C55E]`}
+                  >
+                    PARTS ON SITE
+                  </button>
+                )}
+                {userCanClose && (
+                  <button
+                    type="button"
+                    onClick={() => setShowClose(true)}
+                    className={`${actionBtn} border-2 border-[#22C55E] text-[#22C55E]`}
+                  >
+                    CLOSE PROBLEM
+                  </button>
+                )}
               </>
             ) : (
               <>
-                <VoiceInput value={closeNote} onChange={setCloseNote} placeholder="Closing note (optional)…" rows={2} />
-                <div className="flex gap-2 mt-3">
-                  <button type="button" onClick={() => { setShowClose(false); setCloseNote(""); }}
-                    className="flex-1 border border-[#2A2A2A] py-2.5 rounded-lg font-logo text-xs">
-                    CANCEL
-                  </button>
-                  <button type="button" onClick={handleClose} disabled={busy}
-                    className="flex-1 bg-[#22C55E] text-black py-2.5 rounded-lg font-logo text-xs font-bold disabled:opacity-50">
-                    {busy ? "CLOSING…" : "CONFIRM CLOSE"}
-                  </button>
-                </div>
+                <VoiceInput value={closeNote} onChange={setCloseNote} placeholder="Closing note (optional)…" rows={3} />
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={busy}
+                  className={`${actionBtn} bg-[#22C55E] text-black disabled:opacity-50`}
+                >
+                  {busy ? "CLOSING…" : "CONFIRM CLOSE"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowClose(false); setCloseNote(""); }}
+                  className={`${actionBtn} border border-[#2A2A2A] text-[#F2F0EA]`}
+                >
+                  CANCEL
+                </button>
               </>
             )}
-          </>
+          </div>
         )}
       </Modal>
     );
@@ -162,27 +189,31 @@ export function IssueInboxModal({
   const listContent = (
     <>
       {filteredIssues.length > 0 && (
-        <p className="font-logo text-[10px] text-[#F5C518] mb-3 tracking-wider">{filteredIssues.length} open problem(s)</p>
+        <p className="font-logo text-sm text-[#F5C518] mb-3">{filteredIssues.length} open problem(s)</p>
       )}
-      <div className={`${variant === "modal" ? "max-h-[60vh]" : ""} overflow-y-auto space-y-2`}>
+      <div className={`${variant === "modal" ? "max-h-[70vh]" : ""} overflow-y-auto space-y-3`}>
         {filteredIssues.length === 0 && (
-          <p className="text-sm text-[#F2F0EA]/40 text-center py-8">No open problems.</p>
+          <p className="text-base text-[#F2F0EA]/50 text-center py-10">No open problems.</p>
         )}
         {filteredIssues.map((issue) => {
           const msgs = issueMessages.filter((m) => m.issue_id === issue.id);
           const last = msgs[msgs.length - 1];
           return (
-            <button key={issue.id} type="button" onClick={() => setSelectedId(issue.id)}
-              className="w-full text-left bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-3 active:scale-[0.99]">
-              <div className="flex justify-between items-start gap-2 mb-1">
-                <span className="font-logo text-xs text-[#F2F0EA]">{issue.area}</span>
-                <span className="font-logo text-[10px]" style={{ color: PRIORITY_COLOR[issue.priority] }}>{issue.priority}</span>
+            <button
+              key={issue.id}
+              type="button"
+              onClick={() => setSelectedId(issue.id)}
+              className="block w-full text-left bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4 active:bg-[#1A1A1A]"
+            >
+              <div className="flex justify-between items-start gap-3 mb-2">
+                <span className="font-logo text-base text-[#F2F0EA] leading-snug">{issue.area}</span>
+                <span className="font-logo text-sm shrink-0" style={{ color: PRIORITY_COLOR[issue.priority] }}>
+                  {issue.priority}
+                </span>
               </div>
-              <p className="font-body text-xs text-[#F2F0EA]/60 line-clamp-2 mb-1">{issue.description}</p>
-              <div className="flex justify-between text-[10px] text-[#F2F0EA]/40 font-logo">
-                <span>{issueStatusLabel(issue.status)} · {machineName(issue.machine_id)}</span>
-                <span>{last ? fmtDate(last.created_at) : fmtDate(issue.created_at)}</span>
-              </div>
+              <p className="text-base text-[#F2F0EA]/75 leading-relaxed line-clamp-3 mb-2">{issue.description}</p>
+              <p className="text-sm text-[#F2F0EA]/50">{issueStatusLabel(issue.status)} · {machineName(issue.machine_id)}</p>
+              <p className="text-sm text-[#F2F0EA]/40 mt-1">{last ? fmtDate(last.created_at) : fmtDate(issue.created_at)}</p>
             </button>
           );
         })}

@@ -281,7 +281,7 @@ ${shiftFuel.length
 </body></html>`;
 }
 
-export async function openShiftDailyReport(shift, { events, inspections, fuelLogs, machine, site }) {
+export async function prepareShiftDailyReport(shift, { events, inspections, fuelLogs, machine, site }) {
   const sigRef = shift.supervisor_signature_ref || shift.supervisor_signature;
   const startEv = events.find((e) => e.shift_id === shift.id && e.type === "MACHINE_STARTED");
   const endEv = events.find((e) => e.shift_id === shift.id && e.type === "METER_END_CAPTURED");
@@ -302,11 +302,15 @@ export async function openShiftDailyReport(shift, { events, inspections, fuelLog
     events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls,
   });
 
-  const w = window.open("", "_blank");
-  if (!w) throw new Error("Pop-up blocked — allow pop-ups to view the daily report.");
-  w.document.write(html);
-  w.document.close();
-  w.document.title = `Daily Report · ${shift.operator_name} · ${fmtDateShort(shift.started_at)}`;
+  return {
+    html,
+    title: `Daily Report · ${shift.operator_name} · ${fmtDateShort(shift.started_at)}`,
+  };
+}
+
+/** Returns { html, title } for in-app full-screen viewer */
+export async function openShiftDailyReport(shift, ctx) {
+  return prepareShiftDailyReport(shift, ctx);
 }
 
 export async function downloadShiftDailyReport(shift, ctx) {
@@ -618,16 +622,16 @@ export async function openMechanicInspectionReport(batch, items, { machine, site
   w.document.title = `Mechanic Inspection · ${machine?.name || "Machine"} · ${fmtDateShort(batch.timestamp || items[0]?.timestamp)}`;
 }
 
-export async function printOperationsReport(data, period, machine, site) {
+export async function prepareOperationsReport(data, period, machine, site) {
   const logoUrl = await resolveLogoDataUrl();
   const html = generateFullReportHTML(data, period, period.label, machine, site, {
     logoUrl,
     machines: machine ? [machine] : [],
   });
-  const w = window.open("", "_blank");
-  if (!w) throw new Error("Pop-up blocked — allow pop-ups to view the operations report.");
-  w.document.write(html);
-  w.document.close();
-  w.document.title = `Operations Report · ${period.label}`;
-  setTimeout(() => w.print(), 500);
+  return { html, title: `Operations Report · ${period.label}` };
+}
+
+/** Returns { html, title } for in-app full-screen viewer */
+export async function printOperationsReport(data, period, machine, site) {
+  return prepareOperationsReport(data, period, machine, site);
 }

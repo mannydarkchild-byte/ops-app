@@ -7,6 +7,7 @@ import { uploadPendingMedia } from "../media.js";
 let syncInProgress = false;
 let syncListeners = new Set();
 let debounceTimer = null;
+let syncSiteId = null;
 
 export function onSyncStateChange(fn) {
   syncListeners.add(fn);
@@ -19,6 +20,7 @@ function notify(state) {
 
 export async function runSync({ silent = true, forceBootstrap = false, siteId = null } = {}) {
   if (syncInProgress) return { ok: false, skipped: true };
+  const effectiveSiteId = siteId ?? syncSiteId;
   syncInProgress = true;
 
   const state = {
@@ -46,7 +48,7 @@ export async function runSync({ silent = true, forceBootstrap = false, siteId = 
 
     const bootstrapped = await getSyncMeta("bootstrapped_at");
     if (!bootstrapped || forceBootstrap) {
-      const boot = await pullBootstrap({ siteId });
+      const boot = await pullBootstrap({ siteId: effectiveSiteId });
       state.pulled += boot.pulled;
       if (boot.errors?.length) state.errors.push(...boot.errors);
     }
@@ -61,7 +63,7 @@ export async function runSync({ silent = true, forceBootstrap = false, siteId = 
     state.pushed = push.pushed;
     if (push.errors?.length) state.errors.push(...push.errors);
 
-    const pull = await pullIncremental({ siteId });
+    const pull = await pullIncremental({ siteId: effectiveSiteId });
     state.pulled += pull.pulled;
     if (pull.errors?.length) state.errors.push(...pull.errors);
 
@@ -69,7 +71,7 @@ export async function runSync({ silent = true, forceBootstrap = false, siteId = 
     state.lastSyncAt = new Date().toISOString();
     state.status = state.errors.length ? "error" : "synced";
 
-    if (!silent) notify(state);
+    notify({ ...state, complete: true, silent });
     return { ok: state.errors.length === 0, ...state };
   } catch (e) {
     state.status = "error";
@@ -85,12 +87,13 @@ export async function runSync({ silent = true, forceBootstrap = false, siteId = 
 export function scheduleSync(delayMs = 3000) {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
-    runSync({ silent: true }).catch(() => {});
+    runSync({ silent: true, siteId: syncSiteId }).catch(() => {});
   }, delayMs);
 }
 
 export function initSyncListeners({ siteId = null } = {}) {
-  const onOnline = () => runSync({ silent: true, siteId });
+  syncSiteId = siteId || null;
+  const onOnline = () => runSync({ silent: true, siteId: syncSiteId });
   window.addEventListener("online", onOnline);
 
   // Sync when app becomes visible after being hidden (not on every tab switch)
@@ -98,8 +101,8 @@ export function initSyncListeners({ siteId = null } = {}) {
   const onVis = () => {
     if (document.visibilityState === "hidden") {
       hiddenAt = Date.now();
-    } else if (document.visibilityState === "visible" && hiddenAt && Date.now() - hiddenAt > 60000) {
-      runSync({ silent: true, siteId });
+    } else if (document.visibilityState === "visible" && hiddenAt && Date.now() - hiddenAt > 15000) {
+      runSync({ silent: true, siteId: syncSiteId });
     }
   };
   document.addEventListener("visibilitychange", onVis);

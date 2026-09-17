@@ -4,12 +4,42 @@ import { getSyncMeta, setSyncMeta, mergeServerRow } from "../db.js";
 
 const PAGE_SIZE = 500;
 
-async function fetchIncremental(table, since) {
+/** Tables with a site_id column — filter on the server when syncing one site */
+const SITE_SCOPED_TABLES = new Set([
+  "machines",
+  "profiles",
+  "shifts",
+  "events",
+  "expenses",
+  "inspections",
+  "issues",
+  "work_sessions",
+  "shift_submissions",
+  "fuel_logs",
+  "machine_hour_readings",
+  "breakdowns",
+  "maintenance_jobs",
+  "inventory_items",
+  "inventory_movements",
+  "site_settings",
+]);
+
+const CREATED_AT_TABLES = new Set(["issue_messages", "shift_corrections", "maintenance_parts", "inventory_movements"]);
+
+function applySiteFilter(query, table, siteId) {
+  if (!siteId) return query;
+  if (table === "sites") return query.eq("id", siteId);
+  if (SITE_SCOPED_TABLES.has(table)) return query.eq("site_id", siteId);
+  return query;
+}
+
+async function fetchIncremental(table, since, siteId = null) {
   const out = [];
   let from = 0;
   while (true) {
     let query = supabase.from(table).select("*").order("updated_at", { ascending: true });
     if (since) query = query.gt("updated_at", since);
+    query = applySiteFilter(query, table, siteId);
     const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
     if (!data?.length) break;
@@ -21,12 +51,13 @@ async function fetchIncremental(table, since) {
 }
 
 /** Tables without updated_at use created_at watermark */
-async function fetchIncrementalFallback(table, since) {
+async function fetchIncrementalFallback(table, since, siteId = null) {
   const out = [];
   let from = 0;
   while (true) {
     let query = supabase.from(table).select("*").order("created_at", { ascending: true });
     if (since) query = query.gt("created_at", since);
+    query = applySiteFilter(query, table, siteId);
     const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
     if (!data?.length) break;
@@ -36,8 +67,6 @@ async function fetchIncrementalFallback(table, since) {
   }
   return out;
 }
-
-const CREATED_AT_TABLES = new Set(["issue_messages", "shift_corrections", "maintenance_parts", "inventory_movements"]);
 
 export async function pullIncremental({ tables = SYNC_TABLES, siteId = null } = {}) {
   if (!navigator.onLine) return { pulled: 0, errors: ["offline"] };
@@ -49,13 +78,9 @@ export async function pullIncremental({ tables = SYNC_TABLES, siteId = null } = 
     try {
       const watermarkKey = `watermark_${table}${siteId ? `_${siteId}` : ""}`;
       const since = await getSyncMeta(watermarkKey);
-      let rows = CREATED_AT_TABLES.has(table)
-        ? await fetchIncrementalFallback(table, since)
-        : await fetchIncremental(table, since);
-
-      if (siteId && rows.length) {
-        rows = rows.filter((r) => !r.site_id || r.site_id === siteId);
-      }
+      const rows = CREATED_AT_TABLES.has(table)
+        ? await fetchIncrementalFallback(table, since, siteId)
+        : await fetchIncremental(table, since, siteId);
 
       let merged = 0;
       let maxUpdated = since;
@@ -103,15 +128,15 @@ export async function pullBootstrap({ siteId = null, daysBack = 90 } = {}) {
       } else {
         query = query.gte("created_at", sinceISO);
       }
+      query = applySiteFilter(query, table, siteId);
       const { data, error } = await query.limit(5000);
       if (error) throw error;
       if (!data?.length) continue;
 
-      const rows = siteId ? data.filter((r) => !r.site_id || r.site_id === siteId) : data;
-      for (const row of rows) {
+      for (const row of data) {
         if (await mergeServerRow(table, row)) totalPulled++;
       }
-      const maxTs = rows.reduce((max, r) => {
+      const maxTs = data.reduce((max, r) => {
         const ts = r.updated_at || r.created_at;
         return ts && (!max || new Date(ts) > new Date(max)) ? ts : max;
       }, null);

@@ -7,6 +7,7 @@ import { ActivityFeed } from "../components/ActivityFeed.jsx";
 import { ExpenseModal } from "../components/ExpenseModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
+import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import { SignedReportCard } from "../components/SignedReportCard.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
 import { ISSUE, SHIFT } from "../lib/constants.js";
@@ -53,6 +54,7 @@ export function ManagerApp() {
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
+  const [reportPreview, setReportPreview] = useState(null);
   const showAlert = (title, message, type = "info") =>
     setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -307,7 +309,8 @@ export function ManagerApp() {
 
   const handleViewReport = async (shift) => {
     try {
-      await openShiftDailyReport(shift, { ...reportContext, machine: primaryMachine });
+      const doc = await openShiftDailyReport(shift, { ...reportContext, machine: primaryMachine });
+      setReportPreview(doc);
     } catch (e) {
       showAlert("Could not open report", e.message, "error");
     }
@@ -600,7 +603,8 @@ export function ManagerApp() {
                 type="button"
                 onClick={async () => {
                   try {
-                    await printOperationsReport(warriorReportData, getReportPeriod(), primaryMachine, activeSite);
+                    const doc = await printOperationsReport(warriorReportData, getReportPeriod(), primaryMachine, activeSite);
+                    setReportPreview(doc);
                   } catch (e) {
                     showAlert("Could not open report", e.message, "error");
                   }
@@ -677,6 +681,14 @@ export function ManagerApp() {
           site={activeSite}
           onDone={refreshLocal}
           allowCustomDate
+        />
+      )}
+
+      {reportPreview && (
+        <ReportPreviewModal
+          html={reportPreview.html}
+          title={reportPreview.title}
+          onClose={() => setReportPreview(null)}
         />
       )}
     </AppPage>
