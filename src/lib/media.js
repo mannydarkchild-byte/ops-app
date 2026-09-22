@@ -45,6 +45,20 @@ export async function resolveMediaUrl(ref) {
   return null;
 }
 
+function formatMediaUploadError(mediaId, msg) {
+  const tag = mediaId?.startsWith("MEDIA_") ? mediaId : `MEDIA_${mediaId}`;
+  return `${tag}: ${msg}`;
+}
+
+/** Drop local media ids so row data can upload without a photo URL */
+export function stripUnresolvedMediaRefs(record) {
+  const out = { ...record };
+  for (const [key, val] of Object.entries(out)) {
+    if (typeof val === "string" && val.startsWith("MEDIA_")) delete out[key];
+  }
+  return out;
+}
+
 /** Upload pending media blobs; returns count uploaded */
 export async function uploadPendingMedia({ machineCode = "general" } = {}) {
   if (!navigator.onLine) return { uploaded: 0, errors: ["offline"] };
@@ -66,7 +80,8 @@ export async function uploadPendingMedia({ machineCode = "general" } = {}) {
       await database.media_blobs.update(item.id, { status: "uploaded", remote_url: publicUrl });
       uploaded++;
     } catch (e) {
-      errors.push(`${item.id}: ${e.message}`);
+      const msg = e?.message || String(e);
+      errors.push(formatMediaUploadError(item.id, msg));
     }
   }
 
@@ -99,7 +114,7 @@ export async function resolveMediaRefsInRecord(record) {
       }
     }
   }
-  return out;
+  return stripUnresolvedMediaRefs(out);
 }
 
 export function pickMedia(kind, onResult) {

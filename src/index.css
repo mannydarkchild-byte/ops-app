@@ -214,3 +214,14 @@ button,
   font-size: 0.8125rem;
   letter-spacing: 0.08em;
 }
+
+.sync-header-btn .font-logo {
+  font-size: 0.8125rem;
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 639px) {
+  .sync-header-btn .font-logo {
+    font-size: 0.875rem;
+  }
+}

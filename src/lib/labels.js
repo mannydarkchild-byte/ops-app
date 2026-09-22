@@ -44,3 +44,27 @@ export function syncBannerLine({ status, pending, errors }) {
   if (status === "syncing") return SYNC_LABELS.syncing;
   return syncControlLabel({ status, pending, errors });
 }
+
+/** Full sentence for sync error list (mobile-readable) */
+export function formatSyncErrorMessage(raw) {
+  if (!raw || raw === "offline") return "No signal — will send when you are back online.";
+  const s = String(raw);
+  if (/^MEDIA_/i.test(s) || s.includes("Photo ")) {
+    const detail = s.replace(/^MEDIA_[^:]+:\s*/i, "").trim();
+    if (/row-level security|policy|403|401|permission|JWT/i.test(detail)) {
+      return `Photo could not upload (server storage blocked). Your shift numbers can still send — tap Update again. Admin must allow ops-media uploads for signed-in users. (${detail})`;
+    }
+    if (/Bucket not found|not found/i.test(detail)) {
+      return `Photo bucket missing in Supabase (ops-media). (${detail})`;
+    }
+    if (/Payload too large|413|size/i.test(detail)) {
+      return `Photo file too large for upload. Take a smaller picture or skip the photo. (${detail})`;
+    }
+    return `Photo upload failed: ${detail || s}`;
+  }
+  if (s.includes("/") && s.includes(":")) {
+    const [where, msg] = s.split(/:\s*/, 2);
+    return `${where.replace(/\//g, " — ")}: ${msg || "Could not save"}`;
+  }
+  return s;
+}

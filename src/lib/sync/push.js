@@ -1,7 +1,7 @@
 import { getDB } from "../db.js";
 import { supabase } from "../supabase.js";
 import { ALLOWED_COLUMNS } from "../constants.js";
-import { resolveMediaRefsInRecord } from "../media.js";
+import { resolveMediaRefsInRecord, stripUnresolvedMediaRefs } from "../media.js";
 import { uploadPendingMedia } from "../media.js";
 import { BOOTSTRAP_MACHINE_ID, BOOTSTRAP_SITE_ID } from "../seed.js";
 
@@ -46,7 +46,8 @@ export async function pushOneQueueItem(item) {
   }
 
   await uploadPendingMedia();
-  const resolved = await resolveMediaRefsInRecord(row);
+  let resolved = await resolveMediaRefsInRecord(row);
+  resolved = stripUnresolvedMediaRefs(resolved);
   // Map new ref fields to legacy Supabase columns when needed
   if (resolved.photo_ref && !resolved.photo_data) resolved.photo_data = resolved.photo_ref;
   if (resolved.photo_pump_ref && !resolved.photo_pump) resolved.photo_pump = resolved.photo_pump_ref;

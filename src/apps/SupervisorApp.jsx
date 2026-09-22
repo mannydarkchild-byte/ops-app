@@ -18,6 +18,8 @@ import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 
 import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod } from "../lib/utils.js";
 
+import { formatSyncErrorMessage } from "../lib/labels.js";
+
 import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
 
 import * as wf from "../services/workflows.js";
@@ -684,20 +686,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
       maxWidth="max-w-4xl"
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
-
-        {(syncState.status === "error" || syncState.errors?.length > 0) && (
-
-          <div className="bg-[#EF4444]/10 border border-[#EF4444]/40 rounded-xl px-4 py-3 mb-4">
-
-            <p className="font-logo text-sm text-[#EF4444]">Not fully updated — tap Update in the header</p>
-
-            <p className="text-sm text-[#F2F0EA]/70 mt-1">{syncState.errors?.[0] || "Some data did not download from the server."}</p>
-
-          </div>
-
-        )}
-
-
 
         {(myPendingVerify > 0 || criticalIssues > 0 || stoppedMachines > 0) && (
 

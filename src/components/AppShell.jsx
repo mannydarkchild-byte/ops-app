@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
-import { SYNC_LABELS, syncControlLabel, syncBannerLine } from "../lib/labels.js";
+import { SYNC_LABELS, syncControlLabel, formatSyncErrorMessage } from "../lib/labels.js";
 
 const ROLE_COLORS = {
   operator: { bg: "bg-[#22C55E]/15", text: "text-[#22C55E]", border: "border-[#22C55E]/40" },
@@ -90,16 +90,16 @@ function SyncButton() {
     <button
       type="button"
       onClick={() => syncNow()}
-      className="flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg bg-[#141414] border border-[#2A2A2A] hover:border-[#3A3A3A] active:scale-95 min-h-[36px] max-w-[42vw] sm:max-w-none"
-      title={err || (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Tap to send and refresh from server")}
-      aria-label={err ? `Sync failed: ${err}. Tap to retry.` : `${caption}. Tap to update.`}
+      className="sync-header-btn flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#141414] border border-[#2A2A2A] hover:border-[#3A3A3A] active:scale-95 min-h-[44px] max-w-[46vw] sm:max-w-none"
+      title={err ? formatSyncErrorMessage(err) : (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Tap to send and refresh from server")}
+      aria-label={err ? `Sync failed. Tap to retry.` : `${caption}. Tap to update.`}
     >
-      <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
-      <span className={`font-logo text-[8px] sm:text-[9px] tracking-wider truncate ${meta.color}`}>
+      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${meta.dot}`} />
+      <span className={`font-logo text-xs sm:text-sm tracking-wide truncate ${meta.color}`}>
         {caption}
       </span>
       {(syncState.pending || 0) > 0 && (
-        <span className="font-logo text-[8px] bg-[#F5C518] text-black rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0">
+        <span className="font-logo text-xs bg-[#F5C518] text-black rounded-full min-w-[22px] h-[22px] px-1.5 flex items-center justify-center shrink-0 font-bold">
           {syncState.pending > 99 ? "99+" : syncState.pending}
         </span>
       )}
@@ -107,37 +107,47 @@ function SyncButton() {
   );
 }
 
-/** Extra sync row on small screens when queue or errors need attention */
-export function SyncStatusBanner() {
-  const { syncState, syncNow } = useOps();
-  const meta = SYNC_META[syncState.status] || SYNC_META.idle;
+/** Operator-only hint — no extra button (avoids overlapping tab bars) */
+function SyncQueueHint({ hasTabBar }) {
+  const { syncState } = useOps();
+  if (hasTabBar) return null;
   const pending = syncState.pending || 0;
-  const err = syncState.errors?.[0];
-  const busy = syncState.status === "syncing";
-  const needsBanner = pending > 0 || err || syncState.status === "error" || busy;
-  if (!needsBanner) return null;
-
-  const line = syncBannerLine(syncState);
+  const err = syncState.errors?.length;
+  if (pending <= 0 || err || syncState.status === "syncing") return null;
 
   return (
-    <div className="sm:hidden border-b border-[#2A2A2A] bg-[#141414]/90 px-3 py-2 flex items-center gap-2">
-      <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className={`font-logo text-[10px] tracking-wide ${meta.color}`}>
-          {line}
-        </p>
-        {err && (
-          <p className="font-body text-[11px] text-[#F2F0EA]/70 truncate mt-0.5" title={err}>
-            {err}
-          </p>
-        )}
-      </div>
+    <div className="sm:hidden border-b border-[#F5C518]/30 bg-[#F5C518]/10 px-4 py-3">
+      <p className="font-body text-base text-[#F2F0EA] leading-snug">
+        <span className="font-logo text-[#F5C518]">{pending}</span>
+        {pending === 1 ? " item " : " items "}
+        waiting to send. Tap <span className="font-logo text-[#F5C518]">Update</span> in the top bar.
+      </p>
+    </div>
+  );
+}
+
+/** Full error text — readable on phone, sits below tabs (not on top of them) */
+export function SyncErrorPanel() {
+  const { syncState, syncNow } = useOps();
+  const errors = (syncState.errors || []).filter(Boolean);
+  if (!errors.length) return null;
+
+  return (
+    <div id="sync-error-panel" className="px-3 sm:px-4 py-4 bg-[#1a1212] border-b border-[#EF4444]/40 max-w-5xl mx-auto w-full">
+      <p className="font-logo text-base text-[#EF4444] mb-2">Update did not finish</p>
+      <ul className="space-y-3 mb-4">
+        {errors.map((e, i) => (
+          <li key={i} className="font-body text-base text-[#F2F0EA] leading-relaxed break-words">
+            {formatSyncErrorMessage(e)}
+          </li>
+        ))}
+      </ul>
       <button
         type="button"
         onClick={() => syncNow()}
-        className="shrink-0 px-3 py-2 rounded-lg bg-[#00A4A6] text-white font-logo text-[10px] tracking-wider min-h-[36px] active:scale-95"
+        className="w-full py-4 rounded-xl bg-[#00A4A6] text-white font-logo text-base tracking-wide active:scale-[0.99] min-h-[48px]"
       >
-        {err ? SYNC_LABELS.actionRetry : SYNC_LABELS.action}
+        {SYNC_LABELS.actionRetry}
       </button>
     </div>
   );
@@ -214,39 +224,11 @@ export function AppHeader({ right, subtitle, context, showSite = true }) {
 /**
  * Scrollable tab bar — use below AppHeader in tabbed apps.
  * tabs: { id, label, icon?, badge? }
+ * Sync lives in the header only (avoids crowding tabs on mobile).
  */
-function TabBarSyncButton({ onSync }) {
-  const { syncState } = useOps();
-  const caption = syncControlLabel(syncState);
-  const pending = syncState.pending || 0;
-  const dotClass =
-    syncState.status === "syncing"
-      ? "bg-white animate-pulse"
-      : syncState.status === "error" || syncState.errors?.length
-        ? "bg-[#EF4444]"
-        : "bg-white/90";
-
+export function AppTabBar({ tabs, activeTab, onTabChange, footer }) {
   return (
-    <button
-      type="button"
-      onClick={onSync}
-      className="shrink-0 flex items-center gap-1.5 px-2.5 sm:px-3 py-2.5 rounded-lg font-logo text-[10px] sm:text-[11px] bg-[#00A4A6] text-white hover:bg-[#00A4A6]/90 active:scale-95 min-h-[40px] max-w-[38vw] sm:max-w-none"
-      title={syncState.errors?.[0] || "Send and refresh from server"}
-    >
-      <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} aria-hidden />
-      <span className="tracking-wide truncate">{caption}</span>
-      {pending > 0 && (
-        <span className="bg-[#F5C518] text-black text-[9px] rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0">
-          {pending > 99 ? "99+" : pending}
-        </span>
-      )}
-    </button>
-  );
-}
-
-export function AppTabBar({ tabs, activeTab, onTabChange, onSync, footer }) {
-  return (
-    <div className="bg-[#0A0A0A] border-b border-[#2A2A2A]/80">
+    <div className="relative z-20 bg-[#0A0A0A] border-b border-[#2A2A2A]/80">
       <div className="px-3 sm:px-4 py-2 flex items-center gap-2 max-w-5xl mx-auto">
         <div className="flex gap-1 overflow-x-auto smooth-scroll flex-1 pb-0.5 -mb-0.5">
           {tabs.map((t) => (
@@ -254,7 +236,7 @@ export function AppTabBar({ tabs, activeTab, onTabChange, onSync, footer }) {
               key={t.id}
               type="button"
               onClick={() => onTabChange(t.id)}
-              className={`shrink-0 px-3 py-2.5 rounded-lg font-logo text-[11px] leading-tight tracking-wide whitespace-nowrap transition-colors min-h-[40px] ${
+              className={`shrink-0 px-3 py-2.5 rounded-lg font-logo text-xs sm:text-sm leading-tight tracking-wide whitespace-nowrap transition-colors min-h-[44px] ${
                 activeTab === t.id
                   ? "bg-[#F5C518] text-black"
                   : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70 hover:border-[#3A3A3A]"
@@ -269,7 +251,6 @@ export function AppTabBar({ tabs, activeTab, onTabChange, onSync, footer }) {
             </button>
           ))}
         </div>
-        {onSync && <TabBarSyncButton onSync={onSync} />}
       </div>
       {footer && (
         <div className="px-3 sm:px-4 pb-2 max-w-5xl mx-auto">
@@ -301,17 +282,17 @@ export function AppPage({
       {alert}
       <AppHeader subtitle={subtitle} context={context} showSite={showSite} />
       <OfflineBanner />
-      <SyncStatusBanner />
+      <SyncQueueHint hasTabBar={Boolean(tabs?.length)} />
       {banner}
       {tabs?.length > 0 && (
         <AppTabBar
           tabs={tabs}
           activeTab={activeTab}
           onTabChange={onTabChange}
-          onSync={onSync}
           footer={tabFooter}
         />
       )}
+      <SyncErrorPanel />
       <main className={`p-3 sm:p-4 ${maxWidth} mx-auto`}>{children}</main>
     </div>
   );
