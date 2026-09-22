@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
-import { SYNC_LABELS } from "../lib/labels.js";
+import { SYNC_LABELS, syncControlLabel, syncBannerLine } from "../lib/labels.js";
 
 const ROLE_COLORS = {
   operator: { bg: "bg-[#22C55E]/15", text: "text-[#22C55E]", border: "border-[#22C55E]/40" },
@@ -84,18 +84,62 @@ export function SyncDot() {
 function SyncButton() {
   const { syncState, syncNow } = useOps();
   const meta = SYNC_META[syncState.status] || SYNC_META.idle;
+  const caption = syncControlLabel(syncState);
+  const err = syncState.errors?.[0];
   return (
     <button
       type="button"
       onClick={() => syncNow()}
-      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#141414] border border-[#2A2A2A] hover:border-[#3A3A3A] active:scale-95 min-h-[36px]"
-      title={syncState.errors?.[0] || "Tap to update from server"}
+      className="flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg bg-[#141414] border border-[#2A2A2A] hover:border-[#3A3A3A] active:scale-95 min-h-[36px] max-w-[42vw] sm:max-w-none"
+      title={err || (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Tap to send and refresh from server")}
+      aria-label={err ? `Sync failed: ${err}. Tap to retry.` : `${caption}. Tap to update.`}
     >
       <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
-      <span className={`font-logo text-[9px] tracking-wider hidden sm:inline ${meta.color}`}>
-        {syncState.pending > 0 ? `${syncState.pending} waiting` : meta.label}
+      <span className={`font-logo text-[8px] sm:text-[9px] tracking-wider truncate ${meta.color}`}>
+        {caption}
       </span>
+      {(syncState.pending || 0) > 0 && (
+        <span className="font-logo text-[8px] bg-[#F5C518] text-black rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0">
+          {syncState.pending > 99 ? "99+" : syncState.pending}
+        </span>
+      )}
     </button>
+  );
+}
+
+/** Extra sync row on small screens when queue or errors need attention */
+export function SyncStatusBanner() {
+  const { syncState, syncNow } = useOps();
+  const meta = SYNC_META[syncState.status] || SYNC_META.idle;
+  const pending = syncState.pending || 0;
+  const err = syncState.errors?.[0];
+  const busy = syncState.status === "syncing";
+  const needsBanner = pending > 0 || err || syncState.status === "error" || busy;
+  if (!needsBanner) return null;
+
+  const line = syncBannerLine(syncState);
+
+  return (
+    <div className="sm:hidden border-b border-[#2A2A2A] bg-[#141414]/90 px-3 py-2 flex items-center gap-2">
+      <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className={`font-logo text-[10px] tracking-wide ${meta.color}`}>
+          {line}
+        </p>
+        {err && (
+          <p className="font-body text-[11px] text-[#F2F0EA]/70 truncate mt-0.5" title={err}>
+            {err}
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => syncNow()}
+        className="shrink-0 px-3 py-2 rounded-lg bg-[#00A4A6] text-white font-logo text-[10px] tracking-wider min-h-[36px] active:scale-95"
+      >
+        {err ? SYNC_LABELS.actionRetry : SYNC_LABELS.action}
+      </button>
+    </div>
   );
 }
 
@@ -171,6 +215,35 @@ export function AppHeader({ right, subtitle, context, showSite = true }) {
  * Scrollable tab bar — use below AppHeader in tabbed apps.
  * tabs: { id, label, icon?, badge? }
  */
+function TabBarSyncButton({ onSync }) {
+  const { syncState } = useOps();
+  const caption = syncControlLabel(syncState);
+  const pending = syncState.pending || 0;
+  const dotClass =
+    syncState.status === "syncing"
+      ? "bg-white animate-pulse"
+      : syncState.status === "error" || syncState.errors?.length
+        ? "bg-[#EF4444]"
+        : "bg-white/90";
+
+  return (
+    <button
+      type="button"
+      onClick={onSync}
+      className="shrink-0 flex items-center gap-1.5 px-2.5 sm:px-3 py-2.5 rounded-lg font-logo text-[10px] sm:text-[11px] bg-[#00A4A6] text-white hover:bg-[#00A4A6]/90 active:scale-95 min-h-[40px] max-w-[38vw] sm:max-w-none"
+      title={syncState.errors?.[0] || "Send and refresh from server"}
+    >
+      <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} aria-hidden />
+      <span className="tracking-wide truncate">{caption}</span>
+      {pending > 0 && (
+        <span className="bg-[#F5C518] text-black text-[9px] rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0">
+          {pending > 99 ? "99+" : pending}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function AppTabBar({ tabs, activeTab, onTabChange, onSync, footer }) {
   return (
     <div className="bg-[#0A0A0A] border-b border-[#2A2A2A]/80">
@@ -196,15 +269,7 @@ export function AppTabBar({ tabs, activeTab, onTabChange, onSync, footer }) {
             </button>
           ))}
         </div>
-        {onSync && (
-          <button
-            type="button"
-            onClick={onSync}
-            className="shrink-0 px-3 py-2.5 rounded-lg font-logo text-sm bg-[#00A4A6] text-white hover:bg-[#00A4A6]/90 active:scale-95 min-h-[40px] min-w-[40px]"
-          >
-            ↻
-          </button>
-        )}
+        {onSync && <TabBarSyncButton onSync={onSync} />}
       </div>
       {footer && (
         <div className="px-3 sm:px-4 pb-2 max-w-5xl mx-auto">
@@ -236,6 +301,7 @@ export function AppPage({
       {alert}
       <AppHeader subtitle={subtitle} context={context} showSite={showSite} />
       <OfflineBanner />
+      <SyncStatusBanner />
       {banner}
       {tabs?.length > 0 && (
         <AppTabBar
