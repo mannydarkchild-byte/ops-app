@@ -76,7 +76,7 @@ export async function releaseMachineLock(machineId) {
 export async function syncMachineLocks() {
   if (!navigator.onLine) return;
   const db = getDB();
-  const locks = await db.machine_locks.where("synced").equals(0).toArray();
+  const locks = await db.machine_locks.filter((l) => l.synced !== true).toArray();
   for (const lock of locks) {
     try {
       const shift = lock.shift_id ? await db.shifts.get(lock.shift_id) : null;

@@ -28,7 +28,7 @@ const TABLE_INDEXES = {
   sync_queue: "++queue_id, table, record_id, status, created_at",
   sync_meta: "key",
   media_blobs: "id, status, created_at",
-  machine_locks: "machine_id, status",
+  machine_locks: "machine_id, status, synced",
   machine_status: "machine_id, is_running, operator_id",
 };
 
@@ -43,6 +43,7 @@ export async function initDB() {
   db.version(1).stores(V1_STORES);
   db.version(2).stores(TABLE_INDEXES);
   db.version(3).stores(TABLE_INDEXES);
+  db.version(4).stores(TABLE_INDEXES);
 
   await db.open();
   return db;
