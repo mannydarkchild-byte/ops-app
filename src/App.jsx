@@ -87,7 +87,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <OpsProvider>
-        <RoleRouter />
+        <div className="ops-field min-h-screen">
+          <RoleRouter />
+        </div>
       </OpsProvider>
     </ErrorBoundary>
   );

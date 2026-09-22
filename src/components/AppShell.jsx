@@ -198,7 +198,7 @@ export function AppHeader({ right, subtitle, context, showSite = true }) {
                 {roleLabel}
               </span>
             </div>
-            <p className="font-body text-xs sm:text-[11px] text-[#F2F0EA]/90 sm:text-[#F2F0EA]/50 truncate mt-0.5 leading-snug">
+            <p className="font-body text-sm text-[#F2F0EA]/90 sm:text-[#F2F0EA]/55 truncate mt-0.5 leading-snug">
               <span className="sm:hidden">{mobileContext}</span>
               {contextLine && <span className="hidden sm:inline">{contextLine}</span>}
             </p>
@@ -210,7 +210,7 @@ export function AppHeader({ right, subtitle, context, showSite = true }) {
           <button
             type="button"
             onClick={signOut}
-            className="px-3 py-2 rounded-lg bg-[#141414] border border-[#2A2A2A] font-logo text-[10px] text-[#F2F0EA]/60 hover:text-[#EF4444] hover:border-[#EF4444]/40 active:scale-95 min-h-[36px] tracking-wider"
+            className="px-3 py-2.5 rounded-lg bg-[#141414] border border-[#2A2A2A] font-logo text-sm text-[#F2F0EA]/70 hover:text-[#EF4444] hover:border-[#EF4444]/40 active:scale-95 min-h-[44px] tracking-wider"
             title="Sign out"
           >
             OUT

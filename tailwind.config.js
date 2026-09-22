@@ -6,6 +6,13 @@ export default {
   ],
   theme: {
     extend: {
+      fontSize: {
+        xs: ["0.8125rem", { lineHeight: "1.45" }],
+        sm: ["0.9375rem", { lineHeight: "1.45" }],
+        base: ["1.0625rem", { lineHeight: "1.5" }],
+        lg: ["1.1875rem", { lineHeight: "1.45" }],
+        xl: ["1.3125rem", { lineHeight: "1.4" }],
+      },
       colors: {
         ops: {
           black: '#0A0A0A',
