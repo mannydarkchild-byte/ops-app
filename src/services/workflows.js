@@ -319,9 +319,11 @@ export async function endMachineDay(user, machine, site, machineRun, { endHour, 
   await addEvent(user, machine, site, "METER_END_CAPTURED", { shift_id: ended.id, note: `Ending meter ${h}h`, photo_ref: photoRef });
   await addEvent(user, machine, site, "MACHINE_ENDED", { shift_id: ended.id, note: `Machine day ended at ${h}h` });
 
+  if (!site?.id) throw new Error("Site is missing — contact admin to link your profile to a site");
+
   const submission = {
     id: makeId("SUB"),
-    site_id: site?.id,
+    site_id: site.id,
     machine_id: machine.id,
     shift_id: ended.id,
     operator_id: user.id,

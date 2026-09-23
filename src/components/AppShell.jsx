@@ -293,7 +293,7 @@ export function AppPage({
   outdoor = false,
 }) {
   return (
-    <div className={`min-h-screen bg-ops-black text-ops-text pb-8 mobile-safe-bottom ${outdoor ? "operator-outdoor operator-sunlight" : ""}`}>
+    <div className={`min-h-screen bg-ops-black text-ops-text pb-8 mobile-safe-bottom ${outdoor ? "operator-outdoor" : ""}`}>
       {alert}
       <AppHeader subtitle={subtitle} context={context} showSite={showSite} />
       <OfflineBanner />

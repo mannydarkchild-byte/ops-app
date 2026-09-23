@@ -11,26 +11,26 @@ export function OperatorFlowGuide({ currentStep, machineName, siteName }) {
   return (
     <div className="operator-flow-guide mb-4">
       {(siteName || machineName) && (
-        <p className="font-ui text-sm font-semibold text-operator-ink mb-2 truncate">
+        <p className="font-ui text-sm font-semibold text-ops-gold mb-2 truncate">
           {[siteName, machineName].filter(Boolean).join(" · ")}
         </p>
       )}
 
       {meta.stepNum != null && (
-        <p className="font-ui text-xs font-medium text-operator-muted mb-1">
+        <p className="font-ui text-xs font-medium text-ops-muted mb-1">
           Step {meta.stepNum} of {meta.total}
         </p>
       )}
 
-      <div className="h-2 rounded-full bg-operator-border overflow-hidden mb-3" aria-hidden>
+      <div className="h-2.5 rounded-full bg-ops-border overflow-hidden mb-3" aria-hidden>
         <div
-          className="h-full rounded-full bg-operator-accent transition-all duration-300"
+          className="h-full rounded-full bg-ops-gold transition-all duration-300"
           style={{ width: `${Math.max(progress, meta.stepNum ? 12 : 8)}%` }}
         />
       </div>
 
-      <h2 className="font-ui text-xl font-bold text-operator-ink leading-tight">{meta.title}</h2>
-      <p className="font-body text-base text-operator-muted mt-2 leading-relaxed">{meta.hint}</p>
+      <h2 className="font-ui text-xl font-bold text-ops-text leading-tight">{meta.title}</h2>
+      <p className="font-body text-base text-ops-muted mt-2 leading-relaxed">{meta.hint}</p>
 
       <ol className="flex flex-wrap gap-2 mt-4" aria-label="Shift steps">
         {OPERATOR_FLOW_STEPS.map((s, i) => {
@@ -41,10 +41,10 @@ export function OperatorFlowGuide({ currentStep, machineName, siteName }) {
               key={s.id}
               className={`font-ui text-xs font-medium px-2.5 py-1 rounded-full border ${
                 active
-                  ? "bg-operator-accent text-operator-accent-fg border-operator-accent"
+                  ? "bg-ops-gold text-ops-black border-ops-gold"
                   : done
-                    ? "bg-operator-success/15 text-operator-success border-operator-success/40"
-                    : "bg-operator-surface text-operator-muted border-operator-border"
+                    ? "bg-ops-green/15 text-ops-green border-ops-green/40"
+                    : "bg-ops-card text-ops-muted border-ops-border"
               }`}
             >
               {done ? "✓ " : ""}{s.label}

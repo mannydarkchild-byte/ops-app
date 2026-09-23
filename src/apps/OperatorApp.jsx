@@ -395,8 +395,8 @@ export function OperatorApp() {
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
                 machineStatus === "running"
-                  ? "bg-operator-success/10 border-operator-success/35 text-operator-success"
-                  : "bg-operator-danger/10 border-operator-danger/35 text-operator-danger"
+                  ? "bg-ops-green/10 border-ops-green/35 text-ops-green"
+                  : "bg-ops-red/10 border-ops-red/35 text-ops-red"
               }`}>
                 {machineStatus === "running" ? "Machine running" : `Stopped — ${downtime?.reason || "downtime"}`}
               </div>
@@ -413,7 +413,7 @@ export function OperatorApp() {
                   />
                 </FormSection>
                 <FormSection title="Clock in" description="Tap when you are on site and ready." accent="#15803D">
-                  <Button type="button" variant="primary" size="lg" className="w-full !bg-operator-success !text-white !border-operator-success" onClick={handleClockIn} disabled={blocked || !clockInSupervisorId}>
+                  <Button type="button" variant="primary" size="lg" className="w-full" onClick={handleClockIn} disabled={blocked || !clockInSupervisorId}>
                     Clock in
                   </Button>
                 </FormSection>
@@ -445,7 +445,7 @@ export function OperatorApp() {
                     onPhoto={(ref, preview) => { setStartPhotoRef(ref); setStartPhotoPreview(preview); setStartPhotoError(false); }}
                     showPhotoError={startPhotoError}
                   />
-                  <Button type="button" variant="primary" size="lg" className="w-full mt-4 !bg-operator-success !text-white !border-operator-success" onClick={handleStart}>
+                  <Button type="button" variant="primary" size="lg" className="w-full mt-4" onClick={handleStart}>
                     Start machine
                   </Button>
                 </FormSection>

@@ -88,6 +88,30 @@ export function parseSyncError(raw) {
     };
   }
 
+  if (/photo_ref|schema cache|could not find the/i.test(s)) {
+    return {
+      title: "Photo field mismatch",
+      body: "The app sent a photo column the database does not have. Update the app, then tap Update again.",
+      technical: s,
+    };
+  }
+
+  if (/shift_submissions|row-level security/i.test(s) && /shift_submission|submission/i.test(s)) {
+    return {
+      title: "Shift sign-off record blocked",
+      body: "Server permissions blocked the submission row. Run migration 014 in Supabase, and confirm your profile has the correct site.",
+      technical: s,
+    };
+  }
+
+  if (/issue_messages|schema cache|could not find the/i.test(s)) {
+    return {
+      title: "Issue message didn’t send",
+      body: "Run migration 012 in Supabase (issue_messages media columns), then tap Update.",
+      technical: s,
+    };
+  }
+
   if (s.includes("/") && s.includes(":")) {
     const [where, msg] = s.split(/:\s*/, 2);
     return {

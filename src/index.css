@@ -257,69 +257,20 @@ button,
   color: rgba(242, 240, 234, 0.88) !important;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   OPERATOR SUNLIGHT — light UI for outdoor / glare (operator only)
-   ═══════════════════════════════════════════════════════════════ */
-.operator-sunlight {
-  background-color: #ede9de !important;
-  color: #14120e;
-}
-
-.operator-sunlight header {
-  background: rgba(255, 255, 255, 0.96) !important;
-  border-color: #c9c4b8 !important;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
-}
-
-.operator-sunlight header .text-ops-muted,
-.operator-sunlight header .font-body.text-sm {
-  color: #4a4843 !important;
-}
-
-.operator-sunlight header .text-ops-text {
-  color: #14120e !important;
-}
-
-.operator-sunlight .bg-ops-black {
-  background-color: #ede9de !important;
-}
-
-.operator-sunlight main {
-  color: #14120e;
-}
-
-.operator-sunlight .bg-ops-card,
-.operator-sunlight .operator-work-panel {
-  background-color: #ffffff !important;
-  border-color: #c9c4b8 !important;
-  box-shadow: 0 2px 12px rgba(20, 18, 14, 0.08);
-}
-
-.operator-sunlight .border-ops-border {
-  border-color: #c9c4b8 !important;
-}
-
-.operator-sunlight .text-ops-text {
-  color: #14120e !important;
-}
-
-.operator-sunlight .text-ops-muted {
-  color: #4a4843 !important;
-}
-
-.operator-sunlight .operator-flow-guide {
-  background: #ffffff;
-  border: 2px solid #c9c4b8;
+/* Operator outdoor — dark brand, stronger contrast (no white theme) */
+.operator-outdoor .operator-flow-guide {
+  background: #141414;
+  border: 2px solid #3a3a3a;
   border-radius: 1rem;
   padding: 1rem 1.125rem;
-  box-shadow: 0 2px 12px rgba(20, 18, 14, 0.06);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
 }
 
-.operator-sunlight #sync-error-panel,
-.operator-sunlight .border-ops-red\/25 {
-  background: #fff5f5 !important;
+.operator-outdoor .operator-work-panel {
+  border-width: 2px;
+  border-color: #3a3a3a;
 }
 
-.operator-sunlight .font-logo.text-ops-gold {
-  color: #a16207 !important;
+.operator-outdoor main .text-ops-muted {
+  color: rgba(242, 240, 234, 0.78);
 }

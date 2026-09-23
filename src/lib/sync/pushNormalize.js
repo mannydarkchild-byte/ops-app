@@ -32,6 +32,12 @@ export function normalizeForSupabasePush(row, table) {
     if (!isHttpUrl(out.media_url)) delete out.media_url;
   }
 
+  if (table === "events") {
+    setUrl("photo_data", out.photo_ref, out.photo_data);
+    delete out.photo_ref;
+    delete out.photo;
+  }
+
   for (const key of Object.keys(out)) {
     if (!key.endsWith("_ref")) continue;
     if (table === "shifts" && key === "supervisor_signature_ref") continue;

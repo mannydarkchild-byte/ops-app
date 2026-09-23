@@ -35,7 +35,20 @@ function buildPayload(table, row) {
     delete payload._local_updated_at;
     delete payload._server_updated_at;
   }
-  return payload;
+  return sanitizePayload(table, payload);
+}
+
+/** Never send local *_ref columns or MEDIA ids to PostgREST */
+function sanitizePayload(table, payload) {
+  const allowed = ALLOWED_COLUMNS[table];
+  const out = {};
+  for (const [key, val] of Object.entries(payload)) {
+    if (key.endsWith("_ref")) continue;
+    if (typeof val === "string" && val.startsWith("MEDIA_")) continue;
+    if (allowed && !allowed.includes(key)) continue;
+    out[key] = val;
+  }
+  return out;
 }
 
 export async function pushOneQueueItem(item) {
@@ -50,6 +63,18 @@ export async function pushOneQueueItem(item) {
   let resolved = await resolveMediaRefsInRecord(row);
   resolved = stripUnresolvedMediaRefs(resolved);
   resolved = normalizeForSupabasePush(resolved, item.table);
+
+  if (item.table === "shift_submissions" && !resolved.site_id && resolved.shift_id) {
+    const shift = await db.shifts.get(resolved.shift_id);
+    if (shift?.site_id) resolved.site_id = shift.site_id;
+  }
+  if (item.table === "events" && resolved.photo_ref && !resolved.photo_data) {
+    if (typeof resolved.photo_ref === "string" && resolved.photo_ref.startsWith("http")) {
+      resolved.photo_data = resolved.photo_ref;
+    }
+    delete resolved.photo_ref;
+  }
+
   if (await shouldSkipCatalogPush(item.table, item.record_id)) {
     await db[item.table].update(item.record_id, { _sync_status: "synced" });
     await db.sync_queue.delete(item.queue_id);
