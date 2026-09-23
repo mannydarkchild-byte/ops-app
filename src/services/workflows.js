@@ -200,6 +200,14 @@ export async function startMachine(user, machine, site, { hourMeter, photoRef, v
 
   await saveLocal("shifts", run);
   await addEvent(user, machine, site, "MACHINE_STARTED", { shift_id: run.id, note: `Started at ${h}h`, photo_ref: photoRef });
+  await recordHourReading(user, machine, site, {
+    reading: h,
+    photoRef,
+    readingAt: now,
+    source: "opening",
+    shiftId: run.id,
+    notes: "Opening meter",
+  });
   scheduleSync();
   return { run, lock };
 }
@@ -317,6 +325,14 @@ export async function endMachineDay(user, machine, site, machineRun, { endHour, 
 
   await saveLocal("shifts", ended);
   await addEvent(user, machine, site, "METER_END_CAPTURED", { shift_id: ended.id, note: `Ending meter ${h}h`, photo_ref: photoRef });
+  await recordHourReading(user, machine, site, {
+    reading: h,
+    photoRef,
+    readingAt: now,
+    source: "closing",
+    shiftId: ended.id,
+    notes: "Closing meter",
+  });
   await addEvent(user, machine, site, "MACHINE_ENDED", { shift_id: ended.id, note: `Machine day ended at ${h}h` });
 
   if (!site?.id) throw new Error("Site is missing — contact admin to link your profile to a site");
@@ -804,6 +820,14 @@ export async function resubmitShiftAfterCorrection(user, machine, site, shift, {
     updated_at: now,
   };
   await saveLocal("shifts", updated);
+  await recordHourReading(user, machine, site, {
+    reading: h,
+    photoRef,
+    readingAt: now,
+    source: "closing",
+    shiftId: shift.id,
+    notes: "Corrected closing meter",
+  });
 
   const endEv = events.find((e) => e.shift_id === shift.id && e.type === "METER_END_CAPTURED");
   if (endEv) {
