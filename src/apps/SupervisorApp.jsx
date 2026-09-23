@@ -102,6 +102,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
+  const [closeShift, setCloseShift] = useState(null);
+  const [closeMeter, setCloseMeter] = useState("");
+  const [closeBusy, setCloseBusy] = useState(false);
 
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -811,7 +814,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
                 ) : fleetStatus.map((f) => (
 
-                  <FleetMachineCard key={f.machine.id} fleet={f} />
+                  <FleetMachineCard key={f.machine.id} fleet={f} onCloseShift={(shift) => { setCloseShift(shift); setCloseMeter(String(shift.start_hour_meter ?? "")); }} />
 
                 ))}
 
@@ -1315,6 +1318,44 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
       )}
 
+      {closeShift && (
+        <Modal title="Close open shift" color="yellow" onClose={() => setCloseShift(null)}>
+          <p className="font-body text-sm text-[#F2F0EA]/80 mb-3">
+            {closeShift.operator_name || "This operator"} left this shift open
+            {closeShift.started_at ? ` (started ${new Date(closeShift.started_at).toLocaleString()})` : ""}.
+            Enter the closing meter, then the next operator can start.
+          </p>
+          <input
+            type="number"
+            step="0.1"
+            value={closeMeter}
+            onChange={(e) => setCloseMeter(e.target.value)}
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA] mb-4"
+          />
+          <button
+            type="button"
+            disabled={closeBusy}
+            onClick={async () => {
+              setCloseBusy(true);
+              try {
+                const machine = machines.find((m) => m.id === closeShift.machine_id);
+                await wf.closeOpenShift(user, machine, closeShift, { endHour: closeMeter });
+                setCloseShift(null);
+                await refreshLocal();
+                showAlert("Shift closed", `${closeShift.operator_name || "The operator"}'s open shift is closed. It is waiting for sign-off.`, "success");
+              } catch (e) {
+                showAlert("Could not close", e.message, "error");
+              } finally {
+                setCloseBusy(false);
+              }
+            }}
+            className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40"
+          >
+            {closeBusy ? "Closing…" : "Close shift"}
+          </button>
+        </Modal>
+      )}
+
       {reportPreview && (
         <ReportPreviewModal
           html={reportPreview.html}
@@ -1331,7 +1372,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
 
 
-function FleetMachineCard({ fleet }) {
+function FleetMachineCard({ fleet, onCloseShift }) {
 
   const { machine, runningShift, openStop, activeSession, isRunning, isStopped } = fleet;
 
@@ -1395,6 +1436,16 @@ function FleetMachineCard({ fleet }) {
 
         <p className="text-sm text-[#F2F0EA]/40">No active shift</p>
 
+      )}
+
+      {runningShift && (
+        <button
+          type="button"
+          onClick={() => onCloseShift?.(runningShift)}
+          className="mt-3 w-full border border-[#F5C518]/50 text-[#F5C518] py-3 rounded-xl font-logo text-xs"
+        >
+          Close {runningShift.operator_name || "operator"}&apos;s shift
+        </button>
       )}
 
     </div>

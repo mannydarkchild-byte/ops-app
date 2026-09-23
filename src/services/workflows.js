@@ -165,7 +165,11 @@ export async function startMachine(user, machine, site, { hourMeter, photoRef, v
     }
     const stale = workSessionClockIn && new Date(existingRun.started_at) < new Date(workSessionClockIn);
     if (stale) {
-      throw new Error("A previous shift is still open on this machine. Ask your supervisor to close it before starting a new one.");
+      const who = existingRun.operator_name || "An operator";
+      const when = existingRun.started_at
+        ? new Date(existingRun.started_at).toLocaleString()
+        : "earlier";
+      throw new Error(`${who} did not end their shift (started ${when}). A supervisor must close it before a new shift can start.`);
     }
     return { run: existingRun, lock: { accepted: true }, alreadyRunning: true };
   }
@@ -354,6 +358,34 @@ export async function endMachineDay(user, machine, site, machineRun, { endHour, 
   await releaseMachineLock(machine.id);
   scheduleSync();
   return { ended, submission };
+}
+
+/** Supervisor closes a shift the operator left running so a new shift can start. */
+export async function closeOpenShift(supervisor, machine, shift, { endHour, note } = {}) {
+  if (!shift || shift.shift_status !== SHIFT.RUNNING) throw new Error("That shift is not still open");
+  const h = Number(endHour);
+  if (!Number.isFinite(h) || h < Number(shift.start_hour_meter)) {
+    throw new Error("Enter a closing meter at or above the opening reading");
+  }
+  const now = nowISO();
+  const events = await closeOpenDowntimeForShift(shift.id, now);
+  const downtimeMinutes = shiftDowntimeMinutes(events, shift.id);
+  const runtimeMinutes = shiftRuntimeMinutes(shift.started_at, now, downtimeMinutes);
+  const closed = {
+    ...shift,
+    end_hour_meter: h,
+    hours_worked: meterHoursWorked(shift.start_hour_meter, h),
+    runtime_minutes: runtimeMinutes,
+    downtime_minutes: downtimeMinutes,
+    ended_at: now,
+    shift_status: SHIFT.WAITING_FOR_VERIFICATION,
+    notes: [shift.notes, `Closed by ${supervisor?.name || "supervisor"}`, note].filter(Boolean).join(" | "),
+    updated_at: now,
+  };
+  await saveLocal("shifts", closed);
+  if (machine?.id) await releaseMachineLock(machine.id);
+  scheduleSync();
+  return closed;
 }
 
 export async function recordHourReading(user, machine, site, { reading, photoRef, readingAt, source = "manual", shiftId, notes }) {
