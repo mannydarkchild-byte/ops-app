@@ -35,7 +35,7 @@ import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 
 const TABS = [
 
-  { id: "live", label: "Site Now", icon: "📡" },
+  { id: "live", label: "Live", icon: "📡" },
 
   { id: "verify", label: "Sign Off", icon: "✅" },
 
@@ -801,6 +801,27 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
         {tab === "live" && (
 
           <div className="space-y-4">
+
+            <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
+              <p className="font-logo text-sm text-[#F5C518] mb-2">Who is clocked in</p>
+              {workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id).length === 0
+                && !fleetStatus.some((f) => f.runningShift) ? (
+                <p className="font-body text-sm text-[#F2F0EA]/70">No operator is clocked in on this site. Ask them to tap Update on their phone, then tap Update here.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id).map((s) => (
+                    <li key={s.id} className="font-body text-sm text-[#F2F0EA]">
+                      {s.operator_name || "Operator"} · clocked in {s.clock_in ? new Date(s.clock_in).toLocaleTimeString() : ""}
+                    </li>
+                  ))}
+                  {fleetStatus.filter((f) => f.runningShift).map((f) => (
+                    <li key={f.runningShift.id} className="font-body text-sm text-[#F5C518]">
+                      {f.runningShift.operator_name || "Operator"} still has an open shift on {f.machine.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
             <div>
 
