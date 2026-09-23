@@ -22,7 +22,21 @@ export async function acquireMachineLock(machineId, shiftId, operatorId) {
 
   const existing = await db.machine_locks.get(machineId);
   if (existing?.status === "locked" && existing.operator_id !== operatorId && existing.shift_id !== shiftId) {
-    return { accepted: false, reason: "Machine running on another device" };
+    let serverClear = false;
+    if (navigator.onLine) {
+      const { data: openShifts, error: shiftError } = await supabase
+        .from("shifts")
+        .select("id")
+        .eq("machine_id", machineId)
+        .eq("shift_status", "RUNNING")
+        .limit(1);
+      serverClear = !shiftError && !openShifts?.length;
+    }
+    if (serverClear) {
+      await db.machine_locks.delete(machineId);
+    } else {
+      return { accepted: false, reason: "Machine running on another device" };
+    }
   }
 
   const lock = {
@@ -44,6 +58,20 @@ export async function acquireMachineLock(machineId, shiftId, operatorId) {
       });
       if (error) throw error;
       if (data === false) {
+        const { data: openShifts, error: shiftError } = await supabase
+          .from("shifts")
+          .select("id")
+          .eq("machine_id", machineId)
+          .eq("shift_status", "RUNNING")
+          .limit(1);
+        if (!shiftError && !openShifts?.length) {
+          await supabase.rpc("stop_machine", { p_machine_id: machineId });
+          const retry = await supabase.rpc("start_machine", { p_machine_id: machineId, p_shift_id: shiftId });
+          if (!retry.error && retry.data !== false) {
+            await db.machine_locks.update(machineId, { synced: true });
+            return { accepted: true };
+          }
+        }
         await db.machine_locks.delete(machineId);
         return { accepted: false, reason: "Machine already running on server" };
       }

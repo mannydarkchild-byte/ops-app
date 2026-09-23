@@ -1,7 +1,7 @@
 import { supabase } from "./supabase.js";
 import { ensureDB } from "./db.js";
 
-/** Fetch machine_status from server and cache locally (read-only). */
+/** Fetch machine_status from server and cache locally. Clears a stuck running flag when no shift is open. */
 export async function fetchMachineStatus(machineId) {
   if (!machineId) return null;
 
@@ -15,6 +15,18 @@ export async function fetchMachineStatus(machineId) {
         .eq("machine_id", machineId)
         .maybeSingle();
       if (!error && data) {
+        if (data.is_running) {
+          const { data: openShifts, error: shiftError } = await supabase
+            .from("shifts")
+            .select("id")
+            .eq("machine_id", machineId)
+            .eq("shift_status", "RUNNING")
+            .limit(1);
+          if (!shiftError && !openShifts?.length) {
+            await supabase.rpc("stop_machine", { p_machine_id: machineId });
+            data = { ...data, is_running: false, shift_id: null };
+          }
+        }
         await db.machine_status.put({ ...data, _cached_at: new Date().toISOString() });
         return data;
       }

@@ -145,14 +145,30 @@ export async function completeMechanicInspection(user, machine, site, { results,
   });
 }
 
+async function serverOpenShiftState(machineId) {
+  if (!navigator.onLine || !machineId) return { known: false, shift: null };
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("id, operator_id, operator_name, started_at")
+    .eq("machine_id", machineId)
+    .eq("shift_status", SHIFT.RUNNING)
+    .limit(1);
+  if (error) return { known: false, shift: null };
+  return { known: true, shift: data?.[0] || null };
+}
+
 export async function startMachine(user, machine, site, { hourMeter, photoRef, verifiedShifts, workSessionClockIn } = {}) {
   if (!photoRef) throw new Error("Hour meter photo is required");
   const h = Number(hourMeter);
   if (!Number.isFinite(h) || h < 0) throw new Error("Enter a valid hour meter reading");
 
+  const remote = await serverOpenShiftState(machine.id);
   const remoteStatus = await fetchMachineStatus(machine.id);
-  if (isBlockedByOther(remoteStatus, user.id)) {
-    throw new Error(`${remoteStatus.operator_name || "Another operator"} is already running ${machine.name || machine.id}`);
+  if (remote.known && remote.shift && remote.shift.operator_id !== user.id) {
+    throw new Error(`${remote.shift.operator_name || "Another operator"} is already running ${machine.name || machine.id}`);
+  }
+  if (isBlockedByOther(remoteStatus, user.id) && remote.known && !remote.shift) {
+    await supabase.rpc("stop_machine", { p_machine_id: machine.id });
   }
 
   const existingShifts = await readTable("shifts");
@@ -160,18 +176,26 @@ export async function startMachine(user, machine, site, { hourMeter, photoRef, v
     (s) => s.machine_id === machine.id && s.shift_status === SHIFT.RUNNING
   );
   if (existingRun) {
-    if (existingRun.operator_id !== user.id) {
-      throw new Error(`${existingRun.operator_name || "Another operator"} already has an active shift on this machine`);
-    }
     const stale = workSessionClockIn && new Date(existingRun.started_at) < new Date(workSessionClockIn);
-    if (stale) {
+    const ghost = stale || existingRun.operator_id !== user.id;
+    if (remote.known && !remote.shift && ghost) {
+      await saveLocal("shifts", {
+        ...existingRun,
+        shift_status: SHIFT.WAITING_FOR_VERIFICATION,
+        ended_at: existingRun.ended_at || nowISO(),
+        end_hour_meter: existingRun.end_hour_meter ?? existingRun.start_hour_meter,
+        notes: [existingRun.notes, "Cleared on phone — server has no open shift"].filter(Boolean).join(" | "),
+        updated_at: nowISO(),
+      }, { enqueue: false });
+    } else if (existingRun.operator_id !== user.id) {
+      throw new Error(`${existingRun.operator_name || "Another operator"} already has an active shift on this machine`);
+    } else if (stale) {
       const who = existingRun.operator_name || "An operator";
-      const when = existingRun.started_at
-        ? new Date(existingRun.started_at).toLocaleString()
-        : "earlier";
-      throw new Error(`${who} did not end their shift (started ${when}). A supervisor must close it before a new shift can start.`);
+      const when = existingRun.started_at ? new Date(existingRun.started_at).toLocaleString() : "earlier";
+      throw new Error(`${who} did not end their shift (started ${when}). A supervisor must close it on the Live tab.`);
+    } else {
+      return { run: existingRun, lock: { accepted: true }, alreadyRunning: true };
     }
-    return { run: existingRun, lock: { accepted: true }, alreadyRunning: true };
   }
 
   let baseline = Number(machine.start_hour_meter || 0);
