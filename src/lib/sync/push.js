@@ -3,6 +3,7 @@ import { supabase } from "../supabase.js";
 import { ALLOWED_COLUMNS } from "../constants.js";
 import { resolveMediaRefsInRecord, stripUnresolvedMediaRefs } from "../media.js";
 import { uploadPendingMedia } from "../media.js";
+import { normalizeForSupabasePush } from "./pushNormalize.js";
 import { BOOTSTRAP_MACHINE_ID, BOOTSTRAP_SITE_ID } from "../seed.js";
 
 const CATALOG_TABLES = new Set(["sites", "machines", "inventory_items"]);
@@ -48,14 +49,7 @@ export async function pushOneQueueItem(item) {
   await uploadPendingMedia();
   let resolved = await resolveMediaRefsInRecord(row);
   resolved = stripUnresolvedMediaRefs(resolved);
-  // Map new ref fields to legacy Supabase columns when needed
-  if (resolved.photo_ref && !resolved.photo_data) resolved.photo_data = resolved.photo_ref;
-  if (resolved.photo_pump_ref && !resolved.photo_pump) resolved.photo_pump = resolved.photo_pump_ref;
-  if (resolved.photo_dipstick_ref && !resolved.photo_dipstick) resolved.photo_dipstick = resolved.photo_dipstick_ref;
-  if (resolved.receipt_ref && !resolved.receipt_photo) resolved.receipt_photo = resolved.receipt_ref;
-  if (resolved.photo_ref && !resolved.photo) resolved.photo = resolved.photo_ref;
-  if (resolved.media_ref && !resolved.media_url) resolved.media_url = resolved.media_ref;
-  if (resolved.supervisor_signature_ref && !resolved.supervisor_signature) resolved.supervisor_signature = resolved.supervisor_signature_ref;
+  resolved = normalizeForSupabasePush(resolved, item.table);
   if (await shouldSkipCatalogPush(item.table, item.record_id)) {
     await db[item.table].update(item.record_id, { _sync_status: "synced" });
     await db.sync_queue.delete(item.queue_id);
