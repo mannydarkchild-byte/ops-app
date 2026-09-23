@@ -45,26 +45,63 @@ export function syncBannerLine({ status, pending, errors }) {
   return syncControlLabel({ status, pending, errors });
 }
 
-/** Full sentence for sync error list (mobile-readable) */
-export function formatSyncErrorMessage(raw) {
-  if (!raw || raw === "offline") return "No signal — will send when you are back online.";
-  const s = String(raw);
-  if (/^MEDIA_/i.test(s) || s.includes("Photo ")) {
-    const detail = s.replace(/^MEDIA_[^:]+:\s*/i, "").trim();
-    if (/row-level security|policy|403|401|permission|JWT/i.test(detail)) {
-      return `Photo could not upload (server storage blocked). Your shift numbers can still send — tap Update again. Admin must allow ops-media uploads for signed-in users. (${detail})`;
-    }
-    if (/Bucket not found|not found/i.test(detail)) {
-      return `Photo bucket missing in Supabase (ops-media). (${detail})`;
-    }
-    if (/Payload too large|413|size/i.test(detail)) {
-      return `Photo file too large for upload. Take a smaller picture or skip the photo. (${detail})`;
-    }
-    return `Photo upload failed: ${detail || s}`;
+/** User-facing sync error (title + body + optional technical detail) */
+export function parseSyncError(raw) {
+  if (!raw || raw === "offline") {
+    return {
+      title: "You’re offline",
+      body: "Work is saved on this phone. It will send when you have signal.",
+      technical: null,
+    };
   }
+
+  const s = String(raw);
+  const mediaDetail = s.replace(/^MEDIA_[^:]+:\s*/i, "").trim();
+  const isMedia = /^MEDIA_/i.test(s) || s.includes("Photo ");
+
+  if (isMedia) {
+    if (/row-level security|policy|403|401|permission|JWT/i.test(mediaDetail)) {
+      return {
+        title: "Photo didn’t save",
+        body: "Your shift numbers can still send — tap Update again. Ask the office to fix photo storage (ops-media) in Supabase.",
+        technical: mediaDetail || s,
+      };
+    }
+    if (/Bucket not found|not found/i.test(mediaDetail)) {
+      return {
+        title: "Photo storage missing",
+        body: "The ops-media bucket is not set up in Supabase.",
+        technical: mediaDetail || s,
+      };
+    }
+    if (/Payload too large|413|size/i.test(mediaDetail)) {
+      return {
+        title: "Photo too large",
+        body: "Take a smaller picture or continue without that photo.",
+        technical: mediaDetail || s,
+      };
+    }
+    return {
+      title: "Photo didn’t save",
+      body: "Your shift can still send without the photo.",
+      technical: mediaDetail || s,
+    };
+  }
+
   if (s.includes("/") && s.includes(":")) {
     const [where, msg] = s.split(/:\s*/, 2);
-    return `${where.replace(/\//g, " — ")}: ${msg || "Could not save"}`;
+    return {
+      title: "Could not save",
+      body: `${where.replace(/\//g, " · ")}`,
+      technical: msg || s,
+    };
   }
-  return s;
+
+  return { title: "Update problem", body: "Tap Update to try again.", technical: s };
+}
+
+/** @deprecated use parseSyncError */
+export function formatSyncErrorMessage(raw) {
+  const p = parseSyncError(raw);
+  return p.technical ? `${p.title}. ${p.body} (${p.technical})` : `${p.title}. ${p.body}`;
 }

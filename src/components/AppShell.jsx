@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
-import { SYNC_LABELS, syncControlLabel, formatSyncErrorMessage } from "../lib/labels.js";
+import { SYNC_LABELS, syncControlLabel, parseSyncError } from "../lib/labels.js";
 
 const ROLE_COLORS = {
   operator: { bg: "bg-[#22C55E]/15", text: "text-[#22C55E]", border: "border-[#22C55E]/40" },
@@ -91,7 +91,7 @@ function SyncButton() {
       type="button"
       onClick={() => syncNow()}
       className="sync-header-btn flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#141414] border border-[#2A2A2A] hover:border-[#3A3A3A] active:scale-95 min-h-[44px] max-w-[46vw] sm:max-w-none"
-      title={err ? formatSyncErrorMessage(err) : (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Tap to send and refresh from server")}
+      title={err ? parseSyncError(err).body : (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Tap to send and refresh from server")}
       aria-label={err ? `Sync failed. Tap to retry.` : `${caption}. Tap to update.`}
     >
       <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${meta.dot}`} />
@@ -117,7 +117,7 @@ function SyncQueueHint({ hasTabBar }) {
 
   return (
     <div className="sm:hidden border-b border-[#F5C518]/30 bg-[#F5C518]/10 px-4 py-3">
-      <p className="font-body text-base text-[#F2F0EA] leading-snug">
+      <p className="font-body text-sm text-[#F2F0EA] leading-snug">
         <span className="font-logo text-[#F5C518]">{pending}</span>
         {pending === 1 ? " item " : " items "}
         waiting to send. Tap <span className="font-logo text-[#F5C518]">Update</span> in the top bar.
@@ -127,25 +127,49 @@ function SyncQueueHint({ hasTabBar }) {
 }
 
 /** Full error text — readable on phone, sits below tabs (not on top of them) */
+function SyncErrorItem({ raw }) {
+  const [showTech, setShowTech] = useState(false);
+  const { title, body, technical } = parseSyncError(raw);
+
+  return (
+    <li className="rounded-xl border border-[#EF4444]/30 bg-[#141414] px-4 py-3">
+      <p className="font-logo text-sm text-[#EF4444] tracking-wide">{title}</p>
+      <p className="font-body text-sm text-[#F2F0EA]/90 mt-1.5 leading-relaxed">{body}</p>
+      {technical && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowTech((v) => !v)}
+            className="mt-2 font-logo text-[10px] text-[#F2F0EA]/50 tracking-wide underline-offset-2 hover:text-[#F2F0EA]/70"
+          >
+            {showTech ? "Hide details" : "Show details"}
+          </button>
+          {showTech && (
+            <p className="font-body text-xs text-[#F2F0EA]/55 mt-2 break-words leading-relaxed">{technical}</p>
+          )}
+        </>
+      )}
+    </li>
+  );
+}
+
 export function SyncErrorPanel() {
   const { syncState, syncNow } = useOps();
   const errors = (syncState.errors || []).filter(Boolean);
   if (!errors.length) return null;
 
   return (
-    <div id="sync-error-panel" className="px-3 sm:px-4 py-4 bg-[#1a1212] border-b border-[#EF4444]/40 max-w-5xl mx-auto w-full">
-      <p className="font-logo text-base text-[#EF4444] mb-2">Update did not finish</p>
-      <ul className="space-y-3 mb-4">
+    <div id="sync-error-panel" className="px-3 sm:px-4 py-3 bg-[#0A0A0A] border-b border-[#2A2A2A] max-w-5xl mx-auto w-full">
+      <p className="font-logo text-xs text-[#EF4444]/90 tracking-wide mb-2">Needs attention</p>
+      <ul className="space-y-2 mb-3">
         {errors.map((e, i) => (
-          <li key={i} className="font-body text-base text-[#F2F0EA] leading-relaxed break-words">
-            {formatSyncErrorMessage(e)}
-          </li>
+          <SyncErrorItem key={i} raw={e} />
         ))}
       </ul>
       <button
         type="button"
         onClick={() => syncNow()}
-        className="w-full py-4 rounded-xl bg-[#00A4A6] text-white font-logo text-base tracking-wide active:scale-[0.99] min-h-[48px]"
+        className="w-full py-3.5 rounded-xl bg-[#00A4A6] text-white font-logo text-sm tracking-wide active:scale-[0.99] min-h-[44px]"
       >
         {SYNC_LABELS.actionRetry}
       </button>

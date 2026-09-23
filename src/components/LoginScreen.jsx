@@ -42,7 +42,7 @@ export function LoginScreen({ onLogin, error, loading }) {
               className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl mb-4 text-[#F2F0EA] outline-none focus:border-[#F5C518]" />
             {error && <p className="text-[#EF4444] text-sm mb-3">{error}</p>}
             <button onClick={submitLogin} disabled={busy || loading}
-              className="w-full bg-[#F5C518] text-black py-4 px-4 rounded-xl font-logo text-base tracking-wider disabled:opacity-50">
+              className="w-full bg-[#F5C518] text-black py-3.5 px-4 rounded-xl font-logo text-sm tracking-wider disabled:opacity-50">
               {busy ? "SIGNING IN…" : "SIGN IN"}
             </button>
             <button type="button" onClick={() => setMode("reset")} className="btn-link w-full mt-3 text-[#F2F0EA]/50 text-sm">Forgot password?</button>
