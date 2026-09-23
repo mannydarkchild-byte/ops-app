@@ -1,57 +1,56 @@
 import { OPERATOR_FLOW_STEPS, operatorFlowIndex, operatorFlowMeta } from "../lib/operatorFlow.js";
 
 /**
- * One clear “where am I” block for field use — replaces the small step strip.
+ * Daily shift board — one obvious step, progress you can feel.
  */
-export function OperatorFlowGuide({ currentStep, machineName, siteName }) {
+export function OperatorFlowGuide({ currentStep, machineName, siteName, operatorName }) {
   const meta = operatorFlowMeta(currentStep);
   const activeIdx = operatorFlowIndex(currentStep);
-  const progress = activeIdx < 0 ? 0 : ((activeIdx + 1) / OPERATOR_FLOW_STEPS.length) * 100;
+  const greeting = operatorName ? `Hey ${operatorName.split(/\s+/)[0]}` : "Today’s shift";
 
   return (
-    <div className="operator-flow-guide mb-4">
-      {(siteName || machineName) && (
-        <p className="font-ui text-sm font-semibold text-ops-gold mb-2 truncate">
-          {[siteName, machineName].filter(Boolean).join(" · ")}
-        </p>
-      )}
-
-      {meta.stepNum != null && (
-        <p className="font-ui text-xs font-medium text-ops-muted mb-1">
-          Step {meta.stepNum} of {meta.total}
-        </p>
-      )}
-
-      <div className="h-2.5 rounded-full bg-ops-border overflow-hidden mb-3" aria-hidden>
-        <div
-          className="h-full rounded-full bg-ops-gold transition-all duration-300"
-          style={{ width: `${Math.max(progress, meta.stepNum ? 12 : 8)}%` }}
-        />
+    <section className="operator-shift-board mb-4 overflow-hidden rounded-3xl border border-ops-gold/35 bg-ops-card">
+      <div className="bg-gradient-to-br from-ops-gold/25 via-ops-card to-ops-black px-4 pt-4 pb-3">
+        <p className="font-ui text-sm font-medium text-ops-gold">{greeting}</p>
+        <h2 className="font-ui text-2xl font-bold text-ops-text leading-tight mt-1">{meta.title}</h2>
+        <p className="font-body text-base text-ops-text/80 mt-2 leading-snug">{meta.hint}</p>
+        {(siteName || machineName) && (
+          <p className="font-ui text-sm text-ops-muted mt-3 truncate">
+            {[machineName, siteName].filter(Boolean).join(" · ")}
+          </p>
+        )}
       </div>
 
-      <h2 className="font-ui text-xl font-bold text-ops-text leading-tight">{meta.title}</h2>
-      <p className="font-body text-base text-ops-muted mt-2 leading-relaxed">{meta.hint}</p>
-
-      <ol className="flex flex-wrap gap-2 mt-4" aria-label="Shift steps">
+      <ol className="px-3 py-3 space-y-1" aria-label="Today’s steps">
         {OPERATOR_FLOW_STEPS.map((s, i) => {
           const done = activeIdx >= 0 && i < activeIdx;
           const active = s.id === currentStep;
           return (
             <li
               key={s.id}
-              className={`font-ui text-xs font-medium px-2.5 py-1 rounded-full border ${
-                active
-                  ? "bg-ops-gold text-ops-black border-ops-gold"
-                  : done
-                    ? "bg-ops-green/15 text-ops-green border-ops-green/40"
-                    : "bg-ops-card text-ops-muted border-ops-border"
+              className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 ${
+                active ? "bg-ops-gold text-ops-black" : ""
               }`}
             >
-              {done ? "✓ " : ""}{s.label}
+              <span
+                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-ui text-sm font-bold ${
+                  active
+                    ? "bg-ops-black text-ops-gold"
+                    : done
+                      ? "bg-ops-green text-ops-black"
+                      : "bg-ops-black text-ops-muted border border-ops-border"
+                }`}
+              >
+                {done ? "✓" : i + 1}
+              </span>
+              <span className={`font-ui text-base font-semibold ${active ? "" : done ? "text-ops-green" : "text-ops-muted"}`}>
+                {s.label}
+              </span>
+              {active && <span className="ml-auto font-ui text-xs font-bold uppercase tracking-wide">Now</span>}
             </li>
           );
         })}
       </ol>
-    </div>
+    </section>
   );
 }

@@ -338,6 +338,7 @@ export function OperatorApp() {
             currentStep={currentStep}
             siteName={activeSite?.name}
             machineName={activeMachine?.name}
+            operatorName={user?.name}
           />
         )}
 
@@ -391,7 +392,7 @@ export function OperatorApp() {
         )}
 
         {!submittedShift && !correctionShift && (
-          <div className="operator-work-panel rounded-2xl border border-ops-border p-4 sm:p-5">
+          <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
                 machineStatus === "running"
@@ -458,17 +459,17 @@ export function OperatorApp() {
             {sessionShift && !sessionDowntime && (
               <FormSection title="Your shift" description="Billable hours come from the closing meter at end of day." accent="#15803D">
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-operator-bg rounded-xl p-4 text-center border border-operator-border">
-                    <p className="font-ui text-xs font-medium text-operator-muted">Opening meter</p>
-                    <p className="font-ui text-3xl font-bold text-operator-accent mt-1">{openingMeter}h</p>
+                  <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
+                    <p className="font-ui text-xs font-medium text-ops-muted">Opening meter</p>
+                    <p className="font-ui text-3xl font-bold text-ops-gold mt-1">{openingMeter}h</p>
                   </div>
-                  <div className="bg-operator-bg rounded-xl p-4 text-center border border-operator-border">
-                    <p className="font-ui text-xs font-medium text-operator-muted">Runtime (app)</p>
-                    <p className="font-ui text-3xl font-bold text-operator-success mt-1">{formatDurationSeconds(runningSeconds)}</p>
+                  <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
+                    <p className="font-ui text-xs font-medium text-ops-muted">Runtime (app)</p>
+                    <p className="font-ui text-3xl font-bold text-ops-green mt-1">{formatDurationSeconds(runningSeconds)}</p>
                   </div>
                 </div>
                 {shiftDowntimeMin > 0 && (
-                  <p className="font-body text-sm text-operator-muted mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
+                  <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <Button type="button" variant="danger" size="lg" onClick={() => setShowStop(true)}>Stop</Button>
@@ -479,9 +480,9 @@ export function OperatorApp() {
 
             {sessionShift && sessionDowntime && (
               <FormSection title="Machine stopped" description={`Reason: ${sessionDowntime.reason}. Restart when ready, or end day if finished.`} accent="#B91C1C">
-                <p className="font-ui text-3xl font-bold text-operator-ink mb-4 text-center">{Math.floor(downtimeSeconds / 60)} min down</p>
+                <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{Math.floor(downtimeSeconds / 60)} min down</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Button type="button" variant="primary" size="lg" className="!bg-operator-success !text-white" onClick={() => setShowRestart(true)}>Restart</Button>
+                  <Button type="button" variant="teal" size="lg" onClick={() => setShowRestart(true)}>Restart</Button>
                   <Button type="button" variant="primary" size="lg" onClick={openEndDay}>End day</Button>
                 </div>
               </FormSection>

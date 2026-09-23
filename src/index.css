@@ -258,12 +258,12 @@ button,
 }
 
 /* Operator outdoor — dark brand, stronger contrast (no white theme) */
-.operator-outdoor .operator-flow-guide {
-  background: #141414;
-  border: 2px solid #3a3a3a;
-  border-radius: 1rem;
-  padding: 1rem 1.125rem;
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+.operator-outdoor .operator-shift-board {
+  box-shadow: 0 0 0 1px rgba(245, 197, 24, 0.15), 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.operator-outdoor .operator-work-panel button.font-ui {
+  font-size: 1.05rem;
 }
 
 .operator-outdoor .operator-work-panel {
