@@ -5,6 +5,8 @@ import { AppPage } from "../components/AppShell.jsx";
 import { BackdateReadingModal } from "../components/BackdateReadingModal.jsx";
 import { ActivityFeed } from "../components/ActivityFeed.jsx";
 import { ExpenseModal } from "../components/ExpenseModal.jsx";
+import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
+import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
@@ -53,6 +55,8 @@ export function ManagerApp() {
   const [showBackdate, setShowBackdate] = useState(false);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
+  const [showImportExpenses, setShowImportExpenses] = useState(false);
+  const [showImportExpenses, setShowImportExpenses] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
   const showAlert = (title, message, type = "info") =>
@@ -501,6 +505,20 @@ export function ManagerApp() {
             >
               + LOG / BACKDATE EXPENSE
             </button>
+            <button
+              type="button"
+              onClick={() => setShowImportExpenses(true)}
+              className="w-full border border-[#F5C518]/50 text-[#F5C518] py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
+            >
+              IMPORT BANK EXCEL
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowImportExpenses(true)}
+              className="w-full border border-[#F5C518]/50 text-[#F5C518] py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
+            >
+              IMPORT BANK EXCEL
+            </button>
 
             <div className="flex flex-wrap gap-1">
               {EXPENSE_FILTERS.map((f) => (
@@ -670,6 +688,28 @@ export function ManagerApp() {
           site={activeSite}
           profiles={profiles}
           onDone={refreshLocal}
+        />
+      )}
+
+      {showImportExpenses && (
+        <ImportExpensesModal
+          onClose={() => setShowImportExpenses(false)}
+          user={user}
+          machine={primaryMachine}
+          site={activeSite}
+          existing={expenses}
+          onDone={() => { refreshLocal(); showAlert("Expenses saved", "Bank payments were added and will sync.", "success"); }}
+        />
+      )}
+
+      {showImportExpenses && (
+        <ImportExpensesModal
+          onClose={() => setShowImportExpenses(false)}
+          user={user}
+          machine={primaryMachine}
+          site={activeSite}
+          existing={expenses}
+          onDone={() => { refreshLocal(); showAlert("Expenses saved", "Bank payments were added and will sync.", "success"); }}
         />
       )}
 
