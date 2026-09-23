@@ -111,6 +111,20 @@ export async function getPendingCount() {
   return database.sync_queue.where("status").anyOf("pending", "syncing", "failed").count();
 }
 
+/** Last push errors for queue rows that did not clear (shown when retry did nothing) */
+export async function getStuckQueueErrors(limit = 8) {
+  const database = await ensureDB();
+  const rows = await database.sync_queue
+    .where("status")
+    .anyOf("pending", "failed", "syncing")
+    .toArray();
+  return rows
+    .filter((q) => q.last_error)
+    .sort((a, b) => new Date(b.last_attempt || b.created_at || 0) - new Date(a.last_attempt || a.created_at || 0))
+    .slice(0, limit)
+    .map((q) => `${q.table}/${q.record_id}: ${q.last_error}`);
+}
+
 export async function getSyncMeta(key) {
   const database = await ensureDB();
   const row = await database.sync_meta.get(key);

@@ -69,7 +69,7 @@ export async function pushOneQueueItem(item) {
   return { ok: true };
 }
 
-export async function pushPendingQueue({ maxItems = 50 } = {}) {
+export async function pushPendingQueue({ maxItems = 50, force = false } = {}) {
   const db = getDB();
   if (!navigator.onLine) return { pushed: 0, errors: ["offline"] };
 
@@ -77,10 +77,17 @@ export async function pushPendingQueue({ maxItems = 50 } = {}) {
     await db.sync_queue.where("status").equals("syncing").modify({ status: "pending" });
   } catch {}
 
+  if (force) {
+    try {
+      await db.sync_queue.where("status").equals("failed").modify({ status: "pending" });
+    } catch {}
+  }
+
   const now = Date.now();
   const queue = await db.sync_queue.where("status").equals("pending").toArray();
   const ready = queue
     .filter((item) => {
+      if (force) return true;
       if (!item.last_attempt) return true;
       const attempts = Number(item.attempts || 0);
       const delay = Math.min(15000 * Math.pow(2, Math.min(attempts - 1, 5)), 5 * 60 * 1000);

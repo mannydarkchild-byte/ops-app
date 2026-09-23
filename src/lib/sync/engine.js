@@ -1,4 +1,4 @@
-import { getPendingCount, getSyncMeta, ensureDB } from "../db.js";
+import { getPendingCount, getStuckQueueErrors, getSyncMeta, ensureDB } from "../db.js";
 import { syncMachineLocks } from "../machineLock.js";
 import { pushPendingQueue } from "./push.js";
 import { pullIncremental, pullBootstrap } from "./pull.js";
@@ -25,7 +25,7 @@ function finishState(state, { silent = true } = {}) {
   return state;
 }
 
-export async function runSync({ silent = true, forceBootstrap = false, siteId = null } = {}) {
+export async function runSync({ silent = true, forceBootstrap = false, forcePush = false, siteId = null } = {}) {
   if (syncInProgress && activeSyncPromise) {
     return activeSyncPromise;
   }
@@ -70,7 +70,7 @@ export async function runSync({ silent = true, forceBootstrap = false, siteId = 
 
       await syncMachineLocks();
 
-      const push = await pushPendingQueue();
+      const push = await pushPendingQueue({ force: forcePush });
       state.pushed = push.pushed;
       if (push.errors?.length) state.errors.push(...push.errors);
 
@@ -79,10 +79,15 @@ export async function runSync({ silent = true, forceBootstrap = false, siteId = 
       if (pull.errors?.length) state.errors.push(...pull.errors);
 
       state.pending = await getPendingCount();
+      if (state.pending > 0 && state.errors.length === 0) {
+        const stuck = await getStuckQueueErrors();
+        if (stuck.length) state.errors.push(...stuck);
+        else state.errors.push(`${state.pending} item(s) still waiting to upload.`);
+      }
       state.lastSyncAt = new Date().toISOString();
-      // Data still refreshed even if one table failed — only mark error when nothing moved and queue stuck
-      const hardFail = state.errors.length > 0 && state.pushed === 0 && state.pulled === 0 && state.pending > 0;
-      state.status = hardFail ? "error" : "synced";
+      const hardFail = state.pending > 0 && state.pushed === 0 && state.pulled === 0;
+      const softFail = state.pending > 0 && state.errors.length > 0;
+      state.status = hardFail || softFail ? "error" : "synced";
 
       finishState(state, { silent });
       return { ok: !hardFail, ...state };

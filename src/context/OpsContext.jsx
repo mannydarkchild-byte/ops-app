@@ -174,7 +174,7 @@ export function OpsProvider({ children }) {
 
   const syncNow = useCallback(async () => {
     await syncMachineLocks();
-    const res = await runSync({ silent: false, siteId: siteIdForSync });
+    const res = await runSync({ silent: false, forcePush: true, siteId: siteIdForSync });
     await refreshLocal();
     return res;
   }, [refreshLocal, siteIdForSync]);
@@ -299,7 +299,7 @@ export function OpsProvider({ children }) {
             status: state.status ?? prev.status,
             pending: state.pending ?? prev.pending,
             lastSyncAt: state.lastSyncAt,
-            errors: state.errors?.length ? state.errors : prev.errors,
+            errors: state.errors ?? [],
           }));
         }
         refreshLocal();
