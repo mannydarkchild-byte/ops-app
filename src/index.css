@@ -244,19 +244,6 @@ button,
 /* Operator outdoor — extra contrast in sunlight */
 .operator-outdoor {
   -webkit-text-size-adjust: 100%;
-  font-family: Inter, system-ui, sans-serif;
-}
-
-.operator-outdoor main,
-.operator-outdoor main .font-logo,
-.operator-outdoor main button {
-  font-family: Inter, system-ui, sans-serif !important;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.operator-outdoor main {
-  padding-bottom: 6.5rem;
 }
 
 .operator-outdoor .bg-\[\#141414\] {

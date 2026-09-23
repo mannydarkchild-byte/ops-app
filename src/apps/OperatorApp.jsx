@@ -6,7 +6,7 @@ import { prestartDraftKey } from "../lib/inspectionDraft.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { PreStartInspectionChecklist } from "../components/PreStartInspectionChecklist.jsx";
 import { OperatorFlowGuide } from "../components/OperatorFlowGuide.jsx";
-import { OperatorBottomNav } from "../components/OperatorBottomNav.jsx";
+import { IconAlert, IconClock, IconFuel, IconInbox, IconPlay, IconStop } from "../components/FieldIcons.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
@@ -62,7 +62,6 @@ export function OperatorApp() {
   const [submittedShift, setSubmittedShift] = useState(null);
   const [clockInSupervisorId, setClockInSupervisorId] = useState("");
 
-  const [menu, setMenu] = useState("today");
   const [alert, setAlert] = useState({ isOpen: false });
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -85,7 +84,6 @@ export function OperatorApp() {
   }, [events, sessionShift]);
 
   const runningSeconds = useLiveTimer(sessionShift?.started_at, !!sessionShift);
-  const operatorSeconds = useLiveTimer(workSession?.clock_in, workSession?.status === "active");
   const downtimeSeconds = useLiveTimer(sessionDowntime?.stopped_at, !!sessionDowntime);
   const openingMeter = sessionShift ? Number(sessionShift.start_hour_meter).toFixed(1) : Number(hourMeter).toFixed(1);
   const fuelMeterHint = sessionShift ? openingMeter : openingMeter;
@@ -299,21 +297,11 @@ export function OperatorApp() {
 
   const dismissSubmitted = () => setSubmittedShift(null);
 
-  const headerContext = useMemo(() => {
-    const parts = [activeSite?.name, activeMachine?.name].filter(Boolean);
-    if (shiftSupervisor?.name) parts.push(`Sup: ${shiftSupervisor.name}`);
-    if (workSession) {
-      parts.push(`${Math.floor(operatorSeconds / 3600)}h ${Math.floor((operatorSeconds % 3600) / 60)}m on site`);
-    }
-    return parts.join(" · ");
-  }, [activeSite?.name, activeMachine?.name, shiftSupervisor?.name, workSession, operatorSeconds]);
-
   const machineStatus = sessionShift ? "running" : sessionDowntime ? "stopped" : null;
 
   return (
     <AppPage
       subtitle="Operator"
-      context={headerContext}
       showSite={false}
       maxWidth="max-w-2xl"
       outdoor
@@ -334,45 +322,31 @@ export function OperatorApp() {
         ) : null
       }
     >
-        {menu === "today" && !correctionShift && !submittedShift && (
+        {!correctionShift && !submittedShift && (
           <OperatorFlowGuide currentStep={currentStep} />
         )}
 
-        {menu === "messages" && (
-          <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-5">
-            <h2 className="font-ui text-xl font-bold text-[#F2F0EA]">Messages</h2>
-            <p className="font-body text-base text-[#F2F0EA]/75 mt-2 mb-4">
-              {inboxCount > 0
-                ? `You have ${inboxCount} open report${inboxCount === 1 ? "" : "s"}.`
-                : "No open reports. Use More if you need to report a problem."}
-            </p>
-            <Button type="button" variant="primary" size="lg" className="w-full" onClick={() => setShowInbox(true)}>
-              Open messages
-            </Button>
+        {workSession && !submittedShift && !correctionShift && (
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
+              <span className="w-14 h-14 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
+              <span className="font-logo text-[10px] text-[#F2F0EA]">Report</span>
+            </button>
+            <button type="button" onClick={() => setShowFuel(true)} className="flex flex-col items-center gap-1.5 py-2">
+              <span className="w-14 h-14 rounded-2xl bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
+              <span className="font-logo text-[10px] text-[#F2F0EA]">Diesel</span>
+            </button>
+            <button type="button" onClick={() => setShowInbox(true)} className="relative flex flex-col items-center gap-1.5 py-2">
+              <span className="w-14 h-14 rounded-2xl bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
+              <span className="font-logo text-[10px] text-[#F2F0EA]">Inbox</span>
+              {inboxCount > 0 && (
+                <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">{inboxCount}</span>
+              )}
+            </button>
           </div>
         )}
 
-        {menu === "more" && (
-          <div className="space-y-3">
-            <h2 className="font-ui text-xl font-bold text-[#F2F0EA] px-1">More</h2>
-            <Button type="button" variant="primary" size="lg" className="w-full" onClick={() => setShowFuel(true)} disabled={!workSession}>
-              Add diesel
-            </Button>
-            <Button type="button" variant="danger" size="lg" className="w-full" onClick={() => setShowReportIssue(true)} disabled={!workSession}>
-              Report a problem
-            </Button>
-            {workSession && !sessionShift && (
-              <Button type="button" variant="secondary" size="lg" className="w-full" onClick={() => setShowEarlyClockOut(true)}>
-                Clock out without starting
-              </Button>
-            )}
-            <p className="font-body text-sm text-[#F2F0EA]/60 px-1 pt-2">
-              {[activeSite?.name, activeMachine?.name].filter(Boolean).join(" · ") || "No machine selected"}
-            </p>
-          </div>
-        )}
-
-        {menu === "today" && correctionShift && !submittedShift && (
+        {correctionShift && !submittedShift && (
           <ShiftCorrectionPanel
             shift={correctionShift}
             machine={correctionMachine}
@@ -385,7 +359,7 @@ export function OperatorApp() {
 
 
         {/* Day complete — WhatsApp supervisor */}
-        {menu === "today" && submittedShift && (
+        {submittedShift && (
           <div className={`bg-[#141414] border-2 rounded-2xl p-6 text-center ${
             getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "border-[#F97316]" : "border-[#22C55E]"
           }`}>
@@ -421,7 +395,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {menu === "today" && !submittedShift && !correctionShift && (
+        {!submittedShift && !correctionShift && (
           <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
@@ -444,8 +418,8 @@ export function OperatorApp() {
                   />
                 </FormSection>
                 <FormSection title="Clock in" description="Tap when you are on site and ready." accent="#15803D">
-                  <Button type="button" variant="primary" size="lg" className="w-full" onClick={handleClockIn} disabled={blocked || !clockInSupervisorId}>
-                    Clock in
+                  <Button type="button" variant="primary" size="lg" className="w-full font-logo" onClick={handleClockIn} disabled={blocked || !clockInSupervisorId}>
+                    <IconClock /> Clock in
                   </Button>
                 </FormSection>
               </>
@@ -476,8 +450,8 @@ export function OperatorApp() {
                     onPhoto={(ref, preview) => { setStartPhotoRef(ref); setStartPhotoPreview(preview); setStartPhotoError(false); }}
                     showPhotoError={startPhotoError}
                   />
-                  <Button type="button" variant="primary" size="lg" className="w-full mt-4" onClick={handleStart}>
-                    Start machine
+                  <Button type="button" variant="primary" size="lg" className="w-full mt-4 font-logo" onClick={handleStart}>
+                    <IconPlay /> Start machine
                   </Button>
                 </FormSection>
                 <Button type="button" variant="ghost" size="md" className="w-full mt-4" onClick={() => setShowEarlyClockOut(true)}>
@@ -502,8 +476,8 @@ export function OperatorApp() {
                   <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
                 )}
                 <div className="grid grid-cols-2 gap-3">
-                  <Button type="button" variant="danger" size="lg" onClick={() => setShowStop(true)}>Stop</Button>
-                  <Button type="button" variant="primary" size="lg" onClick={openEndDay}>End day</Button>
+                  <Button type="button" variant="danger" size="lg" className="font-logo" onClick={() => setShowStop(true)}><IconStop /> Stop</Button>
+                  <Button type="button" variant="primary" size="lg" className="font-logo" onClick={openEndDay}>End day</Button>
                 </div>
               </FormSection>
             )}
@@ -520,8 +494,6 @@ export function OperatorApp() {
 
           </div>
         )}
-
-        <OperatorBottomNav active={menu} onChange={setMenu} messageCount={inboxCount} />
 
       {showReportIssue && (
         <ReportIssueModal onClose={() => { setShowReportIssue(false); setReportPrefill(null); }} user={user} machine={activeMachine} site={activeSite} profiles={profiles} onDone={refreshLocal}

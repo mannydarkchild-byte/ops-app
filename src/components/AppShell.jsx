@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { SYNC_LABELS, syncControlLabel, parseSyncError } from "../lib/labels.js";
 import { Button } from "./ui/Button.jsx";
+import { IconOut } from "./FieldIcons.jsx";
 
 const ROLE_COLORS = {
   operator: { dot: "bg-ops-green", text: "text-ops-green" },
@@ -195,41 +196,39 @@ export function RoleBadge() {
   return <UserChip />;
 }
 
-export function AppHeader({ right, subtitle, context, showSite = true }) {
-  const { user, signOut, activeSite } = useOps();
+export function AppHeader({ right, subtitle }) {
+  const { user, signOut } = useOps();
   const role = (user?.role || "operator").toLowerCase();
   const roleLabel = subtitle || role.charAt(0).toUpperCase() + role.slice(1);
   const colors = ROLE_COLORS[role] || ROLE_COLORS.operator;
 
-  const contextLine = context ?? (showSite && activeSite ? activeSite.name : null);
-  const userName = user?.name || user?.email?.split("@")[0] || "User";
-  const mobileContext = `${userName} · ${roleLabel}`;
+  const displayName = (user?.name || user?.email?.split("@")[0] || "User").split(/\s+/)[0];
 
   return (
     <header className="sticky top-0 z-30 bg-ops-black/92 backdrop-blur-md border-b border-ops-border mobile-safe-top shadow-ops-sm">
-      <div className="px-3 sm:px-4 py-3 flex items-center gap-3 max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className="px-3 sm:px-4 py-2.5 flex items-center gap-2 max-w-5xl mx-auto">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <LogoMark size="sm" />
           <div className="min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-logo text-base text-ops-gold shrink-0">OPS</span>
-              <span className={`hidden sm:inline-flex items-center gap-1.5 font-ui text-xs font-medium capitalize ${colors.text}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
-                {roleLabel}
-              </span>
-            </div>
-            <p className="font-body text-sm text-ops-muted sm:text-ops-text/70 truncate mt-0.5 leading-snug">
-              <span className="sm:hidden">{mobileContext}</span>
-              {contextLine && <span className="hidden sm:inline">{contextLine}</span>}
+            <span className="font-logo text-base text-ops-gold">OPS</span>
+            <p className="font-body text-sm text-ops-text truncate leading-tight">
+              {displayName}
+              <span className={`ml-2 font-ui text-xs capitalize ${colors.text}`}>{roleLabel}</span>
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {right ?? <UserChip />}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {right}
           <SyncButton />
-          <Button variant="ghost" size="sm" onClick={signOut} title="Sign out" className="text-ops-muted hover:text-ops-red">
-            Sign out
-          </Button>
+          <button
+            type="button"
+            onClick={signOut}
+            title="Sign out"
+            aria-label="Sign out"
+            className="w-11 h-11 rounded-xl border border-ops-border bg-ops-card text-ops-muted hover:text-ops-red flex items-center justify-center"
+          >
+            <IconOut />
+          </button>
         </div>
       </div>
     </header>
