@@ -16,12 +16,12 @@ export function OperatorStepBar({ currentStep }) {
         return (
           <div key={step.id}
             className={`flex-1 min-w-[56px] text-center py-2 px-1 rounded-lg border ${
-              active ? "bg-[#F5C518]/15 border-[#F5C518] text-[#F5C518]"
-                : done ? "bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]"
-                  : "bg-[#141414] border-[#2A2A2A] text-[#F2F0EA]/30"
+              active ? "bg-ops-gold/12 border-ops-gold/50 text-ops-gold ring-1 ring-ops-gold/20"
+                : done ? "bg-ops-green/10 border-ops-green/30 text-ops-green"
+                  : "bg-ops-card border-ops-border text-ops-muted"
             }`}>
             <div className="text-base leading-none">{done ? "✓" : step.icon}</div>
-            <div className="font-logo text-[10px] sm:text-xs tracking-wider mt-1">{step.label}</div>
+            <div className="font-ui text-[11px] sm:text-xs font-medium mt-1">{step.label}</div>
           </div>
         );
       })}

@@ -5,8 +5,9 @@ import { useInspectionDraft } from "../hooks/useInspectionDraft.js";
 import { prestartDraftKey } from "../lib/inspectionDraft.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { PreStartInspectionChecklist } from "../components/PreStartInspectionChecklist.jsx";
-import { OperatorActionBar } from "../components/OperatorActionBar.jsx";
-import { OperatorStepBar } from "../components/OperatorStepBar.jsx";
+import { OperatorFlowGuide } from "../components/OperatorFlowGuide.jsx";
+import { OperatorQuickTools } from "../components/OperatorQuickTools.jsx";
+import { Button } from "../components/ui/Button.jsx";
 import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
 import { Modal, AlertModal } from "../components/ui/Modal.jsx";
@@ -332,7 +333,13 @@ export function OperatorApp() {
         ) : null
       }
     >
-        {!correctionShift && <OperatorStepBar currentStep={currentStep} />}
+        {!correctionShift && !submittedShift && (
+          <OperatorFlowGuide
+            currentStep={currentStep}
+            siteName={activeSite?.name}
+            machineName={activeMachine?.name}
+          />
+        )}
 
         {correctionShift && !submittedShift && (
           <ShiftCorrectionPanel
@@ -345,30 +352,6 @@ export function OperatorApp() {
           />
         )}
 
-        {!submittedShift && !correctionShift && (activeSite?.name || activeMachine?.name) && (
-          <p className="sm:hidden font-body text-xs text-[#F2F0EA]/80 mb-3 text-center truncate px-1">
-            {[activeSite?.name, activeMachine?.name].filter(Boolean).join(" · ")}
-          </p>
-        )}
-
-        {workSession && !submittedShift && !correctionShift && (
-          <OperatorActionBar
-            inboxCount={inboxCount}
-            onReport={() => setShowReportIssue(true)}
-            onFuel={() => setShowFuel(true)}
-            onInbox={() => setShowInbox(true)}
-          />
-        )}
-
-        {machineStatus && (
-          <div className={`mb-3 px-3 py-2 rounded-lg border text-center font-logo text-[10px] tracking-wider ${
-            machineStatus === "running"
-              ? "bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]"
-              : "bg-[#EF4444]/10 border-[#EF4444]/30 text-[#EF4444]"
-          }`}>
-            {machineStatus === "running" ? "▶ MACHINE RUNNING" : `⏹ STOPPED — ${downtime?.reason || "Downtime"}`}
-          </div>
-        )}
 
         {/* Day complete — WhatsApp supervisor */}
         {submittedShift && (
@@ -408,10 +391,20 @@ export function OperatorApp() {
         )}
 
         {!submittedShift && !correctionShift && (
-          <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-5 sm:p-6 shadow-lg">
+          <div className="operator-work-panel rounded-2xl border border-ops-border p-4 sm:p-5">
+            {machineStatus && (
+              <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
+                machineStatus === "running"
+                  ? "bg-operator-success/10 border-operator-success/35 text-operator-success"
+                  : "bg-operator-danger/10 border-operator-danger/35 text-operator-danger"
+              }`}>
+                {machineStatus === "running" ? "Machine running" : `Stopped — ${downtime?.reason || "downtime"}`}
+              </div>
+            )}
+
             {!workSession && (
               <>
-                <FormSection step={1} title="Supervisor on duty" description="Select who will verify your shift today — required before clock-in." accent="#F5C518">
+                <FormSection title="Supervisor on duty" description="Who will sign off your shift today?" accent="#D4A017">
                   <SupervisorPicker
                     supervisors={siteSupervisors}
                     value={clockInSupervisorId}
@@ -419,11 +412,10 @@ export function OperatorApp() {
                     suggestedId={suggestedSupervisor?.id}
                   />
                 </FormSection>
-                <FormSection step={2} title="Clock in on site" description="Confirm you are on site and ready to begin today's shift." accent="#22C55E">
-                  <button type="button" onClick={handleClockIn} disabled={blocked || !clockInSupervisorId}
-                    className="w-full bg-[#22C55E] text-black py-5 rounded-2xl font-logo font-bold text-xl tracking-wider active:scale-95 disabled:opacity-40">
-                    ⏱ CLOCK IN
-                  </button>
+                <FormSection title="Clock in" description="Tap when you are on site and ready." accent="#15803D">
+                  <Button type="button" variant="primary" size="lg" className="w-full !bg-operator-success !text-white !border-operator-success" onClick={handleClockIn} disabled={blocked || !clockInSupervisorId}>
+                    Clock in
+                  </Button>
                 </FormSection>
               </>
             )}
@@ -437,19 +429,15 @@ export function OperatorApp() {
                   setResults={setInspectionResults} setRemarks={setInspectionRemarks} setPhotos={setInspectionPhotos}
                   onComplete={handleInspection}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowEarlyClockOut(true)}
-                  className="w-full mt-4 border border-[#2A2A2A] text-[#F2F0EA]/60 py-3 rounded-xl font-logo text-xs tracking-wider"
-                >
-                  CLOCK OUT — NOT STARTING TODAY
-                </button>
+                <Button type="button" variant="ghost" size="md" className="w-full mt-4" onClick={() => setShowEarlyClockOut(true)}>
+                  Clock out — not starting today
+                </Button>
               </>
             )}
 
             {workSession && prestartDone && !sessionShift && !sessionDowntime && !blocked && (
               <>
-                <FormSection step={3} title="Opening hour meter" description={`Pre-start complete. Photo of meter is mandatory. Last verified reading: ${hourMeter}h.`} accent="#22C55E">
+                <FormSection title="Opening hour meter" description={`Take a photo of the meter. Last verified reading: ${hourMeter}h.`} accent="#15803D">
                   <MeterPhoto
                     value={startHour}
                     onValue={setStartHour}
@@ -457,50 +445,55 @@ export function OperatorApp() {
                     onPhoto={(ref, preview) => { setStartPhotoRef(ref); setStartPhotoPreview(preview); setStartPhotoError(false); }}
                     showPhotoError={startPhotoError}
                   />
-                  <button type="button" onClick={handleStart} className="w-full mt-4 bg-[#22C55E] text-black py-5 rounded-2xl font-logo font-bold text-xl tracking-wider active:scale-95">
-                    ▶ START MACHINE
-                  </button>
+                  <Button type="button" variant="primary" size="lg" className="w-full mt-4 !bg-operator-success !text-white !border-operator-success" onClick={handleStart}>
+                    Start machine
+                  </Button>
                 </FormSection>
-                <button
-                  type="button"
-                  onClick={() => setShowEarlyClockOut(true)}
-                  className="w-full mt-4 border border-[#2A2A2A] text-[#F2F0EA]/60 py-3 rounded-xl font-logo text-xs tracking-wider"
-                >
-                  CLOCK OUT — NOT STARTING TODAY
-                </button>
+                <Button type="button" variant="ghost" size="md" className="w-full mt-4" onClick={() => setShowEarlyClockOut(true)}>
+                  Clock out — not starting today
+                </Button>
               </>
             )}
 
             {sessionShift && !sessionDowntime && (
-              <FormSection step={4} title="Machine running" description="Billable hours come from meter at end of day — not this timer." accent="#22C55E">
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <div className="bg-[#141414] rounded-xl p-3 text-center">
-                    <p className="font-logo text-[10px] text-[#F2F0EA]/50">OPENING METER</p>
-                    <p className="font-logo text-2xl text-[#F5C518]">{openingMeter}h</p>
+              <FormSection title="Your shift" description="Billable hours come from the closing meter at end of day." accent="#15803D">
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-operator-bg rounded-xl p-4 text-center border border-operator-border">
+                    <p className="font-ui text-xs font-medium text-operator-muted">Opening meter</p>
+                    <p className="font-ui text-3xl font-bold text-operator-accent mt-1">{openingMeter}h</p>
                   </div>
-                  <div className="bg-[#141414] rounded-xl p-3 text-center">
-                    <p className="font-logo text-[10px] text-[#F2F0EA]/50">RUNTIME (APP)</p>
-                    <p className="font-logo text-2xl text-[#22C55E]">{formatDurationSeconds(runningSeconds)}</p>
+                  <div className="bg-operator-bg rounded-xl p-4 text-center border border-operator-border">
+                    <p className="font-ui text-xs font-medium text-operator-muted">Runtime (app)</p>
+                    <p className="font-ui text-3xl font-bold text-operator-success mt-1">{formatDurationSeconds(runningSeconds)}</p>
                   </div>
                 </div>
                 {shiftDowntimeMin > 0 && (
-                  <p className="font-body text-xs text-[#F2F0EA]/50 mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
+                  <p className="font-body text-sm text-operator-muted mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
                 )}
                 <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => setShowStop(true)} className="bg-[#EF4444] text-white py-5 rounded-xl font-logo font-bold tracking-wider active:scale-95">⏹ STOP</button>
-                  <button type="button" onClick={openEndDay} className="bg-[#F5C518] text-black py-5 rounded-xl font-logo font-bold tracking-wider active:scale-95">📋 END DAY</button>
+                  <Button type="button" variant="danger" size="lg" onClick={() => setShowStop(true)}>Stop</Button>
+                  <Button type="button" variant="primary" size="lg" onClick={openEndDay}>End day</Button>
                 </div>
               </FormSection>
             )}
 
             {sessionShift && sessionDowntime && (
-              <FormSection step={4} title="Machine stopped" description={`Reason: ${sessionDowntime.reason}. Restart when ready, or End Day if shift is over.`} accent="#EF4444">
-                <p className="font-logo text-2xl text-[#F2F0EA]/80 mb-4">{Math.floor(downtimeSeconds / 60)} min downtime</p>
+              <FormSection title="Machine stopped" description={`Reason: ${sessionDowntime.reason}. Restart when ready, or end day if finished.`} accent="#B91C1C">
+                <p className="font-ui text-3xl font-bold text-operator-ink mb-4 text-center">{Math.floor(downtimeSeconds / 60)} min down</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => setShowRestart(true)} className="bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold active:scale-95">▶ RESTART</button>
-                  <button type="button" onClick={openEndDay} className="bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold active:scale-95">📋 END DAY</button>
+                  <Button type="button" variant="primary" size="lg" className="!bg-operator-success !text-white" onClick={() => setShowRestart(true)}>Restart</Button>
+                  <Button type="button" variant="primary" size="lg" onClick={openEndDay}>End day</Button>
                 </div>
               </FormSection>
+            )}
+
+            {workSession && !submittedShift && (
+              <OperatorQuickTools
+                inboxCount={inboxCount}
+                onReport={() => setShowReportIssue(true)}
+                onFuel={() => setShowFuel(true)}
+                onInbox={() => setShowInbox(true)}
+              />
             )}
           </div>
         )}

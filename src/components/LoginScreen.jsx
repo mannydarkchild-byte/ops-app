@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { LogoMark } from "./AppShell.jsx";
+import { Button } from "./ui/Button.jsx";
+import { Card, CardBody } from "./ui/Card.jsx";
+
+const inputClass =
+  "w-full bg-ops-black border border-ops-border px-3 py-3 rounded-xl text-ops-text font-body outline-none focus:border-ops-gold/60 focus:ring-1 focus:ring-ops-gold/25";
 
 export function LoginScreen({ onLogin, error, loading }) {
   const [mode, setMode] = useState("login");
@@ -28,37 +33,37 @@ export function LoginScreen({ onLogin, error, loading }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center p-4 mobile-safe-top mobile-safe-bottom">
+    <div className="min-h-screen bg-ops-black flex flex-col items-center justify-center p-4 mobile-safe-top mobile-safe-bottom">
       <LogoMark size="lg" />
-      <h1 className="font-logo text-3xl text-[#F5C518] tracking-widest mt-5 mb-8">OPS</h1>
+      <h1 className="font-logo text-3xl text-ops-gold mt-5 mb-2">OPS</h1>
+      <p className="font-body text-sm text-ops-muted mb-8 text-center max-w-xs">Mine operations — sign in once, work offline on site.</p>
 
-      <div className="w-full max-w-sm bg-[#141414] border border-[#2A2A2A] rounded-2xl p-6">
+      <Card className="w-full max-w-sm">
+        <CardBody>
         {mode === "login" ? (
           <>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email"
-              className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl mb-3 text-[#F2F0EA] outline-none focus:border-[#F5C518]" />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className={`${inputClass} mb-3`} />
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password"
               onKeyDown={(e) => e.key === "Enter" && submitLogin()}
-              className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl mb-4 text-[#F2F0EA] outline-none focus:border-[#F5C518]" />
-            {error && <p className="text-[#EF4444] text-sm mb-3">{error}</p>}
-            <button onClick={submitLogin} disabled={busy || loading}
-              className="w-full bg-[#F5C518] text-black py-3.5 px-4 rounded-xl font-logo text-sm tracking-wider disabled:opacity-50">
-              {busy ? "SIGNING IN…" : "SIGN IN"}
-            </button>
-            <button type="button" onClick={() => setMode("reset")} className="btn-link w-full mt-3 text-[#F2F0EA]/50 text-sm">Forgot password?</button>
+              className={`${inputClass} mb-4`} />
+            {error && <p className="text-ops-red text-sm mb-3 font-body">{error}</p>}
+            <Button variant="primary" size="lg" className="w-full" onClick={submitLogin} disabled={busy || loading}>
+              {busy ? "Signing in…" : "Sign in"}
+            </Button>
+            <button type="button" onClick={() => setMode("reset")} className="btn-link w-full mt-4 text-ops-muted text-sm font-ui hover:text-ops-text">Forgot password?</button>
           </>
         ) : (
           <>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email"
-              className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl mb-4 text-[#F2F0EA] outline-none focus:border-[#F5C518]" />
-            {resetErr && <p className="text-[#EF4444] text-sm mb-3">{resetErr}</p>}
-            {resetMsg && <p className="text-[#22C55E] text-sm mb-3">{resetMsg}</p>}
-            <button onClick={submitReset} disabled={busy} className="w-full bg-[#00A4A6] text-white py-3.5 px-4 rounded-xl font-logo text-sm tracking-wider">SEND RESET</button>
-            <button type="button" onClick={() => setMode("login")} className="btn-link w-full mt-3 text-[#F2F0EA]/50 text-sm">Back to sign in</button>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className={`${inputClass} mb-4`} />
+            {resetErr && <p className="text-ops-red text-sm mb-3">{resetErr}</p>}
+            {resetMsg && <p className="text-ops-green text-sm mb-3">{resetMsg}</p>}
+            <Button variant="teal" size="lg" className="w-full" onClick={submitReset} disabled={busy}>Send reset link</Button>
+            <button type="button" onClick={() => setMode("login")} className="btn-link w-full mt-4 text-ops-muted text-sm font-ui hover:text-ops-text">Back to sign in</button>
           </>
         )}
-      </div>
-      <p className="text-[#F2F0EA]/50 text-sm mt-6 text-center">Works offline after first sign-in</p>
+        </CardBody>
+      </Card>
+      <p className="text-ops-muted text-xs mt-6 text-center font-body">Works offline after first sign-in</p>
     </div>
   );
 }

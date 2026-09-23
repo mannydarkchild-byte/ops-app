@@ -1,21 +1,22 @@
 import { useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { SYNC_LABELS, syncControlLabel, parseSyncError } from "../lib/labels.js";
+import { Button } from "./ui/Button.jsx";
 
 const ROLE_COLORS = {
-  operator: { bg: "bg-[#22C55E]/15", text: "text-[#22C55E]", border: "border-[#22C55E]/40" },
-  mechanic: { bg: "bg-[#00A4A6]/15", text: "text-[#00A4A6]", border: "border-[#00A4A6]/40" },
-  supervisor: { bg: "bg-[#F5C518]/15", text: "text-[#F5C518]", border: "border-[#F5C518]/40" },
-  manager: { bg: "bg-[#F97316]/15", text: "text-[#F97316]", border: "border-[#F97316]/40" },
-  admin: { bg: "bg-[#EF4444]/15", text: "text-[#EF4444]", border: "border-[#EF4444]/40" },
+  operator: { dot: "bg-ops-green", text: "text-ops-green" },
+  mechanic: { dot: "bg-ops-teal", text: "text-ops-teal" },
+  supervisor: { dot: "bg-ops-gold", text: "text-ops-gold" },
+  manager: { dot: "bg-ops-orange", text: "text-ops-orange" },
+  admin: { dot: "bg-ops-red", text: "text-ops-red" },
 };
 
 const SYNC_META = {
-  synced: { label: SYNC_LABELS.synced, color: "text-[#22C55E]", dot: "bg-[#22C55E]" },
-  syncing: { label: SYNC_LABELS.syncing, color: "text-[#00A4A6]", dot: "bg-[#00A4A6] animate-pulse" },
-  offline: { label: SYNC_LABELS.offline, color: "text-[#F5C518]", dot: "bg-[#F5C518]" },
-  error: { label: SYNC_LABELS.error, color: "text-[#EF4444]", dot: "bg-[#EF4444]" },
-  idle: { label: SYNC_LABELS.idle, color: "text-[#F2F0EA]/40", dot: "bg-[#2A2A2A]" },
+  synced: { label: SYNC_LABELS.synced, color: "text-ops-green", dot: "bg-ops-green" },
+  syncing: { label: SYNC_LABELS.syncing, color: "text-ops-teal", dot: "bg-ops-teal animate-pulse" },
+  offline: { label: SYNC_LABELS.offline, color: "text-ops-gold", dot: "bg-ops-gold" },
+  error: { label: SYNC_LABELS.error, color: "text-ops-red", dot: "bg-ops-red" },
+  idle: { label: SYNC_LABELS.idle, color: "text-ops-muted", dot: "bg-ops-border" },
 };
 
 function LogoFallback() {
@@ -34,7 +35,7 @@ export function LogoMark({ size = "md" }) {
 
   return (
     <div
-      className={`${dim} rounded-xl border border-[#F5C518]/80 bg-[#141414] flex items-center justify-center shrink-0 overflow-hidden p-1.5`}
+      className={`${dim} rounded-xl border border-ops-gold/70 bg-ops-card flex items-center justify-center shrink-0 overflow-hidden p-1.5 shadow-ops-sm`}
       aria-hidden
     >
       {!imgFailed ? (
@@ -55,8 +56,8 @@ export function OfflineBanner() {
   const { syncState } = useOps();
   if (syncState.status !== "offline") return null;
   return (
-    <div className="bg-[#F5C518]/20 border-b-2 border-[#F5C518] px-4 py-2.5 text-center">
-      <p className="font-logo text-xs text-[#F5C518] tracking-wider font-bold">OFFLINE — WORKING FROM LOCAL DATA</p>
+    <div className="bg-ops-gold/10 border-b border-ops-gold/40 px-4 py-2.5 text-center">
+      <p className="font-ui text-sm font-semibold text-ops-gold">Offline — working from this phone</p>
     </div>
   );
 }
@@ -87,23 +88,22 @@ function SyncButton() {
   const caption = syncControlLabel(syncState);
   const err = syncState.errors?.[0];
   return (
-    <button
-      type="button"
+    <Button
+      variant="sync"
+      size="sm"
       onClick={() => syncNow()}
-      className="sync-header-btn flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#141414] border border-[#2A2A2A] hover:border-[#3A3A3A] active:scale-95 min-h-[44px] max-w-[46vw] sm:max-w-none"
-      title={err ? parseSyncError(err).body : (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Tap to send and refresh from server")}
-      aria-label={err ? `Sync failed. Tap to retry.` : `${caption}. Tap to update.`}
+      className="max-w-[46vw] sm:max-w-none shrink-0"
+      title={err ? parseSyncError(err).body : (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Send and refresh from server")}
+      aria-label={err ? "Sync failed. Tap to retry." : `${caption}. Tap to update.`}
     >
-      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${meta.dot}`} />
-      <span className={`font-logo text-xs sm:text-sm tracking-wide truncate ${meta.color}`}>
-        {caption}
-      </span>
+      <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
+      <span className={`truncate ${meta.color}`}>{caption}</span>
       {(syncState.pending || 0) > 0 && (
-        <span className="font-logo text-xs bg-[#F5C518] text-black rounded-full min-w-[22px] h-[22px] px-1.5 flex items-center justify-center shrink-0 font-bold">
+        <span className="font-ui text-xs bg-ops-gold text-ops-black rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shrink-0 font-bold">
           {syncState.pending > 99 ? "99+" : syncState.pending}
         </span>
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -116,11 +116,11 @@ function SyncQueueHint({ hasTabBar }) {
   if (pending <= 0 || err || syncState.status === "syncing") return null;
 
   return (
-    <div className="sm:hidden border-b border-[#F5C518]/30 bg-[#F5C518]/10 px-4 py-3">
-      <p className="font-body text-sm text-[#F2F0EA] leading-snug">
-        <span className="font-logo text-[#F5C518]">{pending}</span>
+    <div className="sm:hidden border-b border-ops-border bg-ops-elevated px-4 py-3">
+      <p className="font-body text-sm text-ops-text leading-snug">
+        <span className="font-semibold text-ops-gold">{pending}</span>
         {pending === 1 ? " item " : " items "}
-        waiting to send. Tap <span className="font-logo text-[#F5C518]">Update</span> in the top bar.
+        waiting — tap <span className="font-semibold text-ops-gold">Update</span> above.
       </p>
     </div>
   );
@@ -132,20 +132,20 @@ function SyncErrorItem({ raw }) {
   const { title, body, technical } = parseSyncError(raw);
 
   return (
-    <li className="rounded-xl border border-[#EF4444]/30 bg-[#141414] px-4 py-3">
-      <p className="font-logo text-sm text-[#EF4444] tracking-wide">{title}</p>
-      <p className="font-body text-sm text-[#F2F0EA]/90 mt-1.5 leading-relaxed">{body}</p>
+    <li className="rounded-xl border border-ops-red/25 bg-ops-card px-4 py-3 shadow-ops-sm">
+      <p className="font-ui text-sm font-semibold text-ops-red">{title}</p>
+      <p className="font-body text-sm text-ops-text/90 mt-1.5 leading-relaxed">{body}</p>
       {technical && (
         <>
           <button
             type="button"
             onClick={() => setShowTech((v) => !v)}
-            className="mt-2 font-logo text-[10px] text-[#F2F0EA]/50 tracking-wide underline-offset-2 hover:text-[#F2F0EA]/70"
+            className="btn-link mt-2 font-ui text-xs text-ops-muted underline underline-offset-2 hover:text-ops-text"
           >
             {showTech ? "Hide details" : "Show details"}
           </button>
           {showTech && (
-            <p className="font-body text-xs text-[#F2F0EA]/55 mt-2 break-words leading-relaxed">{technical}</p>
+            <p className="font-body text-xs text-ops-muted mt-2 break-words leading-relaxed">{technical}</p>
           )}
         </>
       )}
@@ -159,20 +159,16 @@ export function SyncErrorPanel() {
   if (!errors.length) return null;
 
   return (
-    <div id="sync-error-panel" className="px-3 sm:px-4 py-3 bg-[#0A0A0A] border-b border-[#2A2A2A] max-w-5xl mx-auto w-full">
-      <p className="font-logo text-xs text-[#EF4444]/90 tracking-wide mb-2">Needs attention</p>
+    <div id="sync-error-panel" className="px-3 sm:px-4 py-3 border-b border-ops-border max-w-5xl mx-auto w-full">
+      <p className="font-ui text-xs font-semibold text-ops-red mb-2">Needs attention</p>
       <ul className="space-y-2 mb-3">
         {errors.map((e, i) => (
           <SyncErrorItem key={i} raw={e} />
         ))}
       </ul>
-      <button
-        type="button"
-        onClick={() => syncNow()}
-        className="w-full py-3.5 rounded-xl bg-[#00A4A6] text-white font-logo text-sm tracking-wide active:scale-[0.99] min-h-[44px]"
-      >
+      <Button variant="teal" size="md" className="w-full" onClick={() => syncNow()}>
         {SYNC_LABELS.actionRetry}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -184,13 +180,12 @@ function UserChip() {
   const firstName = (user?.name || user?.email || "User").split(/\s+/)[0];
 
   return (
-    <div className={`hidden sm:flex flex-col items-end px-2.5 py-1 rounded-lg border ${colors.bg} ${colors.border} max-w-[120px] md:max-w-[160px]`}>
-      <p className={`font-logo text-[10px] tracking-wider truncate w-full text-right ${colors.text}`}>
-        {firstName}
-      </p>
-      <p className="font-logo text-[8px] tracking-wider text-[#F2F0EA]/45 truncate w-full text-right">
-        {role}
-      </p>
+    <div className="hidden sm:flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ops-border bg-ops-card max-w-[160px]">
+      <span className={`w-2 h-2 rounded-full shrink-0 ${colors.dot}`} aria-hidden />
+      <div className="min-w-0 text-right">
+        <p className="font-ui text-xs font-semibold text-ops-text truncate">{firstName}</p>
+        <p className={`font-ui text-[11px] capitalize truncate ${colors.text}`}>{role}</p>
+      </div>
     </div>
   );
 }
@@ -211,34 +206,30 @@ export function AppHeader({ right, subtitle, context, showSite = true }) {
   const mobileContext = `${userName} · ${roleLabel}`;
 
   return (
-    <header className="sticky top-0 z-30 bg-[#0A0A0A]/95 backdrop-blur-md border-b border-[#2A2A2A] mobile-safe-top">
-      <div className="px-3 sm:px-4 py-2.5 flex items-center gap-3">
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <LogoMark />
+    <header className="sticky top-0 z-30 bg-ops-black/92 backdrop-blur-md border-b border-ops-border mobile-safe-top shadow-ops-sm">
+      <div className="px-3 sm:px-4 py-3 flex items-center gap-3 max-w-5xl mx-auto">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <LogoMark size="sm" />
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="font-logo text-sm sm:text-base text-[#F5C518] tracking-widest shrink-0">OPS</span>
-              <span className={`hidden sm:inline font-logo text-[9px] px-2 py-0.5 rounded-full border shrink-0 ${colors.bg} ${colors.text} ${colors.border}`}>
+              <span className="font-logo text-base text-ops-gold shrink-0">OPS</span>
+              <span className={`hidden sm:inline-flex items-center gap-1.5 font-ui text-xs font-medium capitalize ${colors.text}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
                 {roleLabel}
               </span>
             </div>
-            <p className="font-body text-sm text-[#F2F0EA]/90 sm:text-[#F2F0EA]/55 truncate mt-0.5 leading-snug">
+            <p className="font-body text-sm text-ops-muted sm:text-ops-text/70 truncate mt-0.5 leading-snug">
               <span className="sm:hidden">{mobileContext}</span>
               {contextLine && <span className="hidden sm:inline">{contextLine}</span>}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {right ?? <UserChip />}
           <SyncButton />
-          <button
-            type="button"
-            onClick={signOut}
-            className="px-3 py-2.5 rounded-lg bg-[#141414] border border-[#2A2A2A] font-logo text-sm text-[#F2F0EA]/70 hover:text-[#EF4444] hover:border-[#EF4444]/40 active:scale-95 min-h-[44px] tracking-wider"
-            title="Sign out"
-          >
-            OUT
-          </button>
+          <Button variant="ghost" size="sm" onClick={signOut} title="Sign out" className="text-ops-muted hover:text-ops-red">
+            Sign out
+          </Button>
         </div>
       </div>
     </header>
@@ -252,23 +243,23 @@ export function AppHeader({ right, subtitle, context, showSite = true }) {
  */
 export function AppTabBar({ tabs, activeTab, onTabChange, footer }) {
   return (
-    <div className="relative z-20 bg-[#0A0A0A] border-b border-[#2A2A2A]/80">
-      <div className="px-3 sm:px-4 py-2 flex items-center gap-2 max-w-5xl mx-auto">
-        <div className="flex gap-1 overflow-x-auto smooth-scroll flex-1 pb-0.5 -mb-0.5">
+    <div className="relative z-20 bg-ops-black border-b border-ops-border">
+      <div className="px-3 sm:px-4 py-2 max-w-5xl mx-auto">
+        <div className="flex gap-1 p-1 rounded-xl bg-ops-card border border-ops-border overflow-x-auto smooth-scroll">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => onTabChange(t.id)}
-              className={`shrink-0 px-3 py-2.5 rounded-lg font-logo text-xs sm:text-sm leading-tight tracking-wide whitespace-nowrap transition-colors min-h-[44px] ${
+              className={`shrink-0 px-3 py-2.5 rounded-lg font-ui text-sm font-medium whitespace-nowrap transition-colors min-h-[40px] ${
                 activeTab === t.id
-                  ? "bg-[#F5C518] text-black"
-                  : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70 hover:border-[#3A3A3A]"
+                  ? "bg-ops-black text-ops-text shadow-ops-sm ring-1 ring-ops-gold/35"
+                  : "text-ops-muted hover:text-ops-text hover:bg-ops-elevated/80"
               }`}
             >
               {t.icon ? `${t.icon} ` : ""}{t.label}
               {t.badge > 0 && (
-                <span className="ml-1.5 bg-[#EF4444] text-white text-[9px] rounded-full px-1.5 py-px inline-block min-w-[16px] text-center">
+                <span className="ml-1.5 bg-ops-red text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5 inline-block min-w-[18px] text-center">
                   {t.badge > 99 ? "99+" : t.badge}
                 </span>
               )}
@@ -302,7 +293,7 @@ export function AppPage({
   outdoor = false,
 }) {
   return (
-    <div className={`min-h-screen bg-[#0A0A0A] text-[#F2F0EA] pb-8 mobile-safe-bottom ${outdoor ? "operator-outdoor" : ""}`}>
+    <div className={`min-h-screen bg-ops-black text-ops-text pb-8 mobile-safe-bottom ${outdoor ? "operator-outdoor operator-sunlight" : ""}`}>
       {alert}
       <AppHeader subtitle={subtitle} context={context} showSite={showSite} />
       <OfflineBanner />

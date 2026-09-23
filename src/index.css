@@ -10,7 +10,7 @@ body,
 #root {
   background-color: #0A0A0A;
   color: #F2F0EA;
-  font-family: 'Inter', sans-serif;
+  font-family: Inter, system-ui, sans-serif;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -31,11 +31,21 @@ body {
 /* ═══════════════════════════════════════════════════════════════
    TYPOGRAPHY
    ═══════════════════════════════════════════════════════════════ */
+/* Brand mark only — not general UI */
 .font-logo {
-  font-family: 'Russo One', sans-serif !important;
-  letter-spacing: 0.06em;
+  font-family: "Russo One", system-ui, sans-serif !important;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  line-height: 1.2;
+  line-height: 1.15;
+}
+
+.font-ui {
+  font-family: Inter, system-ui, sans-serif !important;
+  letter-spacing: -0.01em;
+}
+
+.font-body {
+  font-family: Inter, system-ui, sans-serif;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -245,4 +255,71 @@ button,
 .operator-outdoor main [class*="text-[#F2F0EA]/60"],
 .operator-outdoor main [class*="text-[#F2F0EA]/70"] {
   color: rgba(242, 240, 234, 0.88) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   OPERATOR SUNLIGHT — light UI for outdoor / glare (operator only)
+   ═══════════════════════════════════════════════════════════════ */
+.operator-sunlight {
+  background-color: #ede9de !important;
+  color: #14120e;
+}
+
+.operator-sunlight header {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: #c9c4b8 !important;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+.operator-sunlight header .text-ops-muted,
+.operator-sunlight header .font-body.text-sm {
+  color: #4a4843 !important;
+}
+
+.operator-sunlight header .text-ops-text {
+  color: #14120e !important;
+}
+
+.operator-sunlight .bg-ops-black {
+  background-color: #ede9de !important;
+}
+
+.operator-sunlight main {
+  color: #14120e;
+}
+
+.operator-sunlight .bg-ops-card,
+.operator-sunlight .operator-work-panel {
+  background-color: #ffffff !important;
+  border-color: #c9c4b8 !important;
+  box-shadow: 0 2px 12px rgba(20, 18, 14, 0.08);
+}
+
+.operator-sunlight .border-ops-border {
+  border-color: #c9c4b8 !important;
+}
+
+.operator-sunlight .text-ops-text {
+  color: #14120e !important;
+}
+
+.operator-sunlight .text-ops-muted {
+  color: #4a4843 !important;
+}
+
+.operator-sunlight .operator-flow-guide {
+  background: #ffffff;
+  border: 2px solid #c9c4b8;
+  border-radius: 1rem;
+  padding: 1rem 1.125rem;
+  box-shadow: 0 2px 12px rgba(20, 18, 14, 0.06);
+}
+
+.operator-sunlight #sync-error-panel,
+.operator-sunlight .border-ops-red\/25 {
+  background: #fff5f5 !important;
+}
+
+.operator-sunlight .font-logo.text-ops-gold {
+  color: #a16207 !important;
 }
