@@ -6,7 +6,7 @@ import { prestartDraftKey } from "../lib/inspectionDraft.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { PreStartInspectionChecklist } from "../components/PreStartInspectionChecklist.jsx";
 import { OperatorFlowGuide } from "../components/OperatorFlowGuide.jsx";
-import { OperatorQuickTools } from "../components/OperatorQuickTools.jsx";
+import { OperatorBottomNav } from "../components/OperatorBottomNav.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
@@ -62,6 +62,7 @@ export function OperatorApp() {
   const [submittedShift, setSubmittedShift] = useState(null);
   const [clockInSupervisorId, setClockInSupervisorId] = useState("");
 
+  const [menu, setMenu] = useState("today");
   const [alert, setAlert] = useState({ isOpen: false });
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -333,16 +334,45 @@ export function OperatorApp() {
         ) : null
       }
     >
-        {!correctionShift && !submittedShift && (
-          <OperatorFlowGuide
-            currentStep={currentStep}
-            siteName={activeSite?.name}
-            machineName={activeMachine?.name}
-            operatorName={user?.name}
-          />
+        {menu === "today" && !correctionShift && !submittedShift && (
+          <OperatorFlowGuide currentStep={currentStep} />
         )}
 
-        {correctionShift && !submittedShift && (
+        {menu === "messages" && (
+          <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-5">
+            <h2 className="font-ui text-xl font-bold text-[#F2F0EA]">Messages</h2>
+            <p className="font-body text-base text-[#F2F0EA]/75 mt-2 mb-4">
+              {inboxCount > 0
+                ? `You have ${inboxCount} open report${inboxCount === 1 ? "" : "s"}.`
+                : "No open reports. Use More if you need to report a problem."}
+            </p>
+            <Button type="button" variant="primary" size="lg" className="w-full" onClick={() => setShowInbox(true)}>
+              Open messages
+            </Button>
+          </div>
+        )}
+
+        {menu === "more" && (
+          <div className="space-y-3">
+            <h2 className="font-ui text-xl font-bold text-[#F2F0EA] px-1">More</h2>
+            <Button type="button" variant="primary" size="lg" className="w-full" onClick={() => setShowFuel(true)} disabled={!workSession}>
+              Add diesel
+            </Button>
+            <Button type="button" variant="danger" size="lg" className="w-full" onClick={() => setShowReportIssue(true)} disabled={!workSession}>
+              Report a problem
+            </Button>
+            {workSession && !sessionShift && (
+              <Button type="button" variant="secondary" size="lg" className="w-full" onClick={() => setShowEarlyClockOut(true)}>
+                Clock out without starting
+              </Button>
+            )}
+            <p className="font-body text-sm text-[#F2F0EA]/60 px-1 pt-2">
+              {[activeSite?.name, activeMachine?.name].filter(Boolean).join(" · ") || "No machine selected"}
+            </p>
+          </div>
+        )}
+
+        {menu === "today" && correctionShift && !submittedShift && (
           <ShiftCorrectionPanel
             shift={correctionShift}
             machine={correctionMachine}
@@ -355,7 +385,7 @@ export function OperatorApp() {
 
 
         {/* Day complete — WhatsApp supervisor */}
-        {submittedShift && (
+        {menu === "today" && submittedShift && (
           <div className={`bg-[#141414] border-2 rounded-2xl p-6 text-center ${
             getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "border-[#F97316]" : "border-[#22C55E]"
           }`}>
@@ -391,7 +421,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {!submittedShift && !correctionShift && (
+        {menu === "today" && !submittedShift && !correctionShift && (
           <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
@@ -488,16 +518,10 @@ export function OperatorApp() {
               </FormSection>
             )}
 
-            {workSession && !submittedShift && (
-              <OperatorQuickTools
-                inboxCount={inboxCount}
-                onReport={() => setShowReportIssue(true)}
-                onFuel={() => setShowFuel(true)}
-                onInbox={() => setShowInbox(true)}
-              />
-            )}
           </div>
         )}
+
+        <OperatorBottomNav active={menu} onChange={setMenu} messageCount={inboxCount} />
 
       {showReportIssue && (
         <ReportIssueModal onClose={() => { setShowReportIssue(false); setReportPrefill(null); }} user={user} machine={activeMachine} site={activeSite} profiles={profiles} onDone={refreshLocal}
