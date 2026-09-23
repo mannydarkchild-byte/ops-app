@@ -322,12 +322,8 @@ export function OperatorApp() {
         ) : null
       }
     >
-        {!correctionShift && !submittedShift && (
-          <OperatorFlowGuide currentStep={currentStep} />
-        )}
-
         {workSession && !submittedShift && !correctionShift && (
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="operator-pin-icons grid grid-cols-3 gap-3 mb-4">
             <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
               <span className="w-14 h-14 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
               <span className="font-logo text-[10px] text-[#F2F0EA]">Report</span>
@@ -344,6 +340,10 @@ export function OperatorApp() {
               )}
             </button>
           </div>
+        )}
+
+        {!correctionShift && !submittedShift && (
+          <OperatorFlowGuide currentStep={currentStep} />
         )}
 
         {correctionShift && !submittedShift && (

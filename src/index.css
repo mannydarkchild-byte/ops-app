@@ -246,6 +246,17 @@ button,
   -webkit-text-size-adjust: 100%;
 }
 
+.operator-pin-icons {
+  position: sticky;
+  z-index: 25;
+  top: calc(env(safe-area-inset-top, 0px) + 3.65rem);
+  background: #0a0a0a;
+  margin-left: -0.75rem;
+  margin-right: -0.75rem;
+  padding: 0.35rem 0.75rem 0.5rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
 .operator-outdoor .bg-\[\#141414\] {
   background-color: #1a1a1a;
   border-color: #3a3a3a;
