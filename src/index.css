@@ -766,3 +766,110 @@ html.theme-light header.bg-ops-black,
 html.theme-light .relative.z-20.bg-ops-black {
   background-color: var(--ops-bg);
 }
+
+/* Phone field size — always on, no max-width gate (PWA may report a wide viewport) */
+html:has(.login-screen),
+html:has(.operator-outdoor) {
+  font-size: 24px;
+}
+
+.login-screen,
+.operator-outdoor,
+.ops-sheet {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  font-size: 28px !important;
+}
+
+.login-screen .login-title {
+  font-size: 52px !important;
+  line-height: 1 !important;
+}
+
+.login-screen .login-copy,
+.login-screen .login-label span {
+  font-size: 28px !important;
+  line-height: 1.35 !important;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.login-screen .login-field {
+  min-height: 96px !important;
+  font-size: 28px !important;
+  padding: 1.15rem 1.2rem !important;
+}
+
+.login-screen .login-link,
+.login-screen .login-note,
+.login-screen .login-error,
+.login-screen .login-ok {
+  font-size: 24px !important;
+}
+
+.operator-outdoor [class*="text-"],
+.ops-sheet [class*="text-"],
+.operator-outdoor p,
+.operator-outdoor li,
+.operator-outdoor label,
+.operator-outdoor span,
+.ops-sheet p,
+.ops-sheet li,
+.ops-sheet label,
+.ops-sheet span {
+  font-size: 26px !important;
+  line-height: 1.3 !important;
+}
+
+.operator-outdoor .text-2xl,
+.operator-outdoor .text-3xl,
+.operator-outdoor .text-4xl,
+.operator-outdoor h2,
+.operator-outdoor h3,
+.ops-sheet h3,
+.ops-sheet .text-2xl,
+.ops-sheet .text-3xl {
+  font-size: 40px !important;
+  line-height: 1.15 !important;
+}
+
+.operator-welcome-name {
+  font-size: 56px !important;
+  line-height: 1.05 !important;
+}
+
+.operator-outdoor header span,
+.operator-outdoor header p {
+  font-size: 22px !important;
+}
+
+.operator-outdoor button:not(.rounded-full),
+.ops-sheet button:not(.rounded-full),
+.login-screen button:not(.rounded-full) {
+  min-height: 92px !important;
+  font-size: 28px !important;
+}
+
+.login-screen button.login-go {
+  min-height: 96px !important;
+  font-size: 30px !important;
+}
+
+.operator-pin-icons button {
+  min-height: 0 !important;
+  font-size: 22px !important;
+}
+
+.operator-pin-icons .font-logo {
+  font-size: 22px !important;
+}
+
+.operator-outdoor input,
+.operator-outdoor textarea,
+.operator-outdoor select,
+.ops-sheet input,
+.ops-sheet textarea,
+.ops-sheet select {
+  font-size: 28px !important;
+  min-height: 88px !important;
+}
