@@ -32,7 +32,7 @@ function LogoFallback() {
 
 export function LogoMark({ size = "md" }) {
   const [imgFailed, setImgFailed] = useState(false);
-  const dim = size === "sm" ? "w-9 h-9" : size === "xl" ? "w-24 h-24" : size === "lg" ? "w-20 h-20" : "w-10 h-10";
+  const dim = size === "sm" ? "w-9 h-9" : size === "xxl" ? "w-32 h-32" : size === "xl" ? "w-24 h-24" : size === "lg" ? "w-20 h-20" : "w-10 h-10";
 
   return (
     <div

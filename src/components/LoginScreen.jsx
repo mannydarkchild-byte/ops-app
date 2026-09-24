@@ -3,9 +3,6 @@ import { supabase } from "../lib/supabase.js";
 import { LogoMark, ThemeToggle } from "./AppShell.jsx";
 import { Button } from "./ui/Button.jsx";
 
-const fieldClass =
-  "w-full min-h-[60px] bg-ops-elevated border-2 border-ops-border px-4 py-4 rounded-2xl text-ops-text font-body text-lg outline-none focus:border-ops-gold";
-
 export function LoginScreen({ onLogin, error, loading }) {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -33,27 +30,27 @@ export function LoginScreen({ onLogin, error, loading }) {
 
   return (
     <div className="login-screen min-h-[100dvh] bg-ops-black">
-      <header className="flex items-center justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3">
-        <p className="font-logo text-lg text-ops-gold">OPS</p>
+      <header className="flex items-center justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-2">
+        <p className="font-logo text-2xl text-ops-gold">OPS</p>
         <ThemeToggle />
       </header>
 
-      <div className="px-5 pb-[max(2rem,env(safe-area-inset-bottom))] max-w-lg w-full mx-auto">
-        <div className="pt-2 pb-6">
-          <LogoMark size="lg" />
-          <h1 className="font-logo text-4xl text-ops-gold mt-4">OPS</h1>
-          <p className="font-body text-xl text-ops-text mt-2 leading-snug">
+      <div className="login-wrap px-5 pb-[max(2rem,env(safe-area-inset-bottom))] w-full mx-auto">
+        <div className="login-brand">
+          <LogoMark size="xxl" />
+          <h1 className="font-logo text-ops-gold login-title">OPS</h1>
+          <p className="font-body text-ops-text login-copy">
             {mode === "login" ? "Open the app on this phone. Clock-in comes after that." : "We will email you a reset link."}
           </p>
         </div>
 
         {mode === "login" ? (
           <form
-            className="flex flex-col gap-5"
+            className="login-form"
             onSubmit={(e) => { e.preventDefault(); submitLogin(); }}
           >
-            <label className="block">
-              <span className="font-ui text-lg font-semibold text-ops-text block mb-2">Email</span>
+            <label className="login-label">
+              <span>Email</span>
               <input
                 type="email"
                 inputMode="email"
@@ -63,26 +60,26 @@ export function LoginScreen({ onLogin, error, loading }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@site.com"
-                className={fieldClass}
+                className="login-field"
               />
             </label>
-            <label className="block">
-              <span className="font-ui text-lg font-semibold text-ops-text block mb-2">Password</span>
+            <label className="login-label">
+              <span>Password</span>
               <input
                 type="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Your password"
-                className={fieldClass}
+                className="login-field"
               />
             </label>
-            {error && <p className="text-ops-red text-lg font-body leading-snug">{error}</p>}
+            {error && <p className="login-error">{error}</p>}
 
             <Button
               variant="primary"
               size="lg"
-              className="w-full min-h-[64px] text-xl font-logo"
+              className="login-go font-logo"
               onClick={submitLogin}
               disabled={busy || loading || !email || !password}
             >
@@ -91,21 +88,19 @@ export function LoginScreen({ onLogin, error, loading }) {
             <button
               type="button"
               onClick={() => setMode("reset")}
-              className="btn-link w-full min-h-[48px] text-ops-text text-lg font-ui"
+              className="btn-link login-link"
             >
               Forgot password?
             </button>
-            <p className="text-ops-muted text-base text-center font-body">
-              Works offline after the first time you open it.
-            </p>
+            <p className="login-note">Works offline after the first time you open it.</p>
           </form>
         ) : (
           <form
-            className="flex flex-col gap-5"
+            className="login-form"
             onSubmit={(e) => { e.preventDefault(); submitReset(); }}
           >
-            <label className="block">
-              <span className="font-ui text-lg font-semibold text-ops-text block mb-2">Email</span>
+            <label className="login-label">
+              <span>Email</span>
               <input
                 type="email"
                 inputMode="email"
@@ -114,15 +109,15 @@ export function LoginScreen({ onLogin, error, loading }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@site.com"
-                className={fieldClass}
+                className="login-field"
               />
             </label>
-            {resetErr && <p className="text-ops-red text-lg font-body">{resetErr}</p>}
-            {resetMsg && <p className="text-ops-green text-lg font-body">{resetMsg}</p>}
+            {resetErr && <p className="login-error">{resetErr}</p>}
+            {resetMsg && <p className="login-ok">{resetMsg}</p>}
             <Button
               variant="teal"
               size="lg"
-              className="w-full min-h-[64px] text-xl"
+              className="login-go"
               onClick={submitReset}
               disabled={busy || !email}
             >
@@ -131,7 +126,7 @@ export function LoginScreen({ onLogin, error, loading }) {
             <button
               type="button"
               onClick={() => setMode("login")}
-              className="btn-link w-full min-h-[48px] text-ops-text text-lg font-ui"
+              className="btn-link login-link"
             >
               Back
             </button>

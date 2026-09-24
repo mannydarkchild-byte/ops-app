@@ -63,18 +63,18 @@ export function VoiceInput({ value, onChange, placeholder, rows = 3, allowRecord
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded focus:border-[#F5C518] outline-none font-body pr-20 text-[#F2F0EA]"
+        className="w-full min-h-[120px] bg-[#0A0A0A] border-2 border-[#2A2A2A] p-4 rounded-2xl focus:border-[#F5C518] outline-none font-body pr-24 text-[#F2F0EA] text-xl"
       />
       <div className="absolute right-2 bottom-2 flex gap-1">
         {recognitionRef.current && (
           <button type="button" onClick={toggleSpeech}
-            className={`w-9 h-9 rounded-full flex items-center justify-center text-sm ${isListening ? "bg-[#EF4444] text-white animate-pulse" : "bg-[#2A2A2A] text-[#F5C518]"}`}>
+            className={`w-12 h-12 rounded-full flex items-center justify-center text-lg ${isListening ? "bg-[#EF4444] text-white animate-pulse" : "bg-[#2A2A2A] text-[#F5C518]"}`}>
             {isListening ? "⏹" : "🎤"}
           </button>
         )}
         {allowRecording && (
           <button type="button" onClick={toggleRecord}
-            className={`w-9 h-9 rounded-full flex items-center justify-center text-sm ${isRecording ? "bg-[#EF4444] text-white animate-pulse" : "bg-[#2A2A2A] text-[#00A4A6]"}`}>
+            className={`w-12 h-12 rounded-full flex items-center justify-center text-lg ${isRecording ? "bg-[#EF4444] text-white animate-pulse" : "bg-[#2A2A2A] text-[#00A4A6]"}`}>
             {isRecording ? "⏹" : "🔴"}
           </button>
         )}

@@ -229,10 +229,10 @@ export function OperatorReportsModal({
 
 function DashTile({ label, value, hint, color }) {
   return (
-    <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-3">
-      <p className="font-logo text-[10px] tracking-wider text-[#F2F0EA]/50">{label}</p>
-      <p className="font-logo text-2xl mt-1" style={{ color: color || "#F5C518" }}>{value}</p>
-      <p className="font-body text-sm text-[#F2F0EA]/50 mt-1">{hint}</p>
+    <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4">
+      <p className="font-logo text-sm tracking-wider text-[#F2F0EA]/50">{label}</p>
+      <p className="font-logo text-3xl mt-1" style={{ color: color || "#F5C518" }}>{value}</p>
+      <p className="font-body text-base text-[#F2F0EA]/50 mt-1">{hint}</p>
     </div>
   );
 }

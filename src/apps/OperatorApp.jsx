@@ -375,23 +375,23 @@ export function OperatorApp() {
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <button type="button" onClick={() => setShowMyReports(true)} className="relative flex flex-col items-center gap-1.5 py-2">
-                <span className="w-20 h-20 rounded-2xl bg-[#141414] border border-[#F5C518]/60 text-[#F5C518] flex items-center justify-center"><IconReports /></span>
-                <span className="font-logo text-sm text-ops-text">My reports</span>
+                <span className="operator-pin-tile bg-[#141414] border border-[#F5C518]/60 text-[#F5C518] flex items-center justify-center"><IconReports /></span>
+                <span className="font-logo text-base text-ops-text">My reports</span>
                 {reportsAttention > 0 && (
                   <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#F5C518] text-black text-[10px] font-bold flex items-center justify-center">{reportsAttention}</span>
                 )}
               </button>
               <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
-                <span className="w-20 h-20 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
-                <span className="font-logo text-sm text-ops-text">Report</span>
+                <span className="operator-pin-tile bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
+                <span className="font-logo text-base text-ops-text">Report</span>
               </button>
               <button type="button" onClick={() => setShowFuel(true)} className="flex flex-col items-center gap-1.5 py-2">
-                <span className="w-20 h-20 rounded-2xl bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
-                <span className="font-logo text-sm text-ops-text">Diesel</span>
+                <span className="operator-pin-tile bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
+                <span className="font-logo text-base text-ops-text">Diesel</span>
               </button>
               <button type="button" onClick={() => setShowInbox(true)} className="relative flex flex-col items-center gap-1.5 py-2">
-                <span className="w-20 h-20 rounded-2xl bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
-                <span className="font-logo text-sm text-ops-text">Inbox</span>
+                <span className="operator-pin-tile bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
+                <span className="font-logo text-base text-ops-text">Inbox</span>
                 {inboxCount > 0 && (
                   <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">{inboxCount}</span>
                 )}
@@ -566,11 +566,11 @@ export function OperatorApp() {
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
                       <p className="font-ui text-xs font-medium text-ops-muted">Opening meter</p>
-                      <p className="font-ui text-3xl font-bold text-ops-gold mt-1">{openingMeter}h</p>
+                      <p className="font-ui text-4xl font-bold text-ops-gold mt-1">{openingMeter}h</p>
                     </div>
                     <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
                       <p className="font-ui text-xs font-medium text-ops-muted">Runtime (app)</p>
-                      <p className="font-ui text-3xl font-bold text-ops-green mt-1">{formatDurationSeconds(runningSeconds)}</p>
+                      <p className="font-ui text-4xl font-bold text-ops-green mt-1">{formatDurationSeconds(runningSeconds)}</p>
                     </div>
                   </div>
                   {shiftDowntimeMin > 0 && (

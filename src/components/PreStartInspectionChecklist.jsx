@@ -85,7 +85,7 @@ export function PreStartInspectionChecklist({
         />
       </div>
 
-      <p className="font-ui text-2xl font-semibold text-ops-text leading-snug mb-5">{item}</p>
+      <p className="font-ui text-3xl font-semibold text-ops-text leading-snug mb-5">{item}</p>
 
       <div className="grid grid-cols-1 gap-2 mb-2">
         {statusOptions.map((opt) => {

@@ -10,8 +10,8 @@ export function OperatorFlowGuide({ currentStep }) {
       <p className="font-logo text-xs tracking-wider text-[#F5C518]">
         {meta.stepNum ? `STEP ${meta.stepNum} OF ${meta.total}` : "NEEDS A FIX"}
       </p>
-      <p className="font-logo text-xl text-ops-text mt-1">{meta.title}</p>
-      <p className="font-body text-base text-ops-muted mt-1.5 leading-snug">{meta.hint}</p>
+      <p className="font-logo text-3xl text-ops-text mt-1">{meta.title}</p>
+      <p className="font-body text-lg text-ops-muted mt-2 leading-snug">{meta.hint}</p>
       <div className="flex gap-1.5 mt-3" aria-hidden>
         {OPERATOR_FLOW_STEPS.map((s, i) => (
           <span
