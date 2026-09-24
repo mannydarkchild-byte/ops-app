@@ -398,6 +398,7 @@ export async function closeOpenShift(supervisor, machine, shift, { endHour, note
     downtime_minutes: downtimeMinutes,
     ended_at: now,
     shift_status: SHIFT.WAITING_FOR_VERIFICATION,
+    verification_token: shift.verification_token || crypto.randomUUID?.() || makeId("TOK"),
     assigned_supervisor_id: shift.assigned_supervisor_id || supervisor?.id || null,
     assigned_supervisor_name: shift.assigned_supervisor_name || supervisor?.name || null,
     notes: [shift.notes, `Closed by ${supervisor?.name || "supervisor"}`, note].filter(Boolean).join(" | "),
@@ -410,6 +411,7 @@ export async function closeOpenShift(supervisor, machine, shift, { endHour, note
     downtime_minutes: closed.downtime_minutes,
     ended_at: closed.ended_at,
     shift_status: closed.shift_status,
+    verification_token: closed.verification_token,
     assigned_supervisor_id: closed.assigned_supervisor_id,
     assigned_supervisor_name: closed.assigned_supervisor_name,
     notes: closed.notes,
@@ -805,15 +807,43 @@ export async function verifyShift(shift, supervisor, { action, reason, signature
   }
 
   const now = nowISO();
+  const token = shift.verification_token || crypto.randomUUID?.() || makeId("TOK");
 
   if (navigator.onLine) {
+    if (!shift.verification_token) {
+      const { error: tokenError } = await supabase.from("shifts").update({
+        verification_token: token,
+        updated_at: now,
+      }).eq("id", shift.id);
+      if (tokenError) throw tokenError;
+    }
+
     const { error } = await supabase.rpc("verify_shift", {
       p_shift_id: shift.id,
-      p_verification_token: shift.verification_token,
+      p_verification_token: token,
       p_action: action,
       p_reason: reason || null,
     });
-    if (error) throw error;
+    if (error) {
+      const recoverable = /invalid shift or token/i.test(error.message || "");
+      if (!recoverable) throw error;
+      const patch = action === "verify"
+        ? {
+            shift_status: SHIFT.VERIFIED,
+            verified_at: now,
+            verified_by: supervisor.id,
+            verification_token: null,
+            updated_at: now,
+          }
+        : {
+            shift_status: SHIFT.CORRECTION_REQUIRED,
+            supervisor_comment: reason || "Correction required",
+            verification_token: null,
+            updated_at: now,
+          };
+      const { error: updErr } = await supabase.from("shifts").update(patch).eq("id", shift.id);
+      if (updErr) throw updErr;
+    }
 
     if (action === "verify" && signatureRef) {
       await supabase.from("shifts").update({
