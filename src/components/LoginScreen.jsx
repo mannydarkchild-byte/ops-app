@@ -2,10 +2,9 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { LogoMark, ThemeToggle } from "./AppShell.jsx";
 import { Button } from "./ui/Button.jsx";
-import { Card, CardBody } from "./ui/Card.jsx";
 
-const inputClass =
-  "w-full bg-ops-black border border-ops-border px-3 py-3 rounded-xl text-ops-text font-body outline-none focus:border-ops-gold/60 focus:ring-1 focus:ring-ops-gold/25";
+const fieldClass =
+  "w-full min-h-[56px] bg-ops-elevated border-2 border-ops-border px-4 py-3.5 rounded-2xl text-ops-text font-body text-lg outline-none focus:border-ops-gold";
 
 export function LoginScreen({ onLogin, error, loading }) {
   const [mode, setMode] = useState("login");
@@ -33,40 +32,116 @@ export function LoginScreen({ onLogin, error, loading }) {
   };
 
   return (
-    <div className="min-h-screen bg-ops-black flex flex-col items-center justify-center p-4 mobile-safe-top mobile-safe-bottom relative">
-      <div className="absolute top-4 right-4">
+    <div className="login-screen min-h-[100dvh] bg-ops-black flex flex-col">
+      <header className="flex items-center justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3">
+        <p className="font-logo text-lg text-ops-gold">OPS</p>
         <ThemeToggle />
-      </div>
-      <LogoMark size="lg" />
-      <h1 className="font-logo text-3xl text-ops-gold mt-5 mb-2">OPS</h1>
-      <p className="font-body text-sm text-ops-muted mb-8 text-center max-w-xs">Mine operations — sign in once, work offline on site.</p>
+      </header>
 
-      <Card className="w-full max-w-sm">
-        <CardBody>
+      <div className="flex-1 flex flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] max-w-lg w-full mx-auto">
+        <div className="pt-4 pb-8">
+          <LogoMark size="xl" />
+          <h1 className="font-logo text-4xl text-ops-gold mt-5">OPS</h1>
+          <p className="font-body text-lg text-ops-text mt-2 leading-snug">
+            {mode === "login" ? "Sign in on this phone to start your shift." : "We will email you a reset link."}
+          </p>
+        </div>
+
         {mode === "login" ? (
-          <>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className={`${inputClass} mb-3`} />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password"
-              onKeyDown={(e) => e.key === "Enter" && submitLogin()}
-              className={`${inputClass} mb-4`} />
-            {error && <p className="text-ops-red text-sm mb-3 font-body">{error}</p>}
-            <Button variant="primary" size="lg" className="w-full" onClick={submitLogin} disabled={busy || loading}>
-              {busy ? "Signing in…" : "Sign in"}
-            </Button>
-            <button type="button" onClick={() => setMode("reset")} className="btn-link w-full mt-4 text-ops-muted text-sm font-ui hover:text-ops-text">Forgot password?</button>
-          </>
+          <form
+            className="flex-1 flex flex-col gap-5"
+            onSubmit={(e) => { e.preventDefault(); submitLogin(); }}
+          >
+            <label className="block">
+              <span className="font-ui text-base font-semibold text-ops-text block mb-2">Email</span>
+              <input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@site.com"
+                className={fieldClass}
+              />
+            </label>
+            <label className="block">
+              <span className="font-ui text-base font-semibold text-ops-text block mb-2">Password</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                className={fieldClass}
+              />
+            </label>
+            {error && <p className="text-ops-red text-base font-body leading-snug">{error}</p>}
+
+            <div className="mt-auto pt-6 space-y-4">
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full min-h-[60px] text-xl font-logo"
+                onClick={submitLogin}
+                disabled={busy || loading || !email || !password}
+              >
+                {busy ? "Signing in…" : "Sign in"}
+              </Button>
+              <button
+                type="button"
+                onClick={() => setMode("reset")}
+                className="btn-link w-full min-h-[48px] text-ops-text text-base font-ui"
+              >
+                Forgot password?
+              </button>
+              <p className="text-ops-muted text-base text-center font-body pb-2">
+                Works offline after the first sign-in.
+              </p>
+            </div>
+          </form>
         ) : (
-          <>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className={`${inputClass} mb-4`} />
-            {resetErr && <p className="text-ops-red text-sm mb-3">{resetErr}</p>}
-            {resetMsg && <p className="text-ops-green text-sm mb-3">{resetMsg}</p>}
-            <Button variant="teal" size="lg" className="w-full" onClick={submitReset} disabled={busy}>Send reset link</Button>
-            <button type="button" onClick={() => setMode("login")} className="btn-link w-full mt-4 text-ops-muted text-sm font-ui hover:text-ops-text">Back to sign in</button>
-          </>
+          <form
+            className="flex-1 flex flex-col gap-5"
+            onSubmit={(e) => { e.preventDefault(); submitReset(); }}
+          >
+            <label className="block">
+              <span className="font-ui text-base font-semibold text-ops-text block mb-2">Email</span>
+              <input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@site.com"
+                className={fieldClass}
+              />
+            </label>
+            {resetErr && <p className="text-ops-red text-base font-body">{resetErr}</p>}
+            {resetMsg && <p className="text-ops-green text-base font-body">{resetMsg}</p>}
+            <div className="mt-auto pt-6 space-y-4">
+              <Button
+                variant="teal"
+                size="lg"
+                className="w-full min-h-[60px] text-xl"
+                onClick={submitReset}
+                disabled={busy || !email}
+              >
+                {busy ? "Sending…" : "Send reset link"}
+              </Button>
+              <button
+                type="button"
+                onClick={() => setMode("login")}
+                className="btn-link w-full min-h-[48px] text-ops-text text-base font-ui"
+              >
+                Back to sign in
+              </button>
+            </div>
+          </form>
         )}
-        </CardBody>
-      </Card>
-      <p className="text-ops-muted text-xs mt-6 text-center font-body">Works offline after first sign-in</p>
+      </div>
     </div>
   );
 }

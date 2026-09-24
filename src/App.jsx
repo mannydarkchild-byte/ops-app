@@ -27,10 +27,10 @@ function RoleRouter() {
 
   if (loading) {
   return (
-      <div className="min-h-screen bg-ops-black text-ops-text flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-ops-black text-ops-text flex items-center justify-center px-6">
         <div className="text-center">
-          <p className="font-logo text-ops-gold tracking-widest mb-2">OPS</p>
-          <p className="font-body text-sm text-ops-muted">Loading…</p>
+          <p className="font-logo text-4xl text-ops-gold tracking-widest mb-3">OPS</p>
+          <p className="font-body text-lg text-ops-muted">Loading…</p>
       </div>
     </div>
   );
