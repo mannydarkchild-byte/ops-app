@@ -14,7 +14,6 @@ import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
 import { STOP_REASONS, ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS } from "../lib/constants.js";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
-import { clearStaleLocalRuns } from "../lib/machineStatus.js";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
 import { shiftDowntimeMinutes, formatDurationSeconds } from "../lib/shiftMetrics.js";
 import { SupervisorPicker, SupervisorWhatsAppButtons } from "../components/SupervisorPicker.jsx";
@@ -156,16 +155,6 @@ export function OperatorApp() {
       setClockInSupervisorId(suggestedSupervisor.id);
     }
   }, [workSession, suggestedSupervisor?.id, clockInSupervisorId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!activeMachine?.id) return;
-      const dropped = await clearStaleLocalRuns(activeMachine.id, workSession, user?.id);
-      if (dropped && !cancelled) await refreshLocal();
-    })();
-    return () => { cancelled = true; };
-  }, [activeMachine?.id, workSession?.id, user?.id, refreshLocal]);
 
   const blocked = machineBlocked && !sessionShift && !sessionDowntime;
 
@@ -436,23 +425,17 @@ export function OperatorApp() {
               </>
             )}
 
-            {workSession && !prestartDone && !sessionShift && !sessionDowntime && (
+            {workSession && !sessionShift && !sessionDowntime && (
               <>
-                <PreStartInspectionChecklist
-                  items={siteConfig.prestart_items}
-                  statusOptions={siteConfig.prestart_status_options}
-                  results={inspectionResults} remarks={inspectionRemarks} photos={inspectionPhotos}
-                  setResults={setInspectionResults} setRemarks={setInspectionRemarks} setPhotos={setInspectionPhotos}
-                  onComplete={handleInspection}
-                />
-                <Button type="button" variant="ghost" size="md" className="w-full mt-4" onClick={() => setShowEarlyClockOut(true)}>
-                  Clock out — not starting today
-                </Button>
-              </>
-            )}
-
-            {workSession && prestartDone && !sessionShift && !sessionDowntime && (
-              <>
+                {!prestartDone && (
+                  <PreStartInspectionChecklist
+                    items={siteConfig.prestart_items}
+                    statusOptions={siteConfig.prestart_status_options}
+                    results={inspectionResults} remarks={inspectionRemarks} photos={inspectionPhotos}
+                    setResults={setInspectionResults} setRemarks={setInspectionRemarks} setPhotos={setInspectionPhotos}
+                    onComplete={handleInspection}
+                  />
+                )}
                 <FormSection title="Opening hour meter" description={`Take a photo of the meter. Last verified reading: ${hourMeter}h.`} accent="#15803D">
                   <MeterPhoto
                     value={startHour}

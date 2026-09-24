@@ -227,7 +227,9 @@ export function OpsProvider({ children }) {
 
         let session = null;
         try {
-          const { data: { session: s } } = await supabase.auth.getSession();
+          const sessionWait = supabase.auth.getSession();
+          const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: { session: null } }), 4000));
+          const { data: { session: s } } = await Promise.race([sessionWait, timeout]);
           session = s;
         } catch {}
 
@@ -306,10 +308,18 @@ export function OpsProvider({ children }) {
       try {
         await refreshLocal();
         const siteId = user?.site_id || activeSite?.id || null;
-        setSyncState((prev) => ({
-          ...prev,
-          status: navigator.onLine ? (prev.status === "offline" ? "idle" : prev.status) : "offline",
-        }));
+        if (navigator.onLine) {
+          try {
+            const syncWait = runSync({ silent: true, siteId });
+            const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("sync-timeout")), 12000));
+            await Promise.race([syncWait, timeout]);
+            await refreshLocal();
+          } catch {
+            setSyncState((prev) => ({ ...prev, status: "idle" }));
+          }
+        } else {
+          setSyncState((prev) => ({ ...prev, status: "offline" }));
+        }
         cleanupSync = initSyncListeners({ siteId });
       } catch (e) {
         console.warn("Data bootstrap:", e);
