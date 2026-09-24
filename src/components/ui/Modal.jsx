@@ -7,7 +7,7 @@ export function Modal({ title, color = "yellow", onClose, children }) {
         style={{ borderTopColor: borderColor, borderTopWidth: 3 }}
       >
         <div className="flex justify-between items-center gap-3 px-4 py-4 border-b border-[#2A2A2A] shrink-0">
-          <h3 className="font-logo text-base sm:text-lg tracking-wide min-w-0" style={{ color: borderColor }}>
+          <h3 className="font-logo text-lg sm:text-xl tracking-wide min-w-0" style={{ color: borderColor }}>
             {title}
           </h3>
           <button

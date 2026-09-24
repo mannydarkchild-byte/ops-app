@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveMediaUrl } from "../lib/media.js";
-import { clearInspectionDraft, loadInspectionDraft, saveInspectionDraft } from "../lib/inspectionDraft.js";
+import { asPhotoList, clearInspectionDraft, loadInspectionDraft, saveInspectionDraft } from "../lib/inspectionDraft.js";
 
 async function hydratePhotoPreviews(photos = {}) {
-  const out = { ...photos };
+  const out = {};
   await Promise.all(
-    Object.entries(out).map(async ([item, meta]) => {
-      if (!meta?.ref || meta.preview) return;
-      const preview = await resolveMediaUrl(meta.ref);
-      if (preview) out[item] = { ...meta, preview };
+    Object.entries(photos || {}).map(async ([item, meta]) => {
+      const next = await Promise.all(
+        asPhotoList(meta).map(async (p) => {
+          if (!p?.ref || p.preview) return p;
+          const preview = await resolveMediaUrl(p.ref);
+          return preview ? { ...p, preview } : p;
+        })
+      );
+      out[item] = next;
     })
   );
   return out;

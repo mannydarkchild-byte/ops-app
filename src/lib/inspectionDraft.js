@@ -9,12 +9,19 @@ function safeParse(raw) {
   }
 }
 
+export function asPhotoList(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.filter((p) => p && (p.ref || p.preview));
+  if (val.ref || val.preview) return [val];
+  return [];
+}
+
 /** Strip blob/data previews — keep media refs for restore after reload */
 function serializePhotos(photos = {}) {
   const out = {};
   for (const [key, val] of Object.entries(photos || {})) {
-    if (!val) continue;
-    out[key] = { ref: val.ref || null };
+    const refs = asPhotoList(val).filter((p) => p.ref).map((p) => ({ ref: p.ref }));
+    if (refs.length) out[key] = refs;
   }
   return out;
 }

@@ -76,12 +76,24 @@ export async function clockOutEarly(user, workSession, machine, site, { reason, 
 
 async function resolveInspectionPhotoRef(photo) {
   if (!photo) return null;
-  if (typeof photo === "object" && photo.ref) return photo.ref;
-  if (typeof photo === "string") {
-    if (photo.startsWith("data:")) return storeMediaDataUrl(photo, "inspection");
-    if (photo.startsWith("MEDIA")) return photo;
+  const first = Array.isArray(photo) ? photo[0] : photo;
+  if (!first) return null;
+  if (typeof first === "object" && first.ref) return first.ref;
+  if (typeof first === "string") {
+    if (first.startsWith("data:")) return storeMediaDataUrl(first, "inspection");
+    if (first.startsWith("MEDIA")) return first;
   }
   return null;
+}
+
+async function resolveInspectionPhotoRefs(photo) {
+  const list = Array.isArray(photo) ? photo : photo ? [photo] : [];
+  const refs = [];
+  for (const item of list) {
+    const ref = await resolveInspectionPhotoRef(item);
+    if (ref) refs.push(ref);
+  }
+  return refs;
 }
 
 async function saveInspectionBatch(user, machine, site, { items, results, remarks, photos, type, getCategory }) {
@@ -95,7 +107,11 @@ async function saveInspectionBatch(user, machine, site, { items, results, remark
   const records = await Promise.all(items.map(async (item, idx) => {
     const itemName = item.item_name ?? item;
     const category = typeof getCategory === "function" ? getCategory(item) : (item.category || "General");
-    const photoRef = await resolveInspectionPhotoRef(photos[itemName]);
+    const photoRefs = await resolveInspectionPhotoRefs(photos[itemName]);
+    const extra = photoRefs.slice(1);
+    const remark = [remarks[itemName] || "", extra.length ? `Extra photos: ${extra.join(",")}` : ""]
+      .filter(Boolean)
+      .join("\n");
     return {
       id: `${batch}-${String(idx + 1).padStart(2, "0")}`,
       site_id: site?.id,
@@ -106,8 +122,8 @@ async function saveInspectionBatch(user, machine, site, { items, results, remark
       category,
       item_name: itemName,
       status: results[itemName],
-      photo_ref: photoRef,
-      remark: remarks[itemName] || "",
+      photo_ref: photoRefs[0] || null,
+      remark,
       timestamp: now,
       inspection_id: batch,
       created_at: now,

@@ -12,7 +12,8 @@ import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
 import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
-import { STOP_REASONS, ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS } from "../lib/constants.js";
+import { STOP_REASONS, ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS, EARLY_CLOCK_OUT_GUIDE, STOP_REASON_GUIDE } from "../lib/constants.js";
+import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
 import { shiftDowntimeMinutes, formatDurationSeconds } from "../lib/shiftMetrics.js";
@@ -341,16 +342,16 @@ export function OperatorApp() {
             </div>
             <div className="grid grid-cols-3 gap-2">
               <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
-                <span className="w-16 h-16 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
-                <span className="font-logo text-xs text-ops-text">Report</span>
+                <span className="w-20 h-20 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
+                <span className="font-logo text-sm text-ops-text">Report</span>
               </button>
               <button type="button" onClick={() => setShowFuel(true)} className="flex flex-col items-center gap-1.5 py-2">
-                <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
-                <span className="font-logo text-xs text-ops-text">Diesel</span>
+                <span className="w-20 h-20 rounded-2xl bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
+                <span className="font-logo text-sm text-ops-text">Diesel</span>
               </button>
               <button type="button" onClick={() => setShowInbox(true)} className="relative flex flex-col items-center gap-1.5 py-2">
-                <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
-                <span className="font-logo text-xs text-ops-text">Inbox</span>
+                <span className="w-20 h-20 rounded-2xl bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
+                <span className="font-logo text-sm text-ops-text">Inbox</span>
                 {inboxCount > 0 && (
                   <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">{inboxCount}</span>
                 )}
@@ -435,6 +436,11 @@ export function OperatorApp() {
                     onChange={setClockInSupervisorId}
                     suggestedId={suggestedSupervisor?.id}
                   />
+                  {clockInSupervisorId && (
+                    <ChoiceHint>
+                      This person will sign off your shift. Clock in starts your time — it does not start the machine.
+                    </ChoiceHint>
+                  )}
                 </FormSection>
                 <FormSection title="Clock in" description="Tap when you are on site and ready." accent="#15803D">
                   <Button type="button" variant="primary" size="lg" className="w-full font-logo" onClick={handleClockIn} disabled={siteSupervisors.length > 0 && !clockInSupervisorId}>
@@ -454,6 +460,14 @@ export function OperatorApp() {
                   step={inspectionStep}
                   setStep={setInspectionStep}
                   onComplete={handleInspection}
+                  onReportProblem={({ item, remark }) => {
+                    setReportPrefill({
+                      area: "Mechanical",
+                      description: remark ? `${item} — ${remark}` : item,
+                      priority: "High",
+                    });
+                    setShowReportIssue(true);
+                  }}
                 />
               </>
             )}
@@ -550,11 +564,14 @@ export function OperatorApp() {
             <select
               value={earlyClockOutReason}
               onChange={(e) => setEarlyClockOutReason(e.target.value)}
-              className="w-full bg-[#0A0A0A] border p-3 rounded text-[#F2F0EA]"
+              className="w-full bg-[#0A0A0A] border p-4 rounded-xl text-[#F2F0EA] text-lg min-h-[60px]"
             >
               <option value="">Select reason…</option>
               {EARLY_CLOCK_OUT_REASONS.map((r) => <option key={r}>{r}</option>)}
             </select>
+            {earlyClockOutReason && (
+              <ChoiceHint>{statusGuide(EARLY_CLOCK_OUT_GUIDE, earlyClockOutReason)}</ChoiceHint>
+            )}
           </FormSection>
           <FormSection step={2} title="Details" description="Optional — add context for the supervisor." accent="#F5C518">
             <VoiceInput value={earlyClockOutNote} onChange={setEarlyClockOutNote} placeholder="Details…" rows={2} />
@@ -572,10 +589,13 @@ export function OperatorApp() {
       {showStop && (
         <Modal title="STOP MACHINE" color="red" onClose={() => setShowStop(false)}>
           <FormSection step={1} title="Stop reason" description="Why is the machine stopping?" accent="#EF4444">
-            <select value={stopReason} onChange={(e) => setStopReason(e.target.value)} className="w-full bg-[#0A0A0A] border p-3 rounded text-[#F2F0EA]">
+            <select value={stopReason} onChange={(e) => setStopReason(e.target.value)} className="w-full bg-[#0A0A0A] border p-4 rounded-xl text-[#F2F0EA] text-lg min-h-[60px]">
               <option value="">Select reason…</option>
               {STOP_REASONS.map((x) => <option key={x}>{x}</option>)}
             </select>
+            {stopReason && (
+              <ChoiceHint>{statusGuide(STOP_REASON_GUIDE, stopReason)}</ChoiceHint>
+            )}
           </FormSection>
           <FormSection step={2} title="Details" description="What happened? What was done?" accent="#EF4444">
             <VoiceInput value={stopNote} onChange={setStopNote} placeholder="Details…" rows={2} />

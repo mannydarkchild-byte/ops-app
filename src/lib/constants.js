@@ -230,6 +230,42 @@ export const PRESTART_INSPECTION_ITEMS = [
 
 export const PRESTART_STATUS_OPTIONS = ["OK", "Action taken", "Needs attention"];
 
+export const PRESTART_STATUS_GUIDE = {
+  OK: "This item looks fine. Go to the next check.",
+  "Action taken": "You found something and already fixed it. Add a short note or a photo.",
+  "Needs attention": "This is a problem. Add photos. You can report it now so the supervisor sees it.",
+};
+
+export const EARLY_CLOCK_OUT_GUIDE = {
+  "Sent home / stood down": "You were told not to work. This still records your time on site.",
+  "Wrong machine assigned": "You clocked in on the wrong machine. Leave now so the right operator can start.",
+  "Medical / personal emergency": "You need to leave site. Your time stops when you confirm.",
+  "Safety concern on site": "Leave if it is not safe. Tell the supervisor — you can also report a problem.",
+  "Machine not ready / waiting for parts": "You arrived but the machine cannot start. Clock out so your time is recorded.",
+  "Strike / site shutdown": "Work has stopped on site. Clock out to close your time.",
+  Other: "Say why you are leaving. This is your time, not machine hours.",
+};
+
+export const STOP_REASON_GUIDE = {
+  "Mechanical Breakdown": "The machine is broken. Stop it here, then report the problem if you have not already.",
+  "Hydraulic Breakdown": "Hydraulics have failed. Stop the machine and add what you see.",
+  "Electrical Breakdown": "Electrical fault. Stop the machine. Do not restart until it is safe.",
+  "Engine Problem": "Engine issue. Stop the machine and add details.",
+  "Screen Problem": "Screen needs attention. Stop if you cannot keep working safely.",
+  "Conveyor/Belt Problem": "Belt or conveyor is down. Stop and add what you see.",
+  "Track Problem": "Tracks need attention. Stop if the machine cannot move safely.",
+  "Waiting for Material": "Machine is fine. You are waiting for feed.",
+  "Waiting for Loader": "Machine is fine. You are waiting for the loader.",
+  "No Diesel": "No fuel. Stop the machine and tell the supervisor.",
+  Weather: "Weather has stopped work. The machine is not broken.",
+  "Planned Maintenance": "A planned stop. Restart when maintenance is done, or finish the day.",
+  "Safety Stop": "You stopped for safety. Do not restart until it is safe.",
+  Cleaning: "A short stop to clean. Restart when ready.",
+  "End of Operating Period": "Work time for the machine is over. Finish the day next.",
+  Strike: "Work has stopped on site.",
+  Other: "Say what happened. This stops the machine, not your time on site.",
+};
+
 /** Mechanic full inspection — detailed grouped checklist */
 export const INSPECTION_GROUPS = [
   { category: "Screen Box", icon: "📐", items: [

@@ -32,7 +32,7 @@ export function MeterPhoto({
         <button
           type="button"
           onClick={handlePhoto}
-          className={`w-full py-5 rounded-xl font-logo font-bold text-base tracking-wider border-2 active:scale-[0.99] ${
+          className={`w-full min-h-[64px] py-5 rounded-xl font-logo font-bold text-lg tracking-wider border-2 active:scale-[0.99] ${
             hasPhoto
               ? "bg-[#22C55E] text-black border-[#22C55E]"
               : showPhotoError
@@ -62,7 +62,7 @@ export function MeterPhoto({
           value={value}
           onChange={(e) => onValue(e.target.value)}
           placeholder="e.g. 5032.5"
-          className="w-full bg-[#090909] border border-[#333] rounded-xl p-3 text-xl text-[#F2F0EA] outline-none focus:border-[#F5C518]"
+          className="w-full bg-[#090909] border border-[#333] rounded-xl p-4 text-2xl text-[#F2F0EA] outline-none focus:border-[#F5C518] min-h-[60px]"
         />
       </div>
 

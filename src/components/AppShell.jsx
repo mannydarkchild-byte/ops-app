@@ -205,7 +205,7 @@ export function ThemeToggle({ className = "" }) {
       onClick={toggleTheme}
       title={light ? "Switch to dark" : "Switch to day / white"}
       aria-label={light ? "Switch to dark mode" : "Switch to white mode"}
-      className={`w-11 h-11 rounded-xl border border-ops-border bg-ops-card text-ops-text flex items-center justify-center ${className}`}
+      className={`w-12 h-12 rounded-xl border border-ops-border bg-ops-card text-ops-text flex items-center justify-center ${className}`}
     >
       {light ? <IconMoon /> : <IconSun />}
     </button>
@@ -243,11 +243,11 @@ export function AppHeader({ right, subtitle, leaveApp = false }) {
             title="Leave the app — this is not clock out"
             aria-label="Leave the app"
             className={`rounded-xl border border-ops-border bg-ops-card text-ops-muted hover:text-ops-red flex items-center justify-center ${
-              leaveApp ? "h-11 px-2 min-w-[3.25rem]" : "w-11 h-11"
+              leaveApp ? "h-12 px-2.5 min-w-[3.6rem]" : "w-12 h-12"
             }`}
           >
             {leaveApp ? (
-              <span className="font-logo text-[10px] leading-tight text-center">Leave<br />app</span>
+              <span className="font-logo text-xs leading-tight text-center">Leave<br />app</span>
             ) : (
               <IconOut />
             )}

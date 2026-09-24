@@ -24,14 +24,14 @@ export function SupervisorPicker({ supervisors, value, onChange, suggestedId = n
             key={sup.id}
             type="button"
             onClick={() => onChange(sup.id)}
-            className={`w-full text-left p-4 rounded-xl border-2 transition-all active:scale-[0.99] ${
+            className={`w-full text-left p-5 rounded-xl border-2 transition-all active:scale-[0.99] min-h-[72px] ${
               selected ? "border-[#F5C518] bg-[#F5C518]/10" : "border-[#2A2A2A] bg-[#0A0A0A]"
             }`}
           >
             <div className="flex justify-between items-start gap-2">
               <div>
-                <p className="font-logo text-base text-[#F2F0EA]">{sup.name}</p>
-                <p className="font-body text-xs text-[#F2F0EA]/80 mt-0.5">
+                <p className="font-logo text-lg text-[#F2F0EA]">{sup.name}</p>
+                <p className="font-body text-sm text-[#F2F0EA]/80 mt-0.5">
                   {BAND_LABEL[sup.shift_band] || BAND_LABEL.any}
                   {suggested && !selected && <span className="text-[#F5C518] ml-2">· suggested</span>}
                 </p>
