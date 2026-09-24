@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
-import { LogoMark } from "./AppShell.jsx";
+import { LogoMark, ThemeToggle } from "./AppShell.jsx";
 import { Button } from "./ui/Button.jsx";
 import { Card, CardBody } from "./ui/Card.jsx";
 
@@ -33,7 +33,10 @@ export function LoginScreen({ onLogin, error, loading }) {
   };
 
   return (
-    <div className="min-h-screen bg-ops-black flex flex-col items-center justify-center p-4 mobile-safe-top mobile-safe-bottom">
+    <div className="min-h-screen bg-ops-black flex flex-col items-center justify-center p-4 mobile-safe-top mobile-safe-bottom relative">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <LogoMark size="lg" />
       <h1 className="font-logo text-3xl text-ops-gold mt-5 mb-2">OPS</h1>
       <p className="font-body text-sm text-ops-muted mb-8 text-center max-w-xs">Mine operations — sign in once, work offline on site.</p>

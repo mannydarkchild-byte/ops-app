@@ -2,9 +2,10 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { supabase } from "../lib/supabase.js";
 import { initDB, readTable, saveLocal, getPendingCount } from "../lib/db.js";
 import { loadProfile, signIn, signOut, readCachedAuthUser, cacheAuthUser } from "../lib/auth.js";
-import { runSync, scheduleSync, initSyncListeners, onSyncStateChange } from "../lib/sync/engine.js";
+import { runSync, initSyncListeners, onSyncStateChange } from "../lib/sync/engine.js";
 import { syncMachineLocks } from "../lib/machineLock.js";
 import { fetchMachineStatus, reconcileMachineOpenState } from "../lib/machineStatus.js";
+import { persistTheme, readTheme } from "../lib/theme.js";
 import { SHIFT } from "../lib/constants.js";
 import { seedLocalDefaults } from "../lib/seed.js";
 import { resolveSiteSettings, defaultSiteSettings } from "../lib/siteConfig.js";
@@ -42,6 +43,7 @@ export function OpsProvider({ children }) {
   const [inventoryItems, setInventoryItems] = useState([]);
   const [siteSettings, setSiteSettings] = useState([]);
   const [machineStatus, setMachineStatus] = useState(null);
+  const [theme, setThemeState] = useState(() => readTheme());
 
   const userRef = useRef(null);
   const activeMachineRef = useRef(null);
@@ -69,15 +71,6 @@ export function OpsProvider({ children }) {
         pending,
         status: navigator.onLine ? prev.status : "offline",
       }));
-      if (activeMachineRef.current?.id) {
-        try {
-          await reconcileMachineOpenState(activeMachineRef.current.id);
-          const status = await fetchMachineStatus(activeMachineRef.current.id);
-          setMachineStatus(status);
-        } catch {}
-        const latestShifts = await readTable("shifts");
-        setShifts(latestShifts);
-      }
     } catch (e) {
       console.warn("refreshLocal:", e);
     }
@@ -181,14 +174,35 @@ export function OpsProvider({ children }) {
   const persistAndSync = useCallback(async (table, record) => {
     await saveLocal(table, record);
     await refreshLocal();
-    scheduleSync();
   }, [refreshLocal]);
+
+  const setTheme = useCallback((next) => {
+    const applied = persistTheme(next);
+    setThemeState(applied);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(theme === "light" ? "dark" : "light");
+  }, [theme, setTheme]);
 
   const siteIdForSync = user?.site_id || activeSite?.id || null;
 
   const syncNow = useCallback(async () => {
+    if (!navigator.onLine) {
+      const pending = await getPendingCount();
+      setSyncState((prev) => ({ ...prev, status: "offline", pending }));
+      await refreshLocal();
+      return { ok: false, status: "offline", pending };
+    }
     await syncMachineLocks();
     const res = await runSync({ silent: false, forcePush: true, siteId: siteIdForSync });
+    if (activeMachineRef.current?.id) {
+      try {
+        await reconcileMachineOpenState(activeMachineRef.current.id);
+        const status = await fetchMachineStatus(activeMachineRef.current.id);
+        setMachineStatus(status);
+      } catch {}
+    }
     await refreshLocal();
     return res;
   }, [refreshLocal, siteIdForSync]);
@@ -292,12 +306,10 @@ export function OpsProvider({ children }) {
       try {
         await refreshLocal();
         const siteId = user?.site_id || activeSite?.id || null;
-        if (navigator.onLine) {
-          await runSync({ silent: true, siteId });
-          await refreshLocal();
-        } else {
-          setSyncState((prev) => ({ ...prev, status: "offline" }));
-        }
+        setSyncState((prev) => ({
+          ...prev,
+          status: navigator.onLine ? (prev.status === "offline" ? "idle" : prev.status) : "offline",
+        }));
         cleanupSync = initSyncListeners({ siteId });
       } catch (e) {
         console.warn("Data bootstrap:", e);
@@ -319,7 +331,10 @@ export function OpsProvider({ children }) {
         refreshLocal();
         return;
       }
-      setSyncState((prev) => ({ ...prev, ...state }));
+      setSyncState((prev) => {
+        if (prev.status === "syncing" && state.status === "idle") return prev;
+        return { ...prev, ...state };
+      });
     });
 
     return () => { cleanupSync(); unsub(); };
@@ -334,6 +349,7 @@ export function OpsProvider({ children }) {
     maintenanceJobs, inventoryItems, siteSettings, siteSettingsMap, getSettingsForSite,
     machineRun, workSession, downtime, hourMeter, machineStatus, machineBlocked,
     refreshLocal, persistAndSync, saveLocal,
+    theme, setTheme, toggleTheme,
     setAuthError, signIn: handleSignIn, signOut: handleSignOut,
   };
 

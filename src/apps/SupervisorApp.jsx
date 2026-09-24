@@ -108,21 +108,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
-  // Refresh screen often; full upload/download less often so sync does not pile up
   useEffect(() => {
     if (!user?.site_id) return;
     const refreshTick = () => {
       if (document.visibilityState === "visible") refreshLocal().catch(() => {});
     };
-    const syncTick = () => {
-      if (document.visibilityState === "visible" && navigator.onLine) syncNow().catch(() => {});
-    };
     refreshTick();
-    syncTick();
     const refreshId = setInterval(refreshTick, 15000);
-    const syncId = setInterval(syncTick, 45000);
-    return () => { clearInterval(refreshId); clearInterval(syncId); };
-  }, [user?.site_id, refreshLocal, syncNow]);
+    return () => { clearInterval(refreshId); };
+  }, [user?.site_id, refreshLocal]);
 
   const siteMachines = useMemo(
 

@@ -2,14 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --ops-bg: #0A0A0A;
+  --ops-card: #141414;
+  --ops-elevated: #1A1A1A;
+  --ops-border: #2A2A2A;
+  --ops-text: #F2F0EA;
+  --ops-muted: rgba(242, 240, 234, 0.78);
+  --ops-ink: #0A0A0A;
+  --ops-inset: #0A0A0A;
+}
+
+html.theme-light {
+  --ops-bg: #F6F1DE;
+  --ops-card: #FFFFFF;
+  --ops-elevated: #FFF8E8;
+  --ops-border: #6F6A5C;
+  --ops-text: #14120E;
+  --ops-muted: rgba(20, 18, 14, 0.78);
+  --ops-ink: #14120E;
+  --ops-inset: #E8E0C8;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    BASE
    ═══════════════════════════════════════════════════════════════ */
 html,
 body,
 #root {
-  background-color: #0A0A0A;
-  color: #F2F0EA;
+  background-color: var(--ops-bg);
+  color: var(--ops-text);
   font-family: Inter, system-ui, sans-serif;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
@@ -253,11 +275,11 @@ button,
   position: sticky;
   z-index: 25;
   top: calc(env(safe-area-inset-top, 0px) + 4rem);
-  background: #0a0a0a;
+  background: var(--ops-bg);
   margin-left: -0.75rem;
   margin-right: -0.75rem;
   padding: 0.5rem 0.75rem 0.65rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--ops-border);
 }
 
 .operator-outdoor .bg-\[\#141414\] {
@@ -292,4 +314,67 @@ button,
 
 .operator-outdoor main .text-ops-muted {
   color: rgba(242, 240, 234, 0.78);
+}
+
+/* Day / white mode — high contrast in sunlight, same OPS gold + Russo */
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder {
+  color: rgba(20, 18, 14, 0.55);
+}
+html.theme-light .text-ops-gold {
+  color: #8A5A00;
+}
+html.theme-light .bg-\[\#0A0A0A\],
+html.theme-light .bg-\[\#0a0a0a\] {
+  background-color: var(--ops-bg);
+}
+html.theme-light .bg-\[\#141414\],
+html.theme-light .bg-\[\#1a1a1a\],
+html.theme-light .bg-\[\#1A1A1A\] {
+  background-color: var(--ops-card);
+  border-color: var(--ops-border);
+}
+html.theme-light .bg-\[\#090909\] {
+  background-color: var(--ops-inset);
+}
+html.theme-light .bg-\[\#2A2A2A\],
+html.theme-light .bg-\[\#2a2a2a\] {
+  background-color: #D8D1BA;
+  color: var(--ops-ink);
+}
+html.theme-light .text-\[\#F2F0EA\] {
+  color: var(--ops-text);
+}
+html.theme-light [class*="text-[#F2F0EA]/"] {
+  color: rgba(20, 18, 14, 0.8) !important;
+}
+html.theme-light .border-\[\#2A2A2A\],
+html.theme-light .border-\[\#2a2a2a\],
+html.theme-light .border-\[\#333\] {
+  border-color: var(--ops-border);
+}
+html.theme-light .operator-outdoor .bg-\[\#141414\] {
+  background-color: var(--ops-card);
+  border-color: var(--ops-border);
+}
+html.theme-light .operator-outdoor main [class*="text-[#F2F0EA]/50"],
+html.theme-light .operator-outdoor main [class*="text-[#F2F0EA]/60"],
+html.theme-light .operator-outdoor main [class*="text-[#F2F0EA]/70"],
+html.theme-light .operator-outdoor main .text-ops-muted {
+  color: rgba(20, 18, 14, 0.82) !important;
+}
+html.theme-light .operator-outdoor .operator-work-panel {
+  border-color: var(--ops-border);
+  background-color: var(--ops-card);
+}
+html.theme-light .operator-work-panel .bg-ops-black,
+html.theme-light .bg-ops-black {
+  background-color: var(--ops-inset);
+}
+html.theme-light .min-h-screen.bg-ops-black {
+  background-color: var(--ops-bg);
+}
+html.theme-light header.bg-ops-black,
+html.theme-light .relative.z-20.bg-ops-black {
+  background-color: var(--ops-bg);
 }

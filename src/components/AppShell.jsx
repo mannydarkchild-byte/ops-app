@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { SYNC_LABELS, syncControlLabel, parseSyncError } from "../lib/labels.js";
 import { Button } from "./ui/Button.jsx";
-import { IconOut } from "./FieldIcons.jsx";
+import { IconMoon, IconOut, IconSun } from "./FieldIcons.jsx";
 
 const ROLE_COLORS = {
   operator: { dot: "bg-ops-green", text: "text-ops-green" },
@@ -100,7 +100,7 @@ function SyncButton() {
       <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
       <span className={`truncate ${meta.color}`}>{caption}</span>
       {(syncState.pending || 0) > 0 && (
-        <span className="font-ui text-xs bg-ops-gold text-ops-black rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shrink-0 font-bold">
+        <span className="font-ui text-xs bg-ops-gold text-ops-ink rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shrink-0 font-bold">
           {syncState.pending > 99 ? "99+" : syncState.pending}
         </span>
       )}
@@ -196,6 +196,22 @@ export function RoleBadge() {
   return <UserChip />;
 }
 
+export function ThemeToggle({ className = "" }) {
+  const { theme, toggleTheme } = useOps();
+  const light = theme === "light";
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      title={light ? "Switch to dark" : "Switch to day / white"}
+      aria-label={light ? "Switch to dark mode" : "Switch to white mode"}
+      className={`w-11 h-11 rounded-xl border border-ops-border bg-ops-card text-ops-text flex items-center justify-center ${className}`}
+    >
+      {light ? <IconMoon /> : <IconSun />}
+    </button>
+  );
+}
+
 export function AppHeader({ right, subtitle }) {
   const { user, signOut } = useOps();
   const role = (user?.role || "operator").toLowerCase();
@@ -205,7 +221,7 @@ export function AppHeader({ right, subtitle }) {
   const displayName = (user?.name || user?.email?.split("@")[0] || "User").split(/\s+/)[0];
 
   return (
-    <header className="sticky top-0 z-30 bg-ops-black/92 backdrop-blur-md border-b border-ops-border mobile-safe-top shadow-ops-sm">
+    <header className="sticky top-0 z-30 bg-ops-black border-b border-ops-border mobile-safe-top shadow-ops-sm">
       <div className="px-3 sm:px-4 py-2.5 flex items-center gap-2 max-w-5xl mx-auto">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <LogoMark size="sm" />
@@ -219,6 +235,7 @@ export function AppHeader({ right, subtitle }) {
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {right}
+          <ThemeToggle />
           <SyncButton />
           <button
             type="button"

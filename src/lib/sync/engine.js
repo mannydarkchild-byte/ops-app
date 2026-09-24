@@ -107,31 +107,23 @@ export async function runSync({ silent = true, forceBootstrap = false, forcePush
   return activeSyncPromise;
 }
 
-export function scheduleSync(delayMs = 3000) {
+/** Saves stay on the phone until the operator taps Update. */
+export function scheduleSync() {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    runSync({ silent: true, siteId: syncSiteId }).catch(() => {});
-  }, delayMs);
 }
 
 export function initSyncListeners({ siteId = null } = {}) {
   syncSiteId = siteId || null;
-  const onOnline = () => runSync({ silent: true, siteId: syncSiteId });
-  window.addEventListener("online", onOnline);
-
-  let hiddenAt = null;
-  const onVis = () => {
-    if (document.visibilityState === "hidden") {
-      hiddenAt = Date.now();
-    } else if (document.visibilityState === "visible" && hiddenAt && Date.now() - hiddenAt > 15000) {
-      runSync({ silent: true, siteId: syncSiteId });
-    }
+  const markConnection = () => {
+    notify({ status: navigator.onLine ? "idle" : "offline" });
   };
-  document.addEventListener("visibilitychange", onVis);
+  window.addEventListener("online", markConnection);
+  window.addEventListener("offline", markConnection);
+  markConnection();
 
   return () => {
-    window.removeEventListener("online", onOnline);
-    document.removeEventListener("visibilitychange", onVis);
+    window.removeEventListener("online", markConnection);
+    window.removeEventListener("offline", markConnection);
     clearTimeout(debounceTimer);
   };
 }

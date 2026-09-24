@@ -27,10 +27,10 @@ function RoleRouter() {
 
   if (loading) {
   return (
-      <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-ops-black text-ops-text flex items-center justify-center">
         <div className="text-center">
-          <p className="font-logo text-[#F5C518] tracking-widest mb-2">OPS</p>
-          <p className="font-body text-sm text-[#F2F0EA]/50">Loading…</p>
+          <p className="font-logo text-ops-gold tracking-widest mb-2">OPS</p>
+          <p className="font-body text-sm text-ops-muted">Loading…</p>
       </div>
     </div>
   );
@@ -70,10 +70,10 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       return (
-        <div className="min-h-screen bg-[#0A0A0A] text-[#F2F0EA] flex items-center justify-center p-6">
-          <div className="max-w-sm bg-[#141414] border border-[#EF4444] rounded-2xl p-6 text-center">
+        <div className="min-h-screen bg-ops-black text-ops-text flex items-center justify-center p-6">
+          <div className="max-w-sm bg-ops-card border border-[#EF4444] rounded-2xl p-6 text-center">
             <h1 className="font-logo text-[#EF4444] text-xl mb-3 tracking-wider">APP ERROR</h1>
-            <p className="font-body text-xs text-[#F2F0EA]/70 mb-4 break-words">{String(this.state.error?.message || this.state.error)}</p>
+            <p className="font-body text-xs text-ops-muted mb-4 break-words">{String(this.state.error?.message || this.state.error)}</p>
             <button onClick={() => window.location.reload()} className="w-full bg-[#F5C518] text-black py-3 rounded font-logo font-bold tracking-wider">RELOAD</button>
           </div>
         </div>

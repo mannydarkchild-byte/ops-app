@@ -6,7 +6,6 @@ import { BackdateReadingModal } from "../components/BackdateReadingModal.jsx";
 import { ActivityFeed } from "../components/ActivityFeed.jsx";
 import { ExpenseModal } from "../components/ExpenseModal.jsx";
 import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
-import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
@@ -55,7 +54,6 @@ export function ManagerApp() {
   const [showBackdate, setShowBackdate] = useState(false);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
-  const [showImportExpenses, setShowImportExpenses] = useState(false);
   const [showImportExpenses, setShowImportExpenses] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);

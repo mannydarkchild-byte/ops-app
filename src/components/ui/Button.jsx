@@ -1,5 +1,5 @@
 const VARIANT = {
-  primary: "bg-ops-gold text-ops-black hover:bg-ops-gold/90 border border-ops-gold/80",
+  primary: "bg-ops-gold text-ops-ink hover:bg-ops-gold/90 border border-ops-gold/80",
   secondary: "bg-ops-card text-ops-text border border-ops-border hover:border-ops-gold/40",
   ghost: "bg-transparent text-ops-text/80 border border-transparent hover:bg-ops-card hover:border-ops-border",
   danger: "bg-ops-red/15 text-ops-red border border-ops-red/35 hover:bg-ops-red/25",
