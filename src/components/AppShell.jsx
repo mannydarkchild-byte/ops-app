@@ -274,17 +274,19 @@ export function AppHeader({ right, subtitle, leaveApp = false }) {
  * tabs: { id, label, icon?, badge? }
  * Sync lives in the header only (avoids crowding tabs on mobile).
  */
-export function AppTabBar({ tabs, activeTab, onTabChange, footer }) {
+export function AppTabBar({ tabs, activeTab, onTabChange, footer, outdoor = false }) {
   return (
     <div className="relative z-20 bg-ops-black border-b border-ops-border">
-      <div className="px-3 sm:px-4 py-2 max-w-5xl mx-auto">
+      <div className={`${outdoor ? "px-4 py-3" : "px-3 sm:px-4 py-2"} max-w-5xl mx-auto`}>
         <div className="flex gap-1 p-1 rounded-xl bg-ops-card border border-ops-border overflow-x-auto smooth-scroll">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => onTabChange(t.id)}
-              className={`shrink-0 px-3 py-2.5 rounded-lg font-ui text-sm font-medium whitespace-nowrap transition-colors min-h-[40px] ${
+              className={`ops-chip shrink-0 rounded-lg font-ui font-medium whitespace-nowrap transition-colors ${
+                outdoor ? "px-4 py-3 text-lg min-h-[56px]" : "px-3 py-2.5 text-sm min-h-[40px]"
+              } ${
                 activeTab === t.id
                   ? "bg-ops-black text-ops-text shadow-ops-sm ring-1 ring-ops-gold/35"
                   : "text-ops-muted hover:text-ops-text hover:bg-ops-elevated/80"
@@ -338,6 +340,7 @@ export function AppPage({
           activeTab={activeTab}
           onTabChange={onTabChange}
           footer={tabFooter}
+          outdoor={outdoor}
         />
       )}
       <SyncErrorPanel />

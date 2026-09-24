@@ -843,11 +843,18 @@ html:has(.operator-outdoor) {
   font-size: 22px !important;
 }
 
-.operator-outdoor button:not(.rounded-full),
-.ops-sheet button:not(.rounded-full),
+.operator-outdoor button:not(.rounded-full):not(.ops-chip),
+.ops-sheet button:not(.rounded-full):not(.ops-chip),
 .login-screen button:not(.rounded-full) {
   min-height: 92px !important;
   font-size: 28px !important;
+}
+
+.operator-outdoor button.ops-chip,
+.ops-sheet button.ops-chip {
+  min-height: 52px !important;
+  font-size: 18px !important;
+  padding: 0.45rem 0.85rem !important;
 }
 
 .login-screen button.login-go {

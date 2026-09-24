@@ -32,7 +32,7 @@ export function TimesheetPanel({
             key={f.id}
             type="button"
             onClick={() => onFilter(f.id)}
-            className={`px-3 py-2 rounded-lg font-logo text-[10px] ${
+            className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] ${
               filter === f.id ? "bg-[#F5C518] text-black" : "bg-[#0A0A0A] border border-[#2A2A2A]"
             }`}
           >
@@ -61,7 +61,7 @@ export function TimesheetPanel({
         onClick={onPreview}
         className="w-full bg-[#F5C518] text-black py-3.5 rounded-xl font-logo font-bold tracking-wider mb-4"
       >
-        PREVIEW / PRINT TIMESHEET
+        OPEN TIMESHEET
       </button>
 
       {summary.byOperator.length > 0 && (

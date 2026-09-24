@@ -23,7 +23,8 @@ import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
 
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
-import { downloadShiftDailyReport, openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
+import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
+import { downloadReportFile, shareReportFile } from "../lib/reportShare.js";
 
 import * as wf from "../services/workflows.js";
 
@@ -435,7 +436,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
     try {
 
-      await downloadShiftDailyReport(shift, { ...reportContext, machine });
+      const doc = await openShiftDailyReport(shift, { ...reportContext, machine });
+      await downloadReportFile(doc.html, doc.title);
 
     } catch (e) {
 
@@ -443,6 +445,20 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
     }
 
+  };
+
+  const handleShareReport = async (shift) => {
+    const machine = machines.find((m) => m.id === shift.machine_id);
+    try {
+      const doc = await openShiftDailyReport(shift, { ...reportContext, machine });
+      const result = await shareReportFile(doc.html, doc.title);
+      if (result === "downloaded") {
+        showAlert("Saved on this phone", "Open WhatsApp or email and attach that file.", "success");
+      }
+    } catch (e) {
+      if (e?.name === "AbortError") return;
+      showAlert("Could not share report", e.message, "error");
+    }
   };
 
 
@@ -718,7 +734,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
       activeTab={tab}
       onTabChange={setTab}
       onSync={syncNow}
-      maxWidth="max-w-4xl"
+      maxWidth="max-w-2xl"
+      outdoor
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
@@ -824,7 +841,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
                 onClick={() => setReportFilter(f.id)}
 
-                className={`px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${reportFilter === f.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}
+                className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${reportFilter === f.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}
 
               >
 
@@ -949,7 +966,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
               <button type="button" onClick={() => setVerifyScope("mine")}
 
-                className={`px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${verifyScope === "mine" ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}>
+                className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${verifyScope === "mine" ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}>
 
                 Assigned to me
 
@@ -957,7 +974,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
               <button type="button" onClick={() => setVerifyScope("all")}
 
-                className={`px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${verifyScope === "all" ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}>
+                className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${verifyScope === "all" ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}>
 
                 All site
 
@@ -1144,6 +1161,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
                 onViewReport={handleViewReport}
 
                 onDownloadReport={handleDownloadReport}
+
+                onShareReport={handleShareReport}
 
               />
 

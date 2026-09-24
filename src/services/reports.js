@@ -732,7 +732,7 @@ export function generateTimesheetReportHTML(workSessions, period, site, { logoUr
 
     <footer class="footer">
       <span>OPS timesheet · ${esc(site?.name || "Site")}</span>
-      <span>Printed ${esc(fmtDate(new Date().toISOString()))}</span>
+      <span>Created ${esc(fmtDate(new Date().toISOString()))}</span>
     </footer>
   </main>
 </div>
