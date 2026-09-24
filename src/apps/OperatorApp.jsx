@@ -6,7 +6,7 @@ import { prestartDraftKey } from "../lib/inspectionDraft.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { PreStartInspectionChecklist } from "../components/PreStartInspectionChecklist.jsx";
 import { OperatorFlowGuide } from "../components/OperatorFlowGuide.jsx";
-import { IconAlert, IconClock, IconFuel, IconInbox, IconPlay, IconStop } from "../components/FieldIcons.jsx";
+import { IconAlert, IconClock, IconFuel, IconInbox, IconLeave, IconPlay, IconStop } from "../components/FieldIcons.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
@@ -325,22 +325,32 @@ export function OperatorApp() {
       }
     >
         {workSession && !submittedShift && (
-          <div className="operator-pin-icons grid grid-cols-3 gap-3 mb-4">
-            <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
-              <span className="w-16 h-16 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
-              <span className="font-logo text-xs text-ops-text">Report</span>
-            </button>
-            <button type="button" onClick={() => setShowFuel(true)} className="flex flex-col items-center gap-1.5 py-2">
-              <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
-              <span className="font-logo text-xs text-ops-text">Diesel</span>
-            </button>
-            <button type="button" onClick={() => setShowInbox(true)} className="relative flex flex-col items-center gap-1.5 py-2">
-              <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
-              <span className="font-logo text-xs text-ops-text">Inbox</span>
-              {inboxCount > 0 && (
-                <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">{inboxCount}</span>
-              )}
-            </button>
+          <div className="operator-pin-icons mb-4">
+            {!sessionShift && (
+              <button type="button" onClick={() => setShowEarlyClockOut(true)} className="operator-clock-out font-logo">
+                <IconLeave /> Clock out
+              </button>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
+                <span className="w-16 h-16 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
+                <span className="font-logo text-xs text-ops-text">Report</span>
+              </button>
+              <button type="button" onClick={() => setShowFuel(true)} className="flex flex-col items-center gap-1.5 py-2">
+                <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
+                <span className="font-logo text-xs text-ops-text">Diesel</span>
+              </button>
+              <button type="button" onClick={() => setShowInbox(true)} className="relative flex flex-col items-center gap-1.5 py-2">
+                <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
+                <span className="font-logo text-xs text-ops-text">Inbox</span>
+                {inboxCount > 0 && (
+                  <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">{inboxCount}</span>
+                )}
+              </button>
+            </div>
+            <p className="operator-onsite font-body">
+              On site since {new Date(workSession.clock_in).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
+            </p>
           </div>
         )}
 
@@ -438,30 +448,22 @@ export function OperatorApp() {
                   setStep={setInspectionStep}
                   onComplete={handleInspection}
                 />
-                <Button type="button" variant="ghost" size="md" className="w-full mt-4" onClick={() => setShowEarlyClockOut(true)}>
-                  Clock out — not starting today
-                </Button>
               </>
             )}
 
             {workSession && prestartDone && !sessionShift && !sessionDowntime && (
-              <>
-                <FormSection title="Opening hour meter" description={`Take a photo of the meter. Last verified reading: ${hourMeter}h.`} accent="#15803D">
-                  <MeterPhoto
-                    value={startHour}
-                    onValue={setStartHour}
-                    photo={startPhotoPreview}
-                    onPhoto={(ref, preview) => { setStartPhotoRef(ref); setStartPhotoPreview(preview); setStartPhotoError(false); }}
-                    showPhotoError={startPhotoError}
-                  />
-                  <Button type="button" variant="primary" size="lg" className="w-full mt-4 font-logo" onClick={handleStart}>
-                    <IconPlay /> Start machine
-                  </Button>
-                </FormSection>
-                <Button type="button" variant="ghost" size="md" className="w-full mt-4" onClick={() => setShowEarlyClockOut(true)}>
-                  Clock out — not starting today
+              <FormSection title="Opening hour meter" description={`Take a photo of the meter. Last verified reading: ${hourMeter}h.`} accent="#15803D">
+                <MeterPhoto
+                  value={startHour}
+                  onValue={setStartHour}
+                  photo={startPhotoPreview}
+                  onPhoto={(ref, preview) => { setStartPhotoRef(ref); setStartPhotoPreview(preview); setStartPhotoError(false); }}
+                  showPhotoError={startPhotoError}
+                />
+                <Button type="button" variant="primary" size="lg" className="w-full mt-4 font-logo" onClick={handleStart}>
+                  <IconPlay /> Start machine
                 </Button>
-              </>
+              </FormSection>
             )}
 
             {sessionShift && !sessionDowntime && (

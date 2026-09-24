@@ -20,7 +20,9 @@ import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBe
 
 import { formatSyncErrorMessage } from "../lib/labels.js";
 
-import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
+import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
+import { buildTimesheetRows } from "../lib/timesheet.js";
+import { downloadShiftDailyReport, openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
 
 import * as wf from "../services/workflows.js";
 
@@ -79,6 +81,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
   const [signature, setSignature] = useState(null);
 
   const [reportFilter, setReportFilter] = useState("cycle");
+  const [timesheetFilter, setTimesheetFilter] = useState("cycle");
 
   const [delegateIssueId, setDelegateIssueId] = useState(null);
 
@@ -247,6 +250,18 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
     return preset ? { start: preset.start, end: preset.end, label: preset.label } : getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
 
   }, [reportFilter]);
+
+  const timesheetPeriod = useMemo(() => {
+    if (timesheetFilter === "all") return null;
+    if (timesheetFilter === "cycle") return getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
+    const preset = getDatePresets(siteConfig.billing_cycle_start_day).find((p) => p.id === timesheetFilter);
+    return preset ? { start: preset.start, end: preset.end, label: preset.label } : getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
+  }, [timesheetFilter, siteConfig.billing_cycle_start_day]);
+
+  const timesheetRows = useMemo(
+    () => buildTimesheetRows(workSessions, { siteId: user?.site_id, period: timesheetPeriod }),
+    [workSessions, user?.site_id, timesheetPeriod]
+  );
 
 
 
@@ -1034,6 +1049,22 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
         {tab === "reports" && (
 
           <div className="space-y-3">
+
+            <TimesheetPanel
+              rows={timesheetRows}
+              periodLabel={timesheetPeriod?.label || "All time"}
+              filter={timesheetFilter}
+              onFilter={setTimesheetFilter}
+              machines={machines}
+              onPreview={async () => {
+                try {
+                  const doc = await printTimesheetReport(workSessions, timesheetPeriod, activeSite, machines);
+                  setReportPreview(doc);
+                } catch (e) {
+                  showAlert("Could not open timesheet", e.message, "error");
+                }
+              }}
+            />
 
             {signedReports.length === 0 ? (
 

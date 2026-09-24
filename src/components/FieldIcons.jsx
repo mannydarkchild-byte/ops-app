@@ -78,6 +78,16 @@ export function IconMoon() {
   );
 }
 
+export function IconLeave() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden {...stroke}>
+      <path d="M10 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2" />
+      <path d="M15 12H3" />
+      <path d="m6 9-3 3 3 3" />
+    </svg>
+  );
+}
+
 export function IconOut() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden {...stroke}>

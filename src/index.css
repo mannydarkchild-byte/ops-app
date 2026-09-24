@@ -286,8 +286,35 @@ button,
   background: var(--ops-bg);
   margin-left: -0.75rem;
   margin-right: -0.75rem;
-  padding: 0.5rem 0.75rem 0.65rem;
+  padding: 0.6rem 0.75rem 0.75rem;
   border-bottom: 1px solid var(--ops-border);
+}
+
+.operator-clock-out {
+  width: 100%;
+  min-height: 3.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+  border-radius: 1rem;
+  background: #F5C518;
+  color: #0A0A0A;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.operator-onsite {
+  margin: 0.35rem 0 0;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--ops-text);
+}
+
+html.theme-light .operator-clock-out {
+  background: #D4A017;
 }
 
 html:not(.theme-light) .operator-outdoor .bg-\[\#141414\] {

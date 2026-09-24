@@ -1,6 +1,7 @@
 import { SHIFT } from "../lib/constants.js";
 import { resolveMediaUrl } from "../lib/media.js";
 import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinutes } from "../lib/shiftMetrics.js";
+import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { esc, fmtDate, fmtDateShort, money, shiftBillableValue } from "../lib/utils.js";
 
 function shiftWindow(shift) {
@@ -634,4 +635,113 @@ export async function prepareOperationsReport(data, period, machine, site) {
 /** Returns { html, title } for in-app full-screen viewer */
 export async function printOperationsReport(data, period, machine, site) {
   return prepareOperationsReport(data, period, machine, site);
+}
+
+export function generateTimesheetReportHTML(workSessions, period, site, { logoUrl, machines = [] } = {}) {
+  const periodLabel = period?.label || "All time";
+  const rows = buildTimesheetRows(workSessions, { siteId: site?.id, period: period || null });
+  const summary = summarizeTimesheet(rows);
+  const machineName = (id) => machines.find((m) => m.id === id)?.name || "—";
+
+  const operatorRows = summary.byOperator
+    .map((op) => `<tr>
+      <td>${esc(op.operator_name)}</td>
+      <td>${op.sessions}</td>
+      <td>${op.hours.toFixed(1)}h</td>
+      <td>${op.leftEarly}</td>
+    </tr>`)
+    .join("") || `<tr class="empty"><td colspan="4">No operators in this period.</td></tr>`;
+
+  const sessionRows = rows
+    .map((r) => `<tr>
+      <td>${esc(r.operator_name || "Operator")}</td>
+      <td>${esc(r.dateLabel)}</td>
+      <td>${esc(r.inLabel)}</td>
+      <td>${esc(r.outLabel)}</td>
+      <td>${r.hours.toFixed(1)}h</td>
+      <td>${esc(r.statusLabel)}</td>
+      <td>${esc(machineName(r.machine_id))}</td>
+      <td>${esc(r.notes || "—")}</td>
+    </tr>`)
+    .join("") || `<tr class="empty"><td colspan="8">No clock-in records for this period.</td></tr>`;
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Timesheet · ${esc(periodLabel)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet"/>
+<style>${reportPageStyles()}</style></head><body>
+<div class="page">
+  <header class="header">
+    <div class="header-row">
+      <div class="logo-wrap">
+        ${logoUrl
+    ? `<img src="${esc(logoUrl)}" alt="OPS" class="logo"/>`
+    : `<div class="logo-fallback">OPS</div>`}
+      </div>
+      <div class="header-text">
+        <h1>Timesheet</h1>
+        <p class="header-sub">${esc(periodLabel)}</p>
+        <div class="header-meta">
+          <span>${esc(site?.name || "Site")}</span>
+          <span>Clock-in to clock-out</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="summary">
+      <div class="summary-cell highlight">
+        <div class="label">Hours on site</div>
+        <div class="value">${summary.hours.toFixed(1)}h</div>
+        <div class="sub">${summary.sessions} session${summary.sessions !== 1 ? "s" : ""}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">Clocked out</div>
+        <div class="value">${summary.ended}</div>
+        <div class="sub">Ended after a shift</div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">Left without starting</div>
+        <div class="value">${summary.leftEarly}</div>
+        <div class="sub">Clocked out before machine start</div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">Still on site</div>
+        <div class="value">${summary.onSite}</div>
+        <div class="sub">Open clock-in now</div>
+      </div>
+    </div>
+
+    <p class="callout">Hours are time on site (clock-in → clock-out). Machine billable hours stay on the operations report.</p>
+
+    <section>
+      <h2>By operator</h2>
+      <table>
+        <thead><tr><th>Operator</th><th>Sessions</th><th>Hours</th><th>Left early</th></tr></thead>
+        <tbody>${operatorRows}</tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Clock-in / clock-out</h2>
+      <table>
+        <thead><tr><th>Operator</th><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th><th>Machine</th><th>Note</th></tr></thead>
+        <tbody>${sessionRows}</tbody>
+      </table>
+    </section>
+
+    <footer class="footer">
+      <span>OPS timesheet · ${esc(site?.name || "Site")}</span>
+      <span>Printed ${esc(fmtDate(new Date().toISOString()))}</span>
+    </footer>
+  </main>
+</div>
+</body></html>`;
+}
+
+export async function printTimesheetReport(workSessions, period, site, machines = []) {
+  const logoUrl = await resolveLogoDataUrl();
+  const label = period?.label || "All time";
+  const html = generateTimesheetReportHTML(workSessions, period, site, { logoUrl, machines });
+  return { html, title: `Timesheet · ${label}` };
 }

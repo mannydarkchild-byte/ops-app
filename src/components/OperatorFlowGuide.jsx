@@ -7,10 +7,11 @@ export function OperatorFlowGuide({ currentStep }) {
 
   return (
     <div className="mb-4">
-      <p className="font-ui text-lg text-[#F2F0EA]/80">
-        {meta.stepNum ? `Step ${meta.stepNum} of ${meta.total}` : "Needs a fix"}
+      <p className="font-logo text-xs tracking-wider text-[#F5C518]">
+        {meta.stepNum ? `STEP ${meta.stepNum} OF ${meta.total}` : "NEEDS A FIX"}
       </p>
-      <div className="flex gap-1.5 mt-2" aria-hidden>
+      <p className="font-logo text-xl text-ops-text mt-1">{meta.title}</p>
+      <div className="flex gap-1.5 mt-3" aria-hidden>
         {OPERATOR_FLOW_STEPS.map((s, i) => (
           <span
             key={s.id}

@@ -17,7 +17,9 @@ import {
   fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, money, shiftBillableValue,
 } from "../lib/utils.js";
 import { ManagerPartsPanel } from "../components/manager/ManagerPartsPanel.jsx";
-import { downloadShiftDailyReport, openShiftDailyReport, printOperationsReport } from "../services/reports.js";
+import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
+import { buildTimesheetRows } from "../lib/timesheet.js";
+import { downloadShiftDailyReport, openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
@@ -49,6 +51,7 @@ export function ManagerApp() {
 
   const [tab, setTab] = useState("overview");
   const [reportPreset, setReportPreset] = useState("cycle");
+  const [timesheetFilter, setTimesheetFilter] = useState("cycle");
   const [signedFilter, setSignedFilter] = useState("cycle");
   const [expenseFilter, setExpenseFilter] = useState("cycle");
   const [showBackdate, setShowBackdate] = useState(false);
@@ -88,6 +91,18 @@ export function ManagerApp() {
     const preset = getDatePresets(siteConfig.billing_cycle_start_day).find((p) => p.id === signedFilter);
     return preset ? { start: preset.start, end: preset.end, label: preset.label } : billingPeriod;
   }, [signedFilter, billingPeriod, siteConfig.billing_cycle_start_day]);
+
+  const timesheetPeriod = useMemo(() => {
+    if (timesheetFilter === "all") return null;
+    if (timesheetFilter === "cycle") return billingPeriod;
+    const preset = getDatePresets(siteConfig.billing_cycle_start_day).find((p) => p.id === timesheetFilter);
+    return preset ? { start: preset.start, end: preset.end, label: preset.label } : billingPeriod;
+  }, [timesheetFilter, billingPeriod, siteConfig.billing_cycle_start_day]);
+
+  const timesheetRows = useMemo(
+    () => buildTimesheetRows(workSessions, { siteId: user?.site_id, period: timesheetPeriod }),
+    [workSessions, user?.site_id, timesheetPeriod]
+  );
 
   const warriorShifts = useMemo(
     () => shifts.filter((s) => s.machine_id === primaryMachine?.id),
@@ -631,6 +646,22 @@ export function ManagerApp() {
               </button>
               <p className="text-[10px] text-[#F2F0EA]/40 mt-2">Warrior 2100 data only · works offline.</p>
             </div>
+
+            <TimesheetPanel
+              rows={timesheetRows}
+              periodLabel={timesheetPeriod?.label || "All time"}
+              filter={timesheetFilter}
+              onFilter={setTimesheetFilter}
+              machines={machines}
+              onPreview={async () => {
+                try {
+                  const doc = await printTimesheetReport(workSessions, timesheetPeriod, activeSite, machines);
+                  setReportPreview(doc);
+                } catch (e) {
+                  showAlert("Could not open timesheet", e.message, "error");
+                }
+              }}
+            />
 
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-3">
