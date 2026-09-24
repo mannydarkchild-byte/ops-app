@@ -6,7 +6,7 @@ import { prestartDraftKey } from "../lib/inspectionDraft.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { PreStartInspectionChecklist } from "../components/PreStartInspectionChecklist.jsx";
 import { OperatorFlowGuide } from "../components/OperatorFlowGuide.jsx";
-import { IconAlert, IconClock, IconFuel, IconInbox, IconLeave, IconPlay, IconStop } from "../components/FieldIcons.jsx";
+import { IconAlert, IconClock, IconFuel, IconInbox, IconLeave, IconPlay, IconReports, IconStop } from "../components/FieldIcons.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
@@ -22,11 +22,13 @@ import * as wf from "../services/workflows.js";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { FuelModal } from "../components/FuelModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
+import { OperatorReportsModal, reportBucket } from "../components/OperatorReportsModal.jsx";
+import { OperatorWelcome } from "../components/OperatorWelcome.jsx";
 
 export function OperatorApp() {
   const {
     user, activeMachine, activeSite, machines, machineRun, workSession, downtime, hourMeter, events,
-    shifts, profiles, issues, issueMessages, inspections, refreshLocal, machineBlocked,
+    shifts, profiles, issues, issueMessages, inspections, workSessions, fuelLogs, refreshLocal, machineBlocked,
     getSettingsForSite,
   } = useOps();
 
@@ -48,6 +50,7 @@ export function OperatorApp() {
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showFuel, setShowFuel] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
+  const [showMyReports, setShowMyReports] = useState(false);
   const [showEarlyClockOut, setShowEarlyClockOut] = useState(false);
   const [earlyClockOutReason, setEarlyClockOutReason] = useState("");
   const [earlyClockOutNote, setEarlyClockOutNote] = useState("");
@@ -62,6 +65,13 @@ export function OperatorApp() {
 
   const [submittedShift, setSubmittedShift] = useState(null);
   const [clockInSupervisorId, setClockInSupervisorId] = useState("");
+  const [dayReady, setDayReady] = useState(() => {
+    try {
+      return sessionStorage.getItem(`ops-day-ready:${user?.id || "me"}`) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const [alert, setAlert] = useState({ isOpen: false });
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
@@ -118,6 +128,13 @@ export function OperatorApp() {
     [issues, user?.id]
   );
 
+  const reportsAttention = useMemo(
+    () => (shifts || []).filter((s) =>
+      s.operator_id === user?.id && ["sent_back", "pending"].includes(reportBucket(s))
+    ).length,
+    [shifts, user?.id]
+  );
+
   /** Shift sent back by supervisor — operator must fix and resubmit before starting again */
   const correctionShift = useMemo(() => {
     if (!user?.id) return null;
@@ -154,12 +171,28 @@ export function OperatorApp() {
   }, [workSession, siteSupervisors, suggestedSupervisor]);
 
   useEffect(() => {
+    if (!user?.id) return;
+    try {
+      if (sessionStorage.getItem(`ops-day-ready:${user.id}`) === "1") setDayReady(true);
+    } catch {}
+  }, [user?.id]);
+
+  useEffect(() => {
     if (!workSession && suggestedSupervisor?.id && !clockInSupervisorId) {
       setClockInSupervisorId(suggestedSupervisor.id);
     }
   }, [workSession, suggestedSupervisor?.id, clockInSupervisorId]);
 
   const blocked = machineBlocked && !sessionShift && !sessionDowntime;
+
+  const showWelcome = !workSession && !submittedShift && !correctionShift && !dayReady;
+
+  const startDay = () => {
+    try {
+      sessionStorage.setItem(`ops-day-ready:${user?.id || "me"}`, "1");
+    } catch {}
+    setDayReady(true);
+  };
 
   const currentStep = useMemo(() => {
     if (correctionShift && !submittedShift) return "correct";
@@ -340,7 +373,14 @@ export function OperatorApp() {
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <button type="button" onClick={() => setShowMyReports(true)} className="relative flex flex-col items-center gap-1.5 py-2">
+                <span className="w-20 h-20 rounded-2xl bg-[#141414] border border-[#F5C518]/60 text-[#F5C518] flex items-center justify-center"><IconReports /></span>
+                <span className="font-logo text-sm text-ops-text">My reports</span>
+                {reportsAttention > 0 && (
+                  <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#F5C518] text-black text-[10px] font-bold flex items-center justify-center">{reportsAttention}</span>
+                )}
+              </button>
               <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
                 <span className="w-20 h-20 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
                 <span className="font-logo text-sm text-ops-text">Report</span>
@@ -360,7 +400,31 @@ export function OperatorApp() {
           </div>
         )}
 
-        {!submittedShift && (
+        {showWelcome && (
+          <OperatorWelcome
+            name={user?.name}
+            machineName={activeMachine?.name}
+            siteName={activeSite?.name}
+            reportsAttention={reportsAttention}
+            onReady={startDay}
+            onMyReports={() => setShowMyReports(true)}
+          />
+        )}
+
+        {!workSession && !submittedShift && !showWelcome && (
+          <button
+            type="button"
+            onClick={() => setShowMyReports(true)}
+            className="relative w-full mb-4 min-h-[64px] rounded-2xl border-2 border-[#F5C518] text-[#F5C518] font-logo text-lg flex items-center justify-center gap-2"
+          >
+            <IconReports /> My reports
+            {reportsAttention > 0 && (
+              <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#F5C518] text-black text-xs font-bold flex items-center justify-center">{reportsAttention}</span>
+            )}
+          </button>
+        )}
+
+        {!submittedShift && !showWelcome && (
           <OperatorFlowGuide currentStep={currentStep} />
         )}
 
@@ -407,13 +471,16 @@ export function OperatorApp() {
               site={activeSite}
               assignedSupervisorId={submittedShift.assigned_supervisor_id}
             />
+            <button type="button" onClick={() => setShowMyReports(true)} className="w-full mb-3 bg-[#F5C518] text-black py-4 rounded-xl font-logo text-base font-bold">
+              VIEW MY REPORTS
+            </button>
             <button type="button" onClick={dismissSubmitted} className="w-full border border-[#2A2A2A] text-[#F2F0EA]/50 py-3 rounded-xl font-logo text-xs">
               DONE
             </button>
           </div>
         )}
 
-        {!submittedShift && (
+        {!submittedShift && !showWelcome && (
           <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
@@ -557,6 +624,20 @@ export function OperatorApp() {
       )}
       {showInbox && (
         <IssueInboxModal onClose={() => setShowInbox(false)} user={user} issues={issues} issueMessages={issueMessages} onDone={refreshLocal} scope="mine" machines={activeMachine ? [activeMachine] : []} />
+      )}
+      {showMyReports && (
+        <OperatorReportsModal
+          onClose={() => setShowMyReports(false)}
+          user={user}
+          shifts={shifts}
+          workSessions={workSessions}
+          machines={machines}
+          events={events}
+          inspections={inspections}
+          fuelLogs={fuelLogs}
+          site={activeSite}
+          cycleStartDay={siteConfig.billing_cycle_start_day}
+        />
       )}
       {showEarlyClockOut && (
         <Modal title="CLOCK OUT — YOUR TIME" color="yellow" onClose={() => { setShowEarlyClockOut(false); setEarlyClockOutReason(""); setEarlyClockOutNote(""); }}>

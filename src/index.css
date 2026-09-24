@@ -75,14 +75,21 @@ body {
    ═══════════════════════════════════════════════════════════════ */
 /* Prevent iOS Safari auto-zoom on input focus (needs 16px minimum) */
 @media screen and (max-width: 640px) {
+  html {
+    font-size: 18px;
+  }
+
   input,
   textarea,
   select {
-    font-size: 16px !important;
+    font-size: 18px !important;
   }
 
-  .login-screen input {
-    font-size: 18px !important;
+  .login-screen input,
+  .operator-outdoor input,
+  .operator-outdoor textarea,
+  .operator-outdoor select {
+    font-size: 20px !important;
   }
 }
 
@@ -290,12 +297,68 @@ button,
 .operator-pin-icons {
   position: sticky;
   z-index: 25;
-  top: calc(env(safe-area-inset-top, 0px) + 4rem);
+  top: calc(env(safe-area-inset-top, 0px) + 7.25rem);
   background: var(--ops-bg);
   margin-left: -0.75rem;
   margin-right: -0.75rem;
   padding: 0.6rem 0.75rem 0.75rem;
   border-bottom: 1px solid var(--ops-border);
+}
+
+@media (min-width: 640px) {
+  .operator-pin-icons {
+    top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
+  }
+}
+
+.operator-welcome {
+  padding: 1.25rem 0 0.5rem;
+}
+
+.operator-welcome-kicker {
+  font-size: 1rem;
+  letter-spacing: 0.14em;
+  color: #F5C518;
+  margin: 0 0 0.35rem;
+}
+
+.operator-welcome-name {
+  font-size: 2.6rem;
+  line-height: 1.05;
+  color: var(--ops-text);
+  margin: 0 0 0.5rem;
+}
+
+.operator-welcome-date {
+  font-size: 1.2rem;
+  color: var(--ops-muted);
+  margin: 0 0 1rem;
+}
+
+.operator-welcome-copy {
+  font-size: 1.25rem;
+  line-height: 1.45;
+  color: var(--ops-text);
+  margin: 0 0 1.5rem;
+}
+
+.operator-welcome-go {
+  min-height: 72px !important;
+  font-size: 1.35rem !important;
+}
+
+.operator-welcome-reports {
+  width: 100%;
+  min-height: 60px;
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 1rem;
+  border: 2px solid #F5C518;
+  color: #F5C518;
+  font-size: 1.05rem;
 }
 
 .operator-time-bar {
@@ -379,19 +442,64 @@ html:not(.theme-light) .operator-outdoor main [class*="text-[#F2F0EA]/70"] {
 @media (max-width: 639px) {
   .operator-clock-out {
     width: 100%;
+    min-height: 3.5rem;
+    font-size: 1.05rem;
   }
 
-  .operator-outdoor header .font-logo.text-\[10px\] {
-    font-size: 0.75rem !important;
+  .operator-outdoor {
+    font-size: 22px;
+  }
+
+  .operator-outdoor main {
+    font-size: 1.3rem !important;
+    line-height: 1.4;
+    padding: 1.1rem !important;
+  }
+
+  .operator-outdoor main .text-xs,
+  .operator-outdoor main .text-sm,
+  .operator-outdoor main .text-\[8px\],
+  .operator-outdoor main .text-\[9px\],
+  .operator-outdoor main .text-\[10px\],
+  .operator-outdoor main .text-\[11px\] {
+    font-size: 1.05rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .operator-outdoor main .text-base {
+    font-size: 1.2rem !important;
+  }
+
+  .operator-outdoor main .text-lg {
+    font-size: 1.35rem !important;
+  }
+
+  .operator-outdoor main .text-xl {
+    font-size: 1.55rem !important;
+  }
+
+  .operator-outdoor main .text-2xl {
+    font-size: 1.85rem !important;
+  }
+
+  .operator-outdoor main button,
+  .operator-outdoor .operator-work-panel button {
+    min-height: 64px !important;
+    font-size: 1.2rem !important;
+  }
+
+  .operator-pin-icons .w-20 {
+    width: 5.75rem !important;
+    height: 5.75rem !important;
   }
 
   .ops-field {
-    font-size: 18px;
+    font-size: 19px;
   }
 
   .ops-field main {
-    font-size: 1.125rem;
-    line-height: 1.5;
+    font-size: 1.15rem;
+    line-height: 1.45;
   }
 }
 

@@ -83,7 +83,7 @@ export function SyncDot() {
   );
 }
 
-function SyncButton() {
+function SyncButton({ roomy = false }) {
   const { syncState, syncNow } = useOps();
   const meta = SYNC_META[syncState.status] || SYNC_META.idle;
   const caption = syncControlLabel(syncState);
@@ -91,9 +91,9 @@ function SyncButton() {
   return (
     <Button
       variant="sync"
-      size="sm"
+      size={roomy ? "md" : "sm"}
       onClick={() => syncNow()}
-      className="max-w-[46vw] sm:max-w-none shrink-0"
+      className={roomy ? "flex-1 min-h-12 text-base" : "max-w-[46vw] sm:max-w-none shrink-0"}
       title={err ? parseSyncError(err).body : (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Send and refresh from server")}
       aria-label={err ? "Sync failed. Tap to retry." : `${caption}. Tap to update.`}
     >
@@ -220,40 +220,51 @@ export function AppHeader({ right, subtitle, leaveApp = false }) {
 
   const displayName = (user?.name || user?.email?.split("@")[0] || "User").split(/\s+/)[0];
 
+  const actions = (
+    <>
+      {right}
+      <ThemeToggle />
+      <SyncButton roomy={leaveApp} />
+      <button
+        type="button"
+        onClick={signOut}
+        title="Leave the app — this is not clock out"
+        aria-label="Leave the app"
+        className={`rounded-xl border border-ops-border bg-ops-card text-ops-muted hover:text-ops-red flex items-center justify-center ${
+          leaveApp ? "h-12 px-3 min-w-[4rem]" : "w-12 h-12"
+        }`}
+      >
+        {leaveApp ? (
+          <span className="font-logo text-xs leading-tight text-center">Leave<br />app</span>
+        ) : (
+          <IconOut />
+        )}
+      </button>
+    </>
+  );
+
   return (
     <header className="sticky top-0 z-30 bg-ops-black border-b border-ops-border mobile-safe-top shadow-ops-sm">
       <div className="px-3 sm:px-4 py-2.5 flex items-center gap-2 max-w-5xl mx-auto">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <LogoMark size="sm" />
           <div className="min-w-0">
-            <span className="font-logo text-lg text-ops-gold">OPS</span>
-            <p className="font-body text-base text-ops-text truncate leading-tight">
+            <span className="font-logo text-xl text-ops-gold">OPS</span>
+            <p className="font-body text-lg text-ops-text truncate leading-tight">
               {displayName}
-              <span className={`ml-2 font-ui text-sm capitalize ${colors.text}`}>{roleLabel}</span>
+              <span className={`ml-2 font-ui text-base capitalize ${colors.text}`}>{roleLabel}</span>
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {right}
-          <ThemeToggle />
-          <SyncButton />
-          <button
-            type="button"
-            onClick={signOut}
-            title="Leave the app — this is not clock out"
-            aria-label="Leave the app"
-            className={`rounded-xl border border-ops-border bg-ops-card text-ops-muted hover:text-ops-red flex items-center justify-center ${
-              leaveApp ? "h-12 px-2.5 min-w-[3.6rem]" : "w-12 h-12"
-            }`}
-          >
-            {leaveApp ? (
-              <span className="font-logo text-xs leading-tight text-center">Leave<br />app</span>
-            ) : (
-              <IconOut />
-            )}
-          </button>
+        <div className={`items-center gap-1.5 shrink-0 ${leaveApp ? "hidden sm:flex" : "flex"}`}>
+          {actions}
         </div>
       </div>
+      {leaveApp && (
+        <div className="sm:hidden flex items-center gap-2 px-3 pb-3">
+          {actions}
+        </div>
+      )}
     </header>
   );
 }
