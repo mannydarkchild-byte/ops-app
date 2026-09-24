@@ -105,6 +105,8 @@ export function OperatorApp() {
     setRemarks: setInspectionRemarks,
     photos: inspectionPhotos,
     setPhotos: setInspectionPhotos,
+    step: inspectionStep,
+    setStep: setInspectionStep,
     clearDraft: clearPrestartDraft,
   } = useInspectionDraft(prestartDraftStorageKey, {
     enabled: !!workSession && !prestartDone,
@@ -425,17 +427,25 @@ export function OperatorApp() {
               </>
             )}
 
-            {workSession && !sessionShift && !sessionDowntime && (
+            {workSession && !prestartDone && !sessionShift && !sessionDowntime && (
               <>
-                {!prestartDone && (
-                  <PreStartInspectionChecklist
-                    items={siteConfig.prestart_items}
-                    statusOptions={siteConfig.prestart_status_options}
-                    results={inspectionResults} remarks={inspectionRemarks} photos={inspectionPhotos}
-                    setResults={setInspectionResults} setRemarks={setInspectionRemarks} setPhotos={setInspectionPhotos}
-                    onComplete={handleInspection}
-                  />
-                )}
+                <PreStartInspectionChecklist
+                  items={siteConfig.prestart_items}
+                  statusOptions={siteConfig.prestart_status_options}
+                  results={inspectionResults} remarks={inspectionRemarks} photos={inspectionPhotos}
+                  setResults={setInspectionResults} setRemarks={setInspectionRemarks} setPhotos={setInspectionPhotos}
+                  step={inspectionStep}
+                  setStep={setInspectionStep}
+                  onComplete={handleInspection}
+                />
+                <Button type="button" variant="ghost" size="md" className="w-full mt-4" onClick={() => setShowEarlyClockOut(true)}>
+                  Clock out — not starting today
+                </Button>
+              </>
+            )}
+
+            {workSession && prestartDone && !sessionShift && !sessionDowntime && (
+              <>
                 <FormSection title="Opening hour meter" description={`Take a photo of the meter. Last verified reading: ${hourMeter}h.`} accent="#15803D">
                   <MeterPhoto
                     value={startHour}

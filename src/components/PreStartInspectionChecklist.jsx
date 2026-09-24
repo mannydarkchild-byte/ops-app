@@ -1,92 +1,136 @@
+import { useEffect } from "react";
 import { PRESTART_INSPECTION_ITEMS, PRESTART_STATUS_OPTIONS } from "../lib/constants.js";
 import { pickMedia } from "../lib/media.js";
 import { VoiceInput } from "./ui/VoiceInput.jsx";
 import { FormSection } from "./ui/FormSection.jsx";
+import { Button } from "./ui/Button.jsx";
 
 export function PreStartInspectionChecklist({
   items = PRESTART_INSPECTION_ITEMS,
   statusOptions = PRESTART_STATUS_OPTIONS,
-  results, remarks, photos, setResults, setRemarks, setPhotos, onComplete,
+  results,
+  remarks,
+  photos,
+  setResults,
+  setRemarks,
+  setPhotos,
+  step = 0,
+  setStep,
+  onComplete,
 }) {
-  const done = items.filter((item) => results[item]).length;
-  const needsAttention = items.filter((item) => results[item] === "Needs attention").length;
-  const allDone = done === items.length;
+  const total = items.length || 1;
+  const index = Math.min(Math.max(Number(step) || 0, 0), Math.max(total - 1, 0));
+  const item = items[index];
+  const answered = !!results[item];
+  const photo = photos[item];
+  const flagged = results[item] === "Needs attention" || results[item] === statusOptions[statusOptions.length - 1];
+  const last = index >= total - 1;
+  const allDone = items.length > 0 && items.every((name) => results[name]);
 
-  const attachPhoto = (item) => {
+  useEffect(() => {
+    if (!items.length || !setStep) return;
+    const firstOpen = items.findIndex((name) => !results[name]);
+    if (firstOpen >= 0 && !results[items[index]]) {
+      setStep(firstOpen);
+    }
+  }, []);
+
+  const attachPhoto = () => {
     pickMedia("photo", ({ ref, data }) => {
       setPhotos((p) => ({ ...p, [item]: { ref, preview: data } }));
     });
   };
 
+  const goNext = () => {
+    if (!answered) return;
+    if (last) {
+      if (allDone) onComplete();
+      return;
+    }
+    setStep?.(index + 1);
+  };
+
+  const goBack = () => {
+    if (index > 0) setStep?.(index - 1);
+  };
+
   return (
     <FormSection
-      step={2}
-      title="Pre-start inspection"
-      description="Walk around the machine and check each item. Add a photo where something needs documenting — photos appear on the shift report."
+      title="Pre-start check"
+      description="One check at a time. Walk the machine, mark this item, then tap Next."
       accent="#F5C518"
     >
-      <div className="flex items-center justify-between mb-4">
-        <p className="font-body text-xs text-[#F2F0EA]/50">{done} of {items.length} complete</p>
-        <div className="h-2 w-20 bg-[#2A2A2A] rounded-full overflow-hidden">
-          <div className="h-full bg-[#F5C518] transition-all" style={{ width: `${items.length ? (done / items.length) * 100 : 0}%` }} />
-        </div>
+      <p className="font-ui text-base text-ops-text mb-2">
+        Check {index + 1} of {total}
+      </p>
+      <div className="h-2 w-full bg-ops-border rounded-full overflow-hidden mb-5">
+        <div
+          className="h-full bg-ops-gold transition-all"
+          style={{ width: `${total ? ((index + (answered ? 1 : 0)) / total) * 100 : 0}%` }}
+        />
       </div>
 
-      {needsAttention > 0 && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-[#F5C518]/10 border border-[#F5C518]/30">
-          <p className="font-logo text-[10px] text-[#F5C518] tracking-wider">{needsAttention} item(s) flagged — add photos and comments</p>
-        </div>
-      )}
+      <p className="font-ui text-xl font-semibold text-ops-text leading-snug mb-5">{item}</p>
 
-      <div className="max-h-[45vh] overflow-y-auto space-y-3 pr-1">
-        {items.map((item, idx) => {
-          const photo = photos[item];
-          const flagged = results[item] === "Needs attention" || results[item] === statusOptions[statusOptions.length - 1];
+      <div className="grid grid-cols-1 gap-2 mb-4">
+        {statusOptions.map((opt) => {
+          const selected = results[item] === opt;
+          const warn = opt === "Needs attention" || opt === statusOptions[statusOptions.length - 1];
           return (
-            <div key={item} className={`bg-[#141414] rounded-xl p-3 border ${flagged ? "border-[#F5C518]/40" : "border-[#2A2A2A]"}`}>
-              <p className="font-logo text-[10px] text-[#00A4A6] mb-1">ITEM {idx + 1} OF {items.length}</p>
-              <p className="font-body text-sm mb-2">{item}</p>
-              <div className="flex flex-wrap gap-1 mb-2">
-                {statusOptions.map((opt) => (
-                  <button key={opt} type="button" onClick={() => setResults((p) => ({ ...p, [item]: opt }))}
-                    className={`px-3 py-2 rounded-lg text-[11px] font-semibold leading-tight ${
-                      results[item] === opt
-                        ? opt === "Needs attention" || opt === statusOptions[statusOptions.length - 1] ? "bg-[#F5C518] text-black" : opt === "Action taken" ? "bg-[#00A4A6] text-white" : "bg-[#22C55E] text-black"
-                        : "bg-[#2A2A2A] text-[#F2F0EA]/70"
-                    }`}>
-                    {opt}
-                  </button>
-                ))}
-              </div>
-              <VoiceInput
-                value={remarks[item] || ""}
-                onChange={(v) => setRemarks((p) => ({ ...p, [item]: v }))}
-                placeholder="Comment (optional)…"
-                rows={1}
-              />
-              <button
-                type="button"
-                onClick={() => attachPhoto(item)}
-                className={`mt-2 w-full py-2.5 rounded-lg font-logo text-[10px] tracking-wider border active:scale-[0.99] ${
-                  photo?.preview
-                    ? "bg-[#22C55E]/15 border-[#22C55E] text-[#22C55E]"
-                    : "bg-[#0A0A0A] border-[#2A2A2A] text-[#F2F0EA]/50"
-                }`}
-              >
-                {photo?.preview ? "✓ PHOTO ATTACHED — TAP TO REPLACE" : "📷 ADD PHOTO (OPTIONAL)"}
-              </button>
-              {photo?.preview && (
-                <img src={photo.preview} alt="" className="w-full max-h-36 object-contain rounded-lg mt-2 border border-[#2A2A2A]" />
-              )}
-            </div>
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setResults((p) => ({ ...p, [item]: opt }))}
+              className={`w-full min-h-[56px] px-4 py-3 rounded-2xl text-lg font-semibold border ${
+                selected
+                  ? warn
+                    ? "bg-ops-gold text-ops-ink border-ops-gold"
+                    : opt === "Action taken"
+                      ? "bg-ops-teal text-white border-ops-teal"
+                      : "bg-ops-green text-ops-ink border-ops-green"
+                  : "bg-ops-elevated text-ops-text border-ops-border"
+              }`}
+            >
+              {opt}
+            </button>
           );
         })}
       </div>
 
-      <button type="button" onClick={onComplete} disabled={!allDone}
-        className="w-full mt-4 bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold text-lg tracking-wider disabled:opacity-40">
-        {allDone ? "COMPLETE PRE-START" : `COMPLETE ALL ${items.length} ITEMS FIRST`}
+      {flagged && (
+        <p className="font-body text-base text-ops-gold mb-3">Add a comment or photo if something needs attention.</p>
+      )}
+
+      <VoiceInput
+        value={remarks[item] || ""}
+        onChange={(v) => setRemarks((p) => ({ ...p, [item]: v }))}
+        placeholder="Comment (optional)…"
+        rows={2}
+      />
+
+      <button
+        type="button"
+        onClick={attachPhoto}
+        className={`mt-3 w-full min-h-[52px] py-3 rounded-2xl font-ui text-base font-semibold border ${
+          photo?.preview
+            ? "bg-ops-green/15 border-ops-green text-ops-green"
+            : "bg-ops-elevated border-ops-border text-ops-text"
+        }`}
+      >
+        {photo?.preview ? "Photo attached — tap to replace" : "Add photo (optional)"}
       </button>
+      {photo?.preview && (
+        <img src={photo.preview} alt="" className="w-full max-h-40 object-contain rounded-xl mt-3 border border-ops-border" />
+      )}
+
+      <div className="grid grid-cols-2 gap-3 mt-6">
+        <Button type="button" variant="secondary" size="lg" onClick={goBack} disabled={index === 0}>
+          Back
+        </Button>
+        <Button type="button" variant="primary" size="lg" className="font-logo" onClick={goNext} disabled={!answered}>
+          {last ? "Finish checks" : "Next"}
+        </Button>
+      </div>
     </FormSection>
   );
 }
