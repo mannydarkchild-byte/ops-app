@@ -22,8 +22,8 @@ export function TimesheetPanel({
 
   return (
     <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-      <h3 className="font-logo text-[#F5C518] text-sm mb-1">TIMESHEET</h3>
-      <p className="font-body text-xs text-[#F2F0EA]/55 mb-3">
+      <h3 className="font-logo text-[#F5C518] text-2xl mb-1">Timesheet</h3>
+      <p className="font-body text-[#F2F0EA]/70 mb-3">
         Hours from clock-in to clock-out{periodLabel ? ` · ${periodLabel}` : ""}.
       </p>
       <div className="flex flex-wrap gap-2 mb-4">
@@ -41,18 +41,14 @@ export function TimesheetPanel({
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="bg-[#0A0A0A] rounded-lg p-3 text-center border border-[#2A2A2A]">
-          <p className="font-logo text-[9px] text-[#F2F0EA]/45 tracking-wider">ON SITE</p>
-          <p className="font-logo text-lg text-[#F5C518] mt-0.5">{summary.hours.toFixed(1)}h</p>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="bg-[#0A0A0A] rounded-xl p-4 text-center border border-[#2A2A2A]">
+          <p className="font-logo text-[#F2F0EA]/55">On site</p>
+          <p className="font-logo text-3xl text-[#F5C518] mt-1">{summary.hours.toFixed(1)}h</p>
         </div>
-        <div className="bg-[#0A0A0A] rounded-lg p-3 text-center border border-[#2A2A2A]">
-          <p className="font-logo text-[9px] text-[#F2F0EA]/45 tracking-wider">SESSIONS</p>
-          <p className="font-logo text-lg text-[#F2F0EA] mt-0.5">{summary.sessions}</p>
-        </div>
-        <div className="bg-[#0A0A0A] rounded-lg p-3 text-center border border-[#2A2A2A]">
-          <p className="font-logo text-[9px] text-[#F2F0EA]/45 tracking-wider">LEFT EARLY</p>
-          <p className="font-logo text-lg text-[#F97316] mt-0.5">{summary.leftEarly}</p>
+        <div className="bg-[#0A0A0A] rounded-xl p-4 text-center border border-[#2A2A2A]">
+          <p className="font-logo text-[#F2F0EA]/55">Left early</p>
+          <p className="font-logo text-3xl text-[#F97316] mt-1">{summary.leftEarly}</p>
         </div>
       </div>
 

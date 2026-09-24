@@ -791,39 +791,24 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
 
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+        {tab === "live" && (
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <Kpi
+              label="On site now"
+              value={String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id).length + openShiftsToClose.length)}
+              sub="Clocked in or still running"
+              color="#F5C518"
+            />
+            <Kpi label="To sign off" value={String(myPendingVerify)} sub="Tap Sign Off" color="#22C55E" />
+          </div>
+        )}
 
-          {tab === "reports" ? (
-
-            <>
-
-              <Kpi label="Signed Reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
-
-              <Kpi label="Meter Hours" value={`${signedHours.toFixed(1)}h`} sub="Hour meter · filtered" color="#22C55E" />
-
-              <Kpi label="Runtime" value={formatDurationMinutes(signedRuntimeMin)} sub="App-tracked · filtered" color="#00A4A6" />
-
-              <Kpi label="Downtime" value={formatDurationMinutes(signedDowntimeMin)} sub="App-tracked · filtered" color="#EF4444" />
-
-            </>
-
-          ) : (
-
-            <>
-
-              <Kpi label="Meter Hours" value={`${dashboardStats.hours.toFixed(1)}h`} sub={`${dashboardStats.reports} signed off · ${billingPeriod.label}`} color="#22C55E" />
-
-              <Kpi label="Run Time" value={formatDurationMinutes(dashboardStats.runtimeMin)} sub="Machine running this cycle" color="#00A4A6" />
-
-              <Kpi label="Stoppage" value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Machine stopped this cycle" color="#EF4444" />
-
-              <Kpi label="To Sign Off" value={String(myPendingVerify)} sub="Assigned to you" color="#F5C518" />
-
-            </>
-
-          )}
-
-        </div>
+        {tab === "reports" && (
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <Kpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
+            <Kpi label="Meter hours" value={`${signedHours.toFixed(1)}h`} sub="Hour meter" color="#22C55E" />
+          </div>
+        )}
 
 
 
@@ -912,9 +897,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
             <div>
 
-              <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-3 tracking-wider">SITE FLEET · {siteMachines.length} machine{siteMachines.length !== 1 ? "s" : ""}</p>
+              <p className="font-logo text-xl text-[#F2F0EA] mb-3">Machines on this site</p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
 
                 {fleetStatus.length === 0 ? (
 
@@ -934,7 +919,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
 
-              <p className="font-logo text-sm text-[#F2F0EA]/50 mb-3">What operators did today</p>
+              <p className="font-logo text-xl text-[#F2F0EA] mb-3">What happened today</p>
 
               <ActivityFeed
 
@@ -1100,17 +1085,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
                 )}
 
-                <div className="flex flex-wrap gap-2 mt-3">
+                <div className="grid grid-cols-1 gap-2 mt-4">
 
-                  <button type="button" onClick={() => handleViewReport(r)} className="min-w-[100px] border border-[#00A4A6] text-[#00A4A6] py-2.5 rounded-lg font-logo text-xs tracking-wider">
+                  <button onClick={() => openVerifyModal(r)} disabled={verifyBusy === r.id} className="w-full bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold">Sign off</button>
 
-                    👁 PREVIEW REPORT
+                  <button onClick={() => openReasonModal(r, "correct")} disabled={verifyBusy === r.id} className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold">Send back</button>
 
-                  </button>
-
-                  <button onClick={() => openVerifyModal(r)} disabled={verifyBusy === r.id} className="flex-1 min-w-[120px] bg-[#22C55E] text-black py-3 rounded-lg font-logo text-sm font-bold">Sign Off</button>
-
-                  <button onClick={() => openReasonModal(r, "correct")} disabled={verifyBusy === r.id} className="flex-1 min-w-[80px] bg-[#F5C518] text-black py-3 rounded-lg font-logo text-sm font-bold">Send Back</button>
+                  <button type="button" onClick={() => handleViewReport(r)} className="w-full border border-[#2A2A2A] text-[#F2F0EA] py-4 rounded-xl font-logo">Open report</button>
 
                 </div>
 
@@ -1184,15 +1165,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
               onClick={() => setShowReportIssue(true)}
 
-              className="w-full bg-[#EF4444] text-white py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
+              className="w-full bg-[#EF4444] text-white py-4 rounded-xl font-logo font-bold"
 
             >
 
-              ⚠ REPORT PROBLEM
+              Report a problem
 
             </button>
 
-            <p className="text-[10px] text-[#F2F0EA]/40 text-center">
+            <p className="text-[#F2F0EA]/60 text-center">
               Machine faults, strikes, suppliers, staffing — site-wide or per machine.
             </p>
 
@@ -1587,13 +1568,13 @@ function Kpi({ label, value, sub, color }) {
 
   return (
 
-    <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3 sm:p-4">
+    <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
 
-      <p className="font-logo text-[10px] text-[#F2F0EA]/50">{label}</p>
+      <p className="font-logo text-[#F2F0EA]/60">{label}</p>
 
-      <p className="font-logo text-xl sm:text-2xl" style={{ color }}>{value}</p>
+      <p className="font-logo text-3xl mt-1" style={{ color }}>{value}</p>
 
-      <p className="font-body text-[10px] text-[#F2F0EA]/40 mt-1">{sub}</p>
+      <p className="font-body text-[#F2F0EA]/50 mt-1">{sub}</p>
 
     </div>
 
