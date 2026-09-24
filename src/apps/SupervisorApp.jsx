@@ -19,6 +19,7 @@ import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod } from "../lib/utils.js";
 
 import { formatSyncErrorMessage } from "../lib/labels.js";
+import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
 
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
@@ -112,14 +113,19 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
   useEffect(() => {
-    if (!user?.site_id) return;
-    const refreshTick = () => {
-      if (document.visibilityState === "visible") refreshLocal().catch(() => {});
+    if (!user?.id) return;
+    let cancelled = false;
+    const refreshTick = async () => {
+      if (document.visibilityState !== "visible") return;
+      if (navigator.onLine) {
+        await hydrateOpenShiftsFromServer().catch(() => {});
+      }
+      if (!cancelled) await refreshLocal().catch(() => {});
     };
     refreshTick();
     const refreshId = setInterval(refreshTick, 15000);
-    return () => { clearInterval(refreshId); };
-  }, [user?.site_id, refreshLocal]);
+    return () => { cancelled = true; clearInterval(refreshId); };
+  }, [user?.id, tab, refreshLocal]);
 
   const siteMachines = useMemo(
 
@@ -176,6 +182,18 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
     };
 
   }), [siteMachines, shifts, events, workSessions]);
+
+  const openShiftsToClose = useMemo(() => {
+    const seen = new Set();
+    const rows = [];
+    for (const shift of shifts) {
+      if (getShiftStatus(shift) !== SHIFT.RUNNING) continue;
+      if (seen.has(shift.id)) continue;
+      seen.add(shift.id);
+      rows.push(shift);
+    }
+    return rows.sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0));
+  }, [shifts]);
 
 
 
@@ -678,10 +696,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
   const tabItems = useMemo(
     () => TABS.map((t) => ({
       ...t,
-      badge: t.id === "verify" ? myPendingVerify : t.id === "issues" ? openSiteIssues.length : 0,
+      badge: t.id === "live" ? openShiftsToClose.length : t.id === "verify" ? myPendingVerify : t.id === "issues" ? openSiteIssues.length : 0,
     })),
-    [myPendingVerify, openSiteIssues.length]
+    [openShiftsToClose.length, myPendingVerify, openSiteIssues.length]
   );
+
+  const beginCloseShift = (shift) => {
+    setCloseShift(shift);
+    setCloseMeter(String(shift.start_hour_meter ?? ""));
+  };
 
   const headerContext = `${activeSite?.name || "Site"} · ${billingPeriod.label}`;
 
@@ -699,7 +722,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
-        {(myPendingVerify > 0 || criticalIssues > 0 || stoppedMachines > 0) && (
+        {(myPendingVerify > 0 || criticalIssues > 0 || stoppedMachines > 0 || openShiftsToClose.length > 0) && (
 
           <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-xl px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1">
 
@@ -720,6 +743,16 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
               <button type="button" onClick={() => setTab("issues")} className="font-logo text-[10px] text-[#EF4444] hover:underline">
 
                 {criticalIssues} critical issue{criticalIssues !== 1 ? "s" : ""}
+
+              </button>
+
+            )}
+
+            {openShiftsToClose.length > 0 && (
+
+              <button type="button" onClick={() => setTab("live")} className="font-logo text-sm text-[#F5C518] hover:underline">
+
+                {openShiftsToClose.length} open shift{openShiftsToClose.length !== 1 ? "s" : ""} to close
 
               </button>
 
@@ -811,6 +844,34 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
           <div className="space-y-4">
 
+            {openShiftsToClose.length > 0 && (
+              <div className="border-2 border-[#F5C518] bg-[#2a2208] rounded-2xl p-4 space-y-3">
+                <p className="font-logo text-xl text-[#F5C518]">Open shifts — close these</p>
+                <p className="font-body text-base text-[#F2F0EA]/80">
+                  An operator cannot start until a supervisor closes the leftover shift.
+                </p>
+                {openShiftsToClose.map((shift) => {
+                  const machine = machines.find((m) => m.id === shift.machine_id);
+                  return (
+                    <div key={shift.id} className="bg-[#0A0A0A] rounded-xl p-4">
+                      <p className="font-logo text-lg text-[#F2F0EA]">{shift.operator_name || "Operator"}</p>
+                      <p className="font-body text-base text-[#F2F0EA]/70 mt-1">
+                        {machine?.name || shift.machine_id || "Machine"}
+                        {shift.started_at ? ` · started ${new Date(shift.started_at).toLocaleString()}` : ""}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => beginCloseShift(shift)}
+                        className="w-full mt-3 min-h-[72px] bg-[#F5C518] text-black py-4 rounded-xl font-logo text-xl"
+                      >
+                        Close this shift
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
               <p className="font-logo text-sm text-[#F5C518] mb-2">Who is clocked in</p>
               {workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id).length === 0
@@ -844,7 +905,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
                 ) : fleetStatus.map((f) => (
 
-                  <FleetMachineCard key={f.machine.id} fleet={f} onCloseShift={(shift) => { setCloseShift(shift); setCloseMeter(String(shift.start_hour_meter ?? "")); }} />
+                  <FleetMachineCard key={f.machine.id} fleet={f} onCloseShift={beginCloseShift} />
 
                 ))}
 
@@ -1387,6 +1448,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
                 const machine = machines.find((m) => m.id === closeShift.machine_id);
                 await wf.closeOpenShift(user, machine, closeShift, { endHour: closeMeter });
                 setCloseShift(null);
+                try { await syncNow(); } catch {}
                 await refreshLocal();
                 showAlert("Shift closed", `${closeShift.operator_name || "The operator"}'s open shift is closed. It is waiting for sign-off.`, "success");
               } catch (e) {
@@ -1488,7 +1550,7 @@ function FleetMachineCard({ fleet, onCloseShift }) {
         <button
           type="button"
           onClick={() => onCloseShift?.(runningShift)}
-          className="mt-3 w-full border border-[#F5C518]/50 text-[#F5C518] py-3 rounded-xl font-logo text-xs"
+          className="mt-3 w-full min-h-[64px] bg-[#F5C518] text-black py-3 rounded-xl font-logo text-base"
         >
           Close {runningShift.operator_name || "operator"}&apos;s shift
         </button>

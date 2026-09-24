@@ -3,7 +3,7 @@ import { acquireMachineLock, releaseMachineLock } from "../lib/machineLock.js";
 import { scheduleSync } from "../lib/sync/engine.js";
 import { supabase } from "../lib/supabase.js";
 import { SHIFT, ISSUE, ROLES, BREAKDOWN_STATUS, MAINTENANCE_STATUS, issueAreaRequiresMachine } from "../lib/constants.js";
-import { canCloseIssue } from "../lib/utils.js";
+import { canCloseIssue, getShiftStatus } from "../lib/utils.js";
 import { makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
 import { getPrestartConfigForSite, getInspectionConfigForSite } from "../lib/siteConfig.js";
@@ -378,10 +378,13 @@ export async function endMachineDay(user, machine, site, machineRun, { endHour, 
 
 /** Supervisor closes a shift the operator left running so a new shift can start. */
 export async function closeOpenShift(supervisor, machine, shift, { endHour, note } = {}) {
-  if (!shift || shift.shift_status !== SHIFT.RUNNING) throw new Error("That shift is not still open");
+  if (!shift || getShiftStatus(shift) !== SHIFT.RUNNING) throw new Error("That shift is not still open");
   const h = Number(endHour);
-  if (!Number.isFinite(h) || h < Number(shift.start_hour_meter)) {
+  if (!Number.isFinite(h) || h < Number(shift.start_hour_meter || 0)) {
     throw new Error("Enter a closing meter at or above the opening reading");
+  }
+  if (!navigator.onLine) {
+    throw new Error("Need a connection to close this so the next operator can start");
   }
   const now = nowISO();
   const events = await closeOpenDowntimeForShift(shift.id, now);
@@ -395,11 +398,27 @@ export async function closeOpenShift(supervisor, machine, shift, { endHour, note
     downtime_minutes: downtimeMinutes,
     ended_at: now,
     shift_status: SHIFT.WAITING_FOR_VERIFICATION,
+    assigned_supervisor_id: shift.assigned_supervisor_id || supervisor?.id || null,
+    assigned_supervisor_name: shift.assigned_supervisor_name || supervisor?.name || null,
     notes: [shift.notes, `Closed by ${supervisor?.name || "supervisor"}`, note].filter(Boolean).join(" | "),
     updated_at: now,
   };
+  const { error } = await supabase.from("shifts").update({
+    end_hour_meter: closed.end_hour_meter,
+    hours_worked: closed.hours_worked,
+    runtime_minutes: closed.runtime_minutes,
+    downtime_minutes: closed.downtime_minutes,
+    ended_at: closed.ended_at,
+    shift_status: closed.shift_status,
+    assigned_supervisor_id: closed.assigned_supervisor_id,
+    assigned_supervisor_name: closed.assigned_supervisor_name,
+    notes: closed.notes,
+    updated_at: closed.updated_at,
+  }).eq("id", shift.id);
+  if (error) throw new Error(error.message || "Could not close the shift on the server");
   await saveLocal("shifts", closed);
-  if (machine?.id) await releaseMachineLock(machine.id);
+  const machineId = machine?.id || shift.machine_id;
+  if (machineId) await releaseMachineLock(machineId);
   scheduleSync();
   return closed;
 }

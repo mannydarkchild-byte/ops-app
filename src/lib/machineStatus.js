@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js";
-import { dropLocalRecord, ensureDB } from "./db.js";
+import { dropLocalRecord, ensureDB, mergeServerRow } from "./db.js";
 import { SHIFT } from "./constants.js";
 
 function isLocalRunning(shift) {
@@ -16,6 +16,27 @@ export async function fetchServerOpenShift(machineId) {
     .limit(1);
   if (error) return { known: false, shift: null };
   return { known: true, shift: data?.[0] || null };
+}
+
+/** All leftover RUNNING shifts on the server — Live tab uses this so close is visible. */
+export async function fetchServerOpenShifts() {
+  if (!navigator.onLine) return { known: false, shifts: [] };
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("shift_status", SHIFT.RUNNING)
+    .order("started_at", { ascending: false });
+  if (error) return { known: false, shifts: [] };
+  return { known: true, shifts: data || [] };
+}
+
+export async function hydrateOpenShiftsFromServer() {
+  const remote = await fetchServerOpenShifts();
+  if (!remote.known) return remote;
+  for (const shift of remote.shifts) {
+    try { await mergeServerRow("shifts", shift); } catch {}
+  }
+  return remote;
 }
 
 async function dropLocalRunningShifts(machineId, keepId = null) {
