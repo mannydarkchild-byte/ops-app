@@ -6,8 +6,8 @@ const BAND_LABEL = { day: "Day shift", night: "Night shift", any: "All shifts" }
 export function SupervisorPicker({ supervisors, value, onChange, suggestedId = null }) {
   if (!supervisors.length) {
     return (
-      <p className="font-body text-sm text-[#EF4444] py-2">
-        No supervisors on this site. Ask admin to add supervisor profiles with phone numbers.
+      <p className="font-body text-sm text-ops-text py-2">
+        No supervisors on this phone yet. You can still clock in, then tap Update when you have signal.
       </p>
     );
   }

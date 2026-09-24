@@ -29,6 +29,25 @@ async function dropLocalRunningShifts(machineId, keepId = null) {
   return locals.length;
 }
 
+/** Drop local RUNNING rows that are not this operator’s current clock-in. */
+export async function clearStaleLocalRuns(machineId, workSession, userId) {
+  if (!machineId) return 0;
+  const db = await ensureDB();
+  const locals = (await db.shifts.toArray()).filter((s) => s.machine_id === machineId && isLocalRunning(s));
+  let dropped = 0;
+  for (const shift of locals) {
+    const belongs = userId
+      && workSession
+      && shift.operator_id === userId
+      && new Date(shift.started_at).getTime() >= new Date(workSession.clock_in).getTime();
+    if (belongs) continue;
+    await dropLocalRecord("shifts", shift.id);
+    dropped += 1;
+  }
+  if (dropped) await db.machine_locks.delete(machineId);
+  return dropped;
+}
+
 /** Align phone lock + local RUNNING rows with the server. Server with no open shift wins. */
 export async function reconcileMachineOpenState(machineId) {
   const db = await ensureDB();

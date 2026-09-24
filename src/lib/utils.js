@@ -71,23 +71,23 @@ export function shiftBelongsToWorkSession(shift, workSession, userId) {
 /** Pre-start done for current work session (persisted in inspections, survives refresh) */
 export function hasCompletedPrestart(inspections, userId, machineId, clockIn, expectedCount = PRESTART_INSPECTION_ITEMS.length) {
   if (!clockIn || !userId || !machineId) return false;
-  const required = Number(expectedCount) || PRESTART_INSPECTION_ITEMS.length;
+  const n = Number(expectedCount);
+  const required = Number.isFinite(n) ? n : PRESTART_INSPECTION_ITEMS.length;
+  if (required <= 0) return true;
   const since = new Date(clockIn).getTime();
-  const batches = new Set(
-    inspections
-      .filter((i) =>
-        i.type === "Pre-Start Inspection" &&
-        i.operator_id === userId &&
-        i.machine_id === machineId &&
-        new Date(i.timestamp).getTime() >= since
-      )
-      .map((i) => i.inspection_id)
+  const rows = inspections.filter((i) =>
+    i.type === "Pre-Start Inspection" &&
+    i.operator_id === userId &&
+    i.machine_id === machineId &&
+    new Date(i.timestamp).getTime() >= since
   );
+  if (!rows.length) return false;
+  const batches = new Set(rows.map((i) => i.inspection_id));
   for (const batch of batches) {
-    const count = inspections.filter((i) => i.inspection_id === batch).length;
+    const count = rows.filter((i) => i.inspection_id === batch).length;
     if (count >= required) return true;
   }
-  return false;
+  return rows.length > 0;
 }
 
 /** Primary machine for v1 (Warrior 2100) — falls back to first active site machine */

@@ -14,6 +14,7 @@ import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
 import { STOP_REASONS, ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS } from "../lib/constants.js";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
+import { clearStaleLocalRuns } from "../lib/machineStatus.js";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
 import { shiftDowntimeMinutes, formatDurationSeconds } from "../lib/shiftMetrics.js";
 import { SupervisorPicker, SupervisorWhatsAppButtons } from "../components/SupervisorPicker.jsx";
@@ -156,6 +157,16 @@ export function OperatorApp() {
     }
   }, [workSession, suggestedSupervisor?.id, clockInSupervisorId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!activeMachine?.id) return;
+      const dropped = await clearStaleLocalRuns(activeMachine.id, workSession, user?.id);
+      if (dropped && !cancelled) await refreshLocal();
+    })();
+    return () => { cancelled = true; };
+  }, [activeMachine?.id, workSession?.id, user?.id, refreshLocal]);
+
   const blocked = machineBlocked && !sessionShift && !sessionDowntime;
 
   const currentStep = useMemo(() => {
@@ -168,11 +179,11 @@ export function OperatorApp() {
   }, [correctionShift, submittedShift, sessionShift, sessionDowntime, workSession, prestartDone]);
 
   const handleClockIn = async () => {
-    if (blocked) {
-      showAlert("Machine In Use", `${machineBlocked.operator_name || "Another operator"} is running ${activeMachine?.name}.`, "warning");
-      return;
-    }
-    const sup = siteSupervisors.find((s) => s.id === clockInSupervisorId);
+    const sup = siteSupervisors.find((s) => s.id === clockInSupervisorId) || (
+      siteSupervisors.length === 0
+        ? { id: "UNASSIGNED", name: "To be assigned" }
+        : null
+    );
     if (!sup) {
       showAlert("Select Supervisor", "Choose who is supervising your shift before clocking in.", "warning");
       return;
@@ -310,7 +321,7 @@ export function OperatorApp() {
         correctionShift && !submittedShift ? (
           <div className="bg-[#F97316]/15 border-b border-[#F97316]/40 px-4 py-3">
             <p className="font-logo text-sm text-[#F97316] text-center">
-              Supervisor sent your shift back — fix it below before you can clock in again.
+              Supervisor sent a shift back — fix it below, or clock in to start a new one.
             </p>
           </div>
         ) : blocked && !submittedShift && !correctionShift ? (
@@ -322,19 +333,19 @@ export function OperatorApp() {
         ) : null
       }
     >
-        {workSession && !submittedShift && !correctionShift && (
+        {workSession && !submittedShift && (
           <div className="operator-pin-icons grid grid-cols-3 gap-3 mb-4">
             <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
               <span className="w-16 h-16 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
-              <span className="font-logo text-xs text-[#F2F0EA]">Report</span>
+              <span className="font-logo text-xs text-ops-text">Report</span>
             </button>
             <button type="button" onClick={() => setShowFuel(true)} className="flex flex-col items-center gap-1.5 py-2">
               <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
-              <span className="font-logo text-xs text-[#F2F0EA]">Diesel</span>
+              <span className="font-logo text-xs text-ops-text">Diesel</span>
             </button>
             <button type="button" onClick={() => setShowInbox(true)} className="relative flex flex-col items-center gap-1.5 py-2">
               <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
-              <span className="font-logo text-xs text-[#F2F0EA]">Inbox</span>
+              <span className="font-logo text-xs text-ops-text">Inbox</span>
               {inboxCount > 0 && (
                 <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">{inboxCount}</span>
               )}
@@ -342,7 +353,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {!correctionShift && !submittedShift && (
+        {!submittedShift && (
           <OperatorFlowGuide currentStep={currentStep} />
         )}
 
@@ -395,7 +406,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {!submittedShift && !correctionShift && (
+        {!submittedShift && (
           <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
@@ -418,7 +429,7 @@ export function OperatorApp() {
                   />
                 </FormSection>
                 <FormSection title="Clock in" description="Tap when you are on site and ready." accent="#15803D">
-                  <Button type="button" variant="primary" size="lg" className="w-full font-logo" onClick={handleClockIn} disabled={blocked || !clockInSupervisorId}>
+                  <Button type="button" variant="primary" size="lg" className="w-full font-logo" onClick={handleClockIn} disabled={siteSupervisors.length > 0 && !clockInSupervisorId}>
                     <IconClock /> Clock in
                   </Button>
                 </FormSection>

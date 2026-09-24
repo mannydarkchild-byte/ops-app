@@ -282,14 +282,14 @@ button,
   border-bottom: 1px solid var(--ops-border);
 }
 
-.operator-outdoor .bg-\[\#141414\] {
+html:not(.theme-light) .operator-outdoor .bg-\[\#141414\] {
   background-color: #1a1a1a;
   border-color: #3a3a3a;
 }
 
-.operator-outdoor main [class*="text-[#F2F0EA]/50"],
-.operator-outdoor main [class*="text-[#F2F0EA]/60"],
-.operator-outdoor main [class*="text-[#F2F0EA]/70"] {
+html:not(.theme-light) .operator-outdoor main [class*="text-[#F2F0EA]/50"],
+html:not(.theme-light) .operator-outdoor main [class*="text-[#F2F0EA]/60"],
+html:not(.theme-light) .operator-outdoor main [class*="text-[#F2F0EA]/70"] {
   color: rgba(242, 240, 234, 0.88) !important;
 }
 
@@ -307,13 +307,23 @@ button,
   font-size: 1.125rem;
 }
 
-.operator-outdoor .operator-work-panel {
+html:not(.theme-light) .operator-outdoor .operator-work-panel {
   border-width: 2px;
   border-color: #3a3a3a;
 }
 
-.operator-outdoor main .text-ops-muted {
+html:not(.theme-light) .operator-outdoor main .text-ops-muted {
   color: rgba(242, 240, 234, 0.78);
+}
+
+html.theme-light .operator-outdoor .operator-work-panel {
+  border-width: 2px;
+}
+html.theme-light .operator-pin-icons .bg-\[\#1a1212\] {
+  background-color: #fff5f5;
+}
+html.theme-light .operator-pin-icons .bg-\[\#141414\] {
+  background-color: #ffffff;
 }
 
 /* Day / white mode — high contrast in sunlight, same OPS gold + Russo */
