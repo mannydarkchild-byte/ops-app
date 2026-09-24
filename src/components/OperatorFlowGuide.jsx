@@ -11,6 +11,7 @@ export function OperatorFlowGuide({ currentStep }) {
         {meta.stepNum ? `STEP ${meta.stepNum} OF ${meta.total}` : "NEEDS A FIX"}
       </p>
       <p className="font-logo text-xl text-ops-text mt-1">{meta.title}</p>
+      <p className="font-body text-base text-ops-muted mt-1.5 leading-snug">{meta.hint}</p>
       <div className="flex gap-1.5 mt-3" aria-hidden>
         {OPERATOR_FLOW_STEPS.map((s, i) => (
           <span

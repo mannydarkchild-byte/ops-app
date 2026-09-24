@@ -43,7 +43,7 @@ export function LoginScreen({ onLogin, error, loading }) {
           <LogoMark size="xl" />
           <h1 className="font-logo text-4xl text-ops-gold mt-5">OPS</h1>
           <p className="font-body text-lg text-ops-text mt-2 leading-snug">
-            {mode === "login" ? "Sign in on this phone to start your shift." : "We will email you a reset link."}
+            {mode === "login" ? "Open the app on this phone. Clock-in comes after that." : "We will email you a reset link."}
           </p>
         </div>
 
@@ -87,7 +87,7 @@ export function LoginScreen({ onLogin, error, loading }) {
                 onClick={submitLogin}
                 disabled={busy || loading || !email || !password}
               >
-                {busy ? "Signing in…" : "Sign in"}
+                {busy ? "Opening…" : "Open the app"}
               </Button>
               <button
                 type="button"
@@ -97,7 +97,7 @@ export function LoginScreen({ onLogin, error, loading }) {
                 Forgot password?
               </button>
               <p className="text-ops-muted text-base text-center font-body pb-2">
-                Works offline after the first sign-in.
+                Works offline after the first time you open it.
               </p>
             </div>
           </form>
@@ -136,7 +136,7 @@ export function LoginScreen({ onLogin, error, loading }) {
                 onClick={() => setMode("login")}
                 className="btn-link w-full min-h-[48px] text-ops-text text-base font-ui"
               >
-                Back to sign in
+                Back
               </button>
             </div>
           </form>

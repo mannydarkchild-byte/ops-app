@@ -1,10 +1,10 @@
 /** Operator day flow — one path, plain language */
 export const OPERATOR_FLOW_STEPS = [
-  { id: "clock", label: "Clock in", hint: "Choose your supervisor, then clock in. That’s how the day starts." },
-  { id: "inspect", label: "Pre-start", hint: "Walk the checklist. Every item needs a status before the machine starts." },
-  { id: "start", label: "Start machine", hint: "Snap the opening meter, type the hours, then start." },
-  { id: "run", label: "You’re running", hint: "Keep working. Stop if the machine goes down. End day when you’re finished." },
-  { id: "end", label: "Send the shift", hint: "Closing meter photo, then send it to your supervisor." },
+  { id: "clock", label: "Your time", hint: "Clock in when you arrive. That is your working time — it does not start the machine." },
+  { id: "inspect", label: "Pre-start", hint: "Check the machine, one item at a time. Then you can start it." },
+  { id: "start", label: "The machine", hint: "Photo the hour meter, then start the machine. That is machine hours, not your time." },
+  { id: "run", label: "Machine running", hint: "Stop the machine if it goes down. Finish day when you are done — that clocks you out too." },
+  { id: "end", label: "Day sent", hint: "Machine hours went to your supervisor. You are clocked out." },
 ];
 
 export function operatorFlowIndex(stepId) {

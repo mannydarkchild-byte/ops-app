@@ -326,11 +326,19 @@ export function OperatorApp() {
     >
         {workSession && !submittedShift && (
           <div className="operator-pin-icons mb-4">
-            {!sessionShift && (
-              <button type="button" onClick={() => setShowEarlyClockOut(true)} className="operator-clock-out font-logo">
-                <IconLeave /> Clock out
-              </button>
-            )}
+            <div className="operator-time-bar">
+              <div className="min-w-0">
+                <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">YOUR TIME</p>
+                <p className="font-body text-sm text-ops-text truncate">
+                  On site since {new Date(workSession.clock_in).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+              {!sessionShift && (
+                <button type="button" onClick={() => setShowEarlyClockOut(true)} className="operator-clock-out font-logo">
+                  <IconLeave /> Clock out
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-3 gap-2">
               <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
                 <span className="w-16 h-16 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
@@ -348,9 +356,6 @@ export function OperatorApp() {
                 )}
               </button>
             </div>
-            <p className="operator-onsite font-body">
-              On site since {new Date(workSession.clock_in).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
-            </p>
           </div>
         )}
 
@@ -420,7 +425,9 @@ export function OperatorApp() {
             )}
 
             {!workSession && (
-              <>
+              <div className="operator-group">
+                <p className="operator-group-label font-logo">Your time</p>
+                <p className="operator-group-explain">Clock in when you arrive. This starts your working time. It does not start the machine.</p>
                 <FormSection title="Supervisor on duty" description="Who will sign off your shift today?" accent="#D4A017">
                   <SupervisorPicker
                     supervisors={siteSupervisors}
@@ -434,7 +441,7 @@ export function OperatorApp() {
                     <IconClock /> Clock in
                   </Button>
                 </FormSection>
-              </>
+              </div>
             )}
 
             {workSession && !prestartDone && !sessionShift && !sessionDowntime && (
@@ -452,50 +459,62 @@ export function OperatorApp() {
             )}
 
             {workSession && prestartDone && !sessionShift && !sessionDowntime && (
-              <FormSection title="Opening hour meter" description={`Take a photo of the meter. Last verified reading: ${hourMeter}h.`} accent="#15803D">
-                <MeterPhoto
-                  value={startHour}
-                  onValue={setStartHour}
-                  photo={startPhotoPreview}
-                  onPhoto={(ref, preview) => { setStartPhotoRef(ref); setStartPhotoPreview(preview); setStartPhotoError(false); }}
-                  showPhotoError={startPhotoError}
-                />
-                <Button type="button" variant="primary" size="lg" className="w-full mt-4 font-logo" onClick={handleStart}>
-                  <IconPlay /> Start machine
-                </Button>
-              </FormSection>
+              <div className="operator-group">
+                <p className="operator-group-label font-logo">The machine</p>
+                <p className="operator-group-explain">This starts machine hours on the meter. Your time already started when you clocked in.</p>
+                <FormSection title="Opening hour meter" description={`Take a photo of the meter. Last verified reading: ${hourMeter}h.`} accent="#15803D">
+                  <MeterPhoto
+                    value={startHour}
+                    onValue={setStartHour}
+                    photo={startPhotoPreview}
+                    onPhoto={(ref, preview) => { setStartPhotoRef(ref); setStartPhotoPreview(preview); setStartPhotoError(false); }}
+                    showPhotoError={startPhotoError}
+                  />
+                  <Button type="button" variant="primary" size="lg" className="w-full mt-4 font-logo" onClick={handleStart}>
+                    <IconPlay /> Start machine
+                  </Button>
+                </FormSection>
+              </div>
             )}
 
             {sessionShift && !sessionDowntime && (
-              <FormSection title="Your shift" description="Billable hours come from the closing meter at end of day." accent="#15803D">
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
-                    <p className="font-ui text-xs font-medium text-ops-muted">Opening meter</p>
-                    <p className="font-ui text-3xl font-bold text-ops-gold mt-1">{openingMeter}h</p>
+              <div className="operator-group">
+                <p className="operator-group-label font-logo">The machine</p>
+                <p className="operator-group-explain">Stop the machine if it goes down. Finish day stops the meter and clocks you out.</p>
+                <FormSection title="Machine running" description="Machine hours come from the closing meter. Your time is already running at the top." accent="#15803D">
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
+                      <p className="font-ui text-xs font-medium text-ops-muted">Opening meter</p>
+                      <p className="font-ui text-3xl font-bold text-ops-gold mt-1">{openingMeter}h</p>
+                    </div>
+                    <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
+                      <p className="font-ui text-xs font-medium text-ops-muted">Runtime (app)</p>
+                      <p className="font-ui text-3xl font-bold text-ops-green mt-1">{formatDurationSeconds(runningSeconds)}</p>
+                    </div>
                   </div>
-                  <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
-                    <p className="font-ui text-xs font-medium text-ops-muted">Runtime (app)</p>
-                    <p className="font-ui text-3xl font-bold text-ops-green mt-1">{formatDurationSeconds(runningSeconds)}</p>
+                  {shiftDowntimeMin > 0 && (
+                    <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button type="button" variant="danger" size="lg" className="font-logo" onClick={() => setShowStop(true)}><IconStop /> Stop machine</Button>
+                    <Button type="button" variant="primary" size="lg" className="font-logo" onClick={openEndDay}>Finish day</Button>
                   </div>
-                </div>
-                {shiftDowntimeMin > 0 && (
-                  <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <Button type="button" variant="danger" size="lg" className="font-logo" onClick={() => setShowStop(true)}><IconStop /> Stop</Button>
-                  <Button type="button" variant="primary" size="lg" className="font-logo" onClick={openEndDay}>End day</Button>
-                </div>
-              </FormSection>
+                </FormSection>
+              </div>
             )}
 
             {sessionShift && sessionDowntime && (
-              <FormSection title="Machine stopped" description={`Reason: ${sessionDowntime.reason}. Restart when ready, or end day if finished.`} accent="#B91C1C">
-                <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{Math.floor(downtimeSeconds / 60)} min down</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button type="button" variant="teal" size="lg" onClick={() => setShowRestart(true)}>Restart</Button>
-                  <Button type="button" variant="primary" size="lg" onClick={openEndDay}>End day</Button>
-                </div>
-              </FormSection>
+              <div className="operator-group">
+                <p className="operator-group-label font-logo">The machine</p>
+                <p className="operator-group-explain">The machine is stopped. You are still on site. Restart it, or finish day to clock out.</p>
+                <FormSection title="Machine stopped" description={`Reason: ${sessionDowntime.reason}.`} accent="#B91C1C">
+                  <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{Math.floor(downtimeSeconds / 60)} min down</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button type="button" variant="teal" size="lg" onClick={() => setShowRestart(true)}>Restart machine</Button>
+                    <Button type="button" variant="primary" size="lg" onClick={openEndDay}>Finish day</Button>
+                  </div>
+                </FormSection>
+              </div>
             )}
 
           </div>
@@ -526,8 +545,8 @@ export function OperatorApp() {
         <IssueInboxModal onClose={() => setShowInbox(false)} user={user} issues={issues} issueMessages={issueMessages} onDone={refreshLocal} scope="mine" machines={activeMachine ? [activeMachine] : []} />
       )}
       {showEarlyClockOut && (
-        <Modal title="CLOCK OUT" color="yellow" onClose={() => { setShowEarlyClockOut(false); setEarlyClockOutReason(""); setEarlyClockOutNote(""); }}>
-          <FormSection step={1} title="Why are you leaving?" description="You clocked in but are not starting a shift. This is recorded for the supervisor." accent="#F5C518">
+        <Modal title="CLOCK OUT — YOUR TIME" color="yellow" onClose={() => { setShowEarlyClockOut(false); setEarlyClockOutReason(""); setEarlyClockOutNote(""); }}>
+          <FormSection step={1} title="Why are you leaving site?" description="This stops your working time. The machine was not started." accent="#F5C518">
             <select
               value={earlyClockOutReason}
               onChange={(e) => setEarlyClockOutReason(e.target.value)}
@@ -573,12 +592,13 @@ export function OperatorApp() {
         </Modal>
       )}
       {showEndDay && (
-        <Modal title="END DAY — SUBMIT SHIFT" color="yellow" onClose={() => setShowEndDay(false)}>
+        <Modal title="FINISH DAY" color="yellow" onClose={() => setShowEndDay(false)}>
+          <p className="font-body text-sm text-[#F2F0EA]/70 mb-4">Stops machine hours and clocks you out.</p>
           <div className="mb-4 px-4 py-3 rounded-xl bg-[#F5C518]/10 border border-[#F5C518]/40">
             <p className="font-logo text-[10px] text-[#F5C518] tracking-wider mb-1">SUPERVISOR FOR THIS SHIFT</p>
             <p className="font-logo text-base text-[#F2F0EA]">{shiftSupervisor?.name || "—"}</p>
           </div>
-          <FormSection step={1} title="Closing hour meter" description="Photo of meter is mandatory. Enter reading from the photo." accent="#F5C518">
+          <FormSection step={1} title="Closing hour meter" description="Photo of the meter is required. Type the reading from the photo." accent="#F5C518">
             <MeterPhoto
               value={endHour}
               onValue={setEndHour}
@@ -589,7 +609,7 @@ export function OperatorApp() {
           </FormSection>
           <button type="button" onClick={handleEndDay} disabled={!shiftSupervisor?.id || !endHour || !endPhotoRef}
             className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold text-base disabled:opacity-40">
-            SUBMIT & CLOCK OUT
+            SEND SHIFT & CLOCK OUT
           </button>
         </Modal>
       )}

@@ -212,7 +212,7 @@ export function ThemeToggle({ className = "" }) {
   );
 }
 
-export function AppHeader({ right, subtitle }) {
+export function AppHeader({ right, subtitle, leaveApp = false }) {
   const { user, signOut } = useOps();
   const role = (user?.role || "operator").toLowerCase();
   const roleLabel = subtitle || role.charAt(0).toUpperCase() + role.slice(1);
@@ -240,11 +240,17 @@ export function AppHeader({ right, subtitle }) {
           <button
             type="button"
             onClick={signOut}
-            title="Sign out"
-            aria-label="Sign out"
-            className="w-11 h-11 rounded-xl border border-ops-border bg-ops-card text-ops-muted hover:text-ops-red flex items-center justify-center"
+            title="Leave the app — this is not clock out"
+            aria-label="Leave the app"
+            className={`rounded-xl border border-ops-border bg-ops-card text-ops-muted hover:text-ops-red flex items-center justify-center ${
+              leaveApp ? "h-11 px-2 min-w-[3.25rem]" : "w-11 h-11"
+            }`}
           >
-            <IconOut />
+            {leaveApp ? (
+              <span className="font-logo text-[10px] leading-tight text-center">Leave<br />app</span>
+            ) : (
+              <IconOut />
+            )}
           </button>
         </div>
       </div>
@@ -311,7 +317,7 @@ export function AppPage({
   return (
     <div className={`min-h-screen bg-ops-black text-ops-text pb-8 mobile-safe-bottom ${outdoor ? "operator-outdoor" : ""}`}>
       {alert}
-      <AppHeader subtitle={subtitle} context={context} showSite={showSite} />
+      <AppHeader subtitle={subtitle} context={context} showSite={showSite} leaveApp={outdoor} />
       <OfflineBanner />
       <SyncQueueHint hasTabBar={Boolean(tabs?.length)} />
       {banner}
