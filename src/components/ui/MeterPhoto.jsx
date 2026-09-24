@@ -26,13 +26,13 @@ export function MeterPhoto({
     <div className="space-y-3">
       {/* Photo first — compulsory for hour readings */}
       <div>
-        <p className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider mb-2">
+        <p className="font-logo text-xs text-[#F2F0EA]/70 tracking-wider mb-2">
           {required ? "① PHOTO (REQUIRED)" : "① PHOTO"}
         </p>
         <button
           type="button"
           onClick={handlePhoto}
-          className={`w-full py-4 rounded-xl font-logo font-bold text-sm tracking-wider border-2 active:scale-[0.99] ${
+          className={`w-full py-5 rounded-xl font-logo font-bold text-base tracking-wider border-2 active:scale-[0.99] ${
             hasPhoto
               ? "bg-[#22C55E] text-black border-[#22C55E]"
               : showPhotoError
@@ -52,9 +52,9 @@ export function MeterPhoto({
 
       {/* Reading from photo */}
       <div>
-        <p className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider mb-2">{required ? "② READING FROM PHOTO" : "② READING"}</p>
-        {hint && <p className="font-body text-xs text-[#F2F0EA]/45 mb-2">{hint}</p>}
-        <label className="font-body text-xs text-[#F2F0EA]/60 block mb-1">{label}</label>
+        <p className="font-logo text-xs text-[#F2F0EA]/70 tracking-wider mb-2">{required ? "② READING FROM PHOTO" : "② READING"}</p>
+        {hint && <p className="font-body text-sm text-[#F2F0EA]/70 mb-2">{hint}</p>}
+        <label className="font-body text-sm text-[#F2F0EA]/70 block mb-1">{label}</label>
         <input
           type="number"
           step="0.1"

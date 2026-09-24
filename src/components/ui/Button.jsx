@@ -10,7 +10,7 @@ const VARIANT = {
 const SIZE = {
   sm: "px-3 py-2 text-sm min-h-[40px] rounded-lg",
   md: "px-4 py-2.5 text-sm min-h-[44px] rounded-xl",
-  lg: "px-4 py-3.5 text-base min-h-[48px] rounded-xl",
+  lg: "px-5 py-4 text-lg min-h-[56px] rounded-2xl",
 };
 
 /** Field-friendly button — Inter, sentence case (not Russo caps) */

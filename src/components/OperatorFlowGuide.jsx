@@ -7,7 +7,7 @@ export function OperatorFlowGuide({ currentStep }) {
 
   return (
     <div className="mb-4">
-      <p className="font-ui text-base text-[#F2F0EA]/70">
+      <p className="font-ui text-lg text-[#F2F0EA]/80">
         {meta.stepNum ? `Step ${meta.stepNum} of ${meta.total}` : "Needs a fix"}
       </p>
       <div className="flex gap-1.5 mt-2" aria-hidden>

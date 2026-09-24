@@ -4,7 +4,7 @@ import { initDB, readTable, saveLocal, getPendingCount } from "../lib/db.js";
 import { loadProfile, signIn, signOut, readCachedAuthUser, cacheAuthUser } from "../lib/auth.js";
 import { runSync, scheduleSync, initSyncListeners, onSyncStateChange } from "../lib/sync/engine.js";
 import { syncMachineLocks } from "../lib/machineLock.js";
-import { fetchMachineStatus, isBlockedByOther } from "../lib/machineStatus.js";
+import { fetchMachineStatus, reconcileMachineOpenState } from "../lib/machineStatus.js";
 import { SHIFT } from "../lib/constants.js";
 import { seedLocalDefaults } from "../lib/seed.js";
 import { resolveSiteSettings, defaultSiteSettings } from "../lib/siteConfig.js";
@@ -71,9 +71,12 @@ export function OpsProvider({ children }) {
       }));
       if (activeMachineRef.current?.id) {
         try {
+          await reconcileMachineOpenState(activeMachineRef.current.id);
           const status = await fetchMachineStatus(activeMachineRef.current.id);
           setMachineStatus(status);
         } catch {}
+        const latestShifts = await readTable("shifts");
+        setShifts(latestShifts);
       }
     } catch (e) {
       console.warn("refreshLocal:", e);
@@ -113,10 +116,21 @@ export function OpsProvider({ children }) {
   }, [events, machineRun]);
 
   const machineBlocked = useMemo(() => {
-    if (!user?.id || !machineStatus) return null;
-    if (!isBlockedByOther(machineStatus, user.id)) return null;
-    return machineStatus;
-  }, [machineStatus, user?.id]);
+    if (!user?.id || !activeMachine?.id) return null;
+    const otherRun = shifts.find((s) =>
+      s.machine_id === activeMachine.id
+      && (s.shift_status === SHIFT.RUNNING || s.status === SHIFT.RUNNING)
+      && s.operator_id
+      && s.operator_id !== user.id
+    );
+    if (!otherRun) return null;
+    return {
+      ...(machineStatus || {}),
+      is_running: true,
+      operator_id: otherRun.operator_id,
+      operator_name: otherRun.operator_name,
+    };
+  }, [machineStatus, user?.id, shifts, activeMachine?.id]);
 
   const siteSettingsMap = useMemo(
     () => Object.fromEntries(siteSettings.map((row) => [row.site_id, resolveSiteSettings(row)])),

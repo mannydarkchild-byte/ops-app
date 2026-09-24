@@ -1,11 +1,69 @@
 import { supabase } from "./supabase.js";
-import { ensureDB } from "./db.js";
+import { dropLocalRecord, ensureDB } from "./db.js";
+import { SHIFT } from "./constants.js";
+
+function isLocalRunning(shift) {
+  return shift?.shift_status === SHIFT.RUNNING || shift?.status === SHIFT.RUNNING;
+}
+
+export async function fetchServerOpenShift(machineId) {
+  if (!navigator.onLine || !machineId) return { known: false, shift: null };
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("id, operator_id, operator_name, started_at, shift_status")
+    .eq("machine_id", machineId)
+    .eq("shift_status", SHIFT.RUNNING)
+    .limit(1);
+  if (error) return { known: false, shift: null };
+  return { known: true, shift: data?.[0] || null };
+}
+
+async function dropLocalRunningShifts(machineId, keepId = null) {
+  const db = await ensureDB();
+  const locals = (await db.shifts.toArray()).filter(
+    (s) => s.machine_id === machineId && isLocalRunning(s) && s.id !== keepId
+  );
+  for (const shift of locals) {
+    await dropLocalRecord("shifts", shift.id);
+  }
+  return locals.length;
+}
+
+/** Align phone lock + local RUNNING rows with the server. Server with no open shift wins. */
+export async function reconcileMachineOpenState(machineId) {
+  const db = await ensureDB();
+  const remote = await fetchServerOpenShift(machineId);
+
+  if (remote.known && !remote.shift) {
+    try {
+      await supabase.rpc("stop_machine", { p_machine_id: machineId });
+    } catch {}
+    await dropLocalRunningShifts(machineId);
+    await db.machine_locks.delete(machineId);
+    const cached = await db.machine_status.get(machineId);
+    const cleared = {
+      ...(cached || { machine_id: machineId }),
+      machine_id: machineId,
+      is_running: false,
+      shift_id: null,
+      operator_id: null,
+      operator_name: null,
+      _cached_at: new Date().toISOString(),
+    };
+    await db.machine_status.put(cleared);
+    return { ...remote, status: cleared, cleared: true };
+  }
+
+  return { ...remote, status: null, cleared: false };
+}
 
 /** Fetch machine_status from server and cache locally. Clears a stuck running flag when no shift is open. */
 export async function fetchMachineStatus(machineId) {
   if (!machineId) return null;
 
   const db = await ensureDB();
+  const reconciled = await reconcileMachineOpenState(machineId);
+  if (reconciled.cleared && reconciled.status) return reconciled.status;
 
   if (navigator.onLine) {
     try {
@@ -15,20 +73,11 @@ export async function fetchMachineStatus(machineId) {
         .eq("machine_id", machineId)
         .maybeSingle();
       if (!error && data) {
-        if (data.is_running) {
-          const { data: openShifts, error: shiftError } = await supabase
-            .from("shifts")
-            .select("id")
-            .eq("machine_id", machineId)
-            .eq("shift_status", "RUNNING")
-            .limit(1);
-          if (!shiftError && !openShifts?.length) {
-            await supabase.rpc("stop_machine", { p_machine_id: machineId });
-            data = { ...data, is_running: false, shift_id: null };
-          }
-        }
-        await db.machine_status.put({ ...data, _cached_at: new Date().toISOString() });
-        return data;
+        const status = data.is_running && reconciled.known && !reconciled.shift
+          ? { ...data, is_running: false, shift_id: null, operator_id: null, operator_name: null }
+          : data;
+        await db.machine_status.put({ ...status, _cached_at: new Date().toISOString() });
+        return status;
       }
     } catch {}
   }

@@ -315,8 +315,8 @@ export function OperatorApp() {
           </div>
         ) : blocked && !submittedShift && !correctionShift ? (
           <div className="bg-[#EF4444]/10 border-b border-[#EF4444]/30 px-4 py-2.5">
-            <p className="font-logo text-[10px] text-[#EF4444] tracking-wider text-center">
-              🔒 {machineBlocked.operator_name} is running {activeMachine?.name}
+            <p className="font-logo text-sm text-[#EF4444] text-center">
+              {machineBlocked.operator_name} is running {activeMachine?.name}
             </p>
           </div>
         ) : null
@@ -325,16 +325,16 @@ export function OperatorApp() {
         {workSession && !submittedShift && !correctionShift && (
           <div className="operator-pin-icons grid grid-cols-3 gap-3 mb-4">
             <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
-              <span className="w-14 h-14 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
-              <span className="font-logo text-[10px] text-[#F2F0EA]">Report</span>
+              <span className="w-16 h-16 rounded-2xl bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
+              <span className="font-logo text-xs text-[#F2F0EA]">Report</span>
             </button>
             <button type="button" onClick={() => setShowFuel(true)} className="flex flex-col items-center gap-1.5 py-2">
-              <span className="w-14 h-14 rounded-2xl bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
-              <span className="font-logo text-[10px] text-[#F2F0EA]">Diesel</span>
+              <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
+              <span className="font-logo text-xs text-[#F2F0EA]">Diesel</span>
             </button>
             <button type="button" onClick={() => setShowInbox(true)} className="relative flex flex-col items-center gap-1.5 py-2">
-              <span className="w-14 h-14 rounded-2xl bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
-              <span className="font-logo text-[10px] text-[#F2F0EA]">Inbox</span>
+              <span className="w-16 h-16 rounded-2xl bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
+              <span className="font-logo text-xs text-[#F2F0EA]">Inbox</span>
               {inboxCount > 0 && (
                 <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">{inboxCount}</span>
               )}
@@ -440,7 +440,7 @@ export function OperatorApp() {
               </>
             )}
 
-            {workSession && prestartDone && !sessionShift && !sessionDowntime && !blocked && (
+            {workSession && prestartDone && !sessionShift && !sessionDowntime && (
               <>
                 <FormSection title="Opening hour meter" description={`Take a photo of the meter. Last verified reading: ${hourMeter}h.`} accent="#15803D">
                   <MeterPhoto

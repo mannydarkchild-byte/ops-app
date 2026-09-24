@@ -65,6 +65,16 @@ export async function readTable(table) {
   return database[table].toArray();
 }
 
+/** Remove a local row and any unfinished sync-queue items for it */
+export async function dropLocalRecord(table, id) {
+  const database = await ensureDB();
+  if (database[table]) await database[table].delete(id);
+  const queued = await database.sync_queue
+    .filter((q) => q.table === table && q.record_id === id)
+    .toArray();
+  await Promise.all(queued.map((q) => database.sync_queue.delete(q.queue_id)));
+}
+
 /** Save record locally and enqueue for sync */
 export async function saveLocal(table, record, { enqueue = true } = {}) {
   const database = await ensureDB();

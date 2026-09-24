@@ -2,7 +2,7 @@ import { getDB } from "./db.js";
 import { supabase } from "./supabase.js";
 import { SHIFT } from "./constants.js";
 import { findOpenStopForShift } from "./shiftMetrics.js";
-import { fetchMachineStatus, isBlockedByOther } from "./machineStatus.js";
+import { fetchServerOpenShift } from "./machineStatus.js";
 
 /**
  * Offline-first machine lock.
@@ -11,32 +11,21 @@ import { fetchMachineStatus, isBlockedByOther } from "./machineStatus.js";
 export async function acquireMachineLock(machineId, shiftId, operatorId) {
   const db = getDB();
 
-  const remoteStatus = await fetchMachineStatus(machineId);
-  if (isBlockedByOther(remoteStatus, operatorId)) {
+  const remoteOpen = await fetchServerOpenShift(machineId);
+  if (remoteOpen.known && remoteOpen.shift && remoteOpen.shift.operator_id !== operatorId) {
     return {
       accepted: false,
-      reason: `${remoteStatus.operator_name || "Another operator"} is already running this machine`,
-      operatorName: remoteStatus.operator_name,
+      reason: `${remoteOpen.shift.operator_name || "Another operator"} is already running this machine`,
+      operatorName: remoteOpen.shift.operator_name,
     };
   }
 
   const existing = await db.machine_locks.get(machineId);
   if (existing?.status === "locked" && existing.operator_id !== operatorId && existing.shift_id !== shiftId) {
-    let serverClear = false;
-    if (navigator.onLine) {
-      const { data: openShifts, error: shiftError } = await supabase
-        .from("shifts")
-        .select("id")
-        .eq("machine_id", machineId)
-        .eq("shift_status", "RUNNING")
-        .limit(1);
-      serverClear = !shiftError && !openShifts?.length;
-    }
-    if (serverClear) {
-      await db.machine_locks.delete(machineId);
-    } else {
+    if (remoteOpen.known && remoteOpen.shift) {
       return { accepted: false, reason: "Machine running on another device" };
     }
+    await db.machine_locks.delete(machineId);
   }
 
   const lock = {
@@ -58,13 +47,8 @@ export async function acquireMachineLock(machineId, shiftId, operatorId) {
       });
       if (error) throw error;
       if (data === false) {
-        const { data: openShifts, error: shiftError } = await supabase
-          .from("shifts")
-          .select("id")
-          .eq("machine_id", machineId)
-          .eq("shift_status", "RUNNING")
-          .limit(1);
-        if (!shiftError && !openShifts?.length) {
+        const remote = await fetchServerOpenShift(machineId);
+        if (!remote.shift) {
           await supabase.rpc("stop_machine", { p_machine_id: machineId });
           const retry = await supabase.rpc("start_machine", { p_machine_id: machineId, p_shift_id: shiftId });
           if (!retry.error && retry.data !== false) {

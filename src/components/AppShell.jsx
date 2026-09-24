@@ -210,10 +210,10 @@ export function AppHeader({ right, subtitle }) {
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <LogoMark size="sm" />
           <div className="min-w-0">
-            <span className="font-logo text-base text-ops-gold">OPS</span>
-            <p className="font-body text-sm text-ops-text truncate leading-tight">
+            <span className="font-logo text-lg text-ops-gold">OPS</span>
+            <p className="font-body text-base text-ops-text truncate leading-tight">
               {displayName}
-              <span className={`ml-2 font-ui text-xs capitalize ${colors.text}`}>{roleLabel}</span>
+              <span className={`ml-2 font-ui text-sm capitalize ${colors.text}`}>{roleLabel}</span>
             </p>
           </div>
         </div>
@@ -307,7 +307,7 @@ export function AppPage({
         />
       )}
       <SyncErrorPanel />
-      <main className={`p-3 sm:p-4 ${maxWidth} mx-auto`}>{children}</main>
+      <main className={`${outdoor ? "p-4 sm:p-5" : "p-3 sm:p-4"} ${maxWidth} mx-auto`}>{children}</main>
     </div>
   );
 }

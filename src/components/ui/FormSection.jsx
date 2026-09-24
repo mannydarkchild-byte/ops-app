@@ -7,9 +7,9 @@ export function FormSection({ step, title, description, children, accent = "#F5C
           Step {step}
         </p>
       )}
-      <h3 className="font-ui text-base font-semibold text-ops-text mb-1">{title}</h3>
+      <h3 className="font-ui text-lg font-semibold text-ops-text mb-1">{title}</h3>
       {description && (
-        <p className="font-body text-sm text-ops-muted mb-4 leading-relaxed">{description}</p>
+        <p className="font-body text-base text-ops-muted mb-4 leading-relaxed">{description}</p>
       )}
       {children}
     </section>
