@@ -487,7 +487,7 @@ export function OperatorApp() {
           <div className="mb-4 bg-[#1a1212] border border-[#EF4444]/40 rounded-2xl p-4">
             <p className="font-logo text-[#EF4444] mb-2">Open shift still on this machine</p>
             <p className="font-body text-[#F2F0EA]/75 mb-3">
-              This leftover is blocking a new start. Edit it, or delete it to clean your workspace.
+              This leftover is blocking a new start. Enter the closing meter and send it for sign-off, or delete it.
             </p>
             {leftoverOpen.map((shift) => (
               <div key={shift.id} className="mb-3 last:mb-0">

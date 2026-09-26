@@ -498,6 +498,73 @@ export async function updateOwnShift(user, shift, patch = {}) {
   return updated;
 }
 
+/** Operator finishes a leftover RUNNING shift so the machine can start again. */
+export async function submitOwnOpenShift(user, shift, {
+  endHour,
+  endedAt,
+  assignedSupervisor,
+  notes,
+  startHour,
+  startedAt,
+} = {}) {
+  assertOwnEditableShift(user, shift);
+  if (getShiftStatus(shift) !== SHIFT.RUNNING) {
+    throw new Error("This shift is not still open");
+  }
+  const startMeter = startHour != null && startHour !== "" ? Number(startHour) : Number(shift.start_hour_meter);
+  const h = Number(endHour);
+  if (!Number.isFinite(startMeter) || startMeter < 0) throw new Error("Enter a valid opening meter");
+  if (!Number.isFinite(h) || h < startMeter) throw new Error("Enter a closing meter at or above the opening reading");
+  const supervisor = assignedSupervisor || (shift.assigned_supervisor_id
+    ? { id: shift.assigned_supervisor_id, name: shift.assigned_supervisor_name }
+    : null);
+  if (!supervisor?.id) throw new Error("Select the supervisor who must sign this off");
+  const endTime = endedAt || nowISO();
+  const events = await closeOpenDowntimeForShift(shift.id, endTime);
+  const downtimeMinutes = shiftDowntimeMinutes(events, shift.id);
+  const runtimeMinutes = shiftRuntimeMinutes(startedAt || shift.started_at, endTime, downtimeMinutes);
+  const now = nowISO();
+  const ended = {
+    ...shift,
+    start_hour_meter: startMeter,
+    end_hour_meter: h,
+    hours_worked: meterHoursWorked(startMeter, h),
+    runtime_minutes: runtimeMinutes,
+    downtime_minutes: downtimeMinutes,
+    started_at: startedAt || shift.started_at,
+    ended_at: endTime,
+    notes: notes !== undefined ? notes : shift.notes,
+    shift_status: SHIFT.WAITING_FOR_VERIFICATION,
+    verification_token: shift.verification_token || crypto.randomUUID?.() || makeId("TOK"),
+    assigned_supervisor_id: supervisor.id,
+    assigned_supervisor_name: supervisor.name,
+    updated_at: now,
+  };
+  await saveLocal("shifts", ended);
+  if (shift.machine_id) await releaseMachineLock(shift.machine_id);
+  if (navigator.onLine) {
+    try {
+      await supabase.from("shifts").update({
+        start_hour_meter: ended.start_hour_meter,
+        end_hour_meter: ended.end_hour_meter,
+        hours_worked: ended.hours_worked,
+        runtime_minutes: ended.runtime_minutes,
+        downtime_minutes: ended.downtime_minutes,
+        started_at: ended.started_at,
+        ended_at: ended.ended_at,
+        notes: ended.notes,
+        shift_status: ended.shift_status,
+        verification_token: ended.verification_token,
+        assigned_supervisor_id: ended.assigned_supervisor_id,
+        assigned_supervisor_name: ended.assigned_supervisor_name,
+        updated_at: now,
+      }).eq("id", shift.id).eq("operator_id", user.id);
+    } catch {}
+  }
+  scheduleSync();
+  return ended;
+}
+
 /** Operator removes an unsigned shift that is cluttering or blocking start. */
 export async function deleteOwnShift(user, shift) {
   assertOwnEditableShift(user, shift);

@@ -92,7 +92,7 @@ export function hasCompletedPrestart(inspections, userId, machineId, clockIn, ex
     const count = rows.filter((i) => i.inspection_id === batch).length;
     if (count >= required) return true;
   }
-  return rows.length > 0;
+  return false;
 }
 
 /** Primary machine for v1 (Warrior 2100) — falls back to first active site machine */

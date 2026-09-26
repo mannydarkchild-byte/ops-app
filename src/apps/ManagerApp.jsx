@@ -19,7 +19,7 @@ import {
 import { ManagerPartsPanel } from "../components/manager/ManagerPartsPanel.jsx";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
-import { downloadShiftDailyReport, openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
+import { openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
@@ -310,7 +310,7 @@ export function ManagerApp() {
   }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings]);
 
   const getReportPeriod = () => {
-    const presets = getDatePresets();
+    const presets = getDatePresets(siteConfig.billing_cycle_start_day);
     const p = presets.find((x) => x.id === reportPreset) || presets[4];
     return { start: p.start, end: p.end, label: p.label };
   };
@@ -330,14 +330,6 @@ export function ManagerApp() {
       setReportPreview(doc);
     } catch (e) {
       showAlert("Could not open report", e.message, "error");
-    }
-  };
-
-  const handleDownloadReport = async (shift) => {
-    try {
-      await downloadShiftDailyReport(shift, { ...reportContext, machine: primaryMachine });
-    } catch (e) {
-      showAlert("Could not save report", e.message, "error");
     }
   };
 
@@ -525,13 +517,6 @@ export function ManagerApp() {
             >
               IMPORT BANK EXCEL
             </button>
-            <button
-              type="button"
-              onClick={() => setShowImportExpenses(true)}
-              className="w-full border border-[#F5C518]/50 text-[#F5C518] py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
-            >
-              IMPORT BANK EXCEL
-            </button>
 
             <div className="flex flex-wrap gap-1">
               {EXPENSE_FILTERS.map((f) => (
@@ -619,7 +604,7 @@ export function ManagerApp() {
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
               <h3 className="font-logo text-[#F5C518] text-sm mb-3">OPERATIONS REPORT</h3>
               <div className="flex flex-wrap gap-2 mb-4">
-                {getDatePresets().map((p) => (
+                {getDatePresets(siteConfig.billing_cycle_start_day).map((p) => (
                   <button
                     key={p.id}
                     type="button"
@@ -689,7 +674,8 @@ export function ManagerApp() {
                       shift={r}
                       machineName={primaryMachine.name}
                       onViewReport={handleViewReport}
-                      onDownloadReport={handleDownloadReport}
+                      onDownloadReport={handleViewReport}
+                      onShareReport={handleViewReport}
                     />
                   ))}
                 </div>
@@ -717,17 +703,6 @@ export function ManagerApp() {
           site={activeSite}
           profiles={profiles}
           onDone={refreshLocal}
-        />
-      )}
-
-      {showImportExpenses && (
-        <ImportExpensesModal
-          onClose={() => setShowImportExpenses(false)}
-          user={user}
-          machine={primaryMachine}
-          site={activeSite}
-          existing={expenses}
-          onDone={() => { refreshLocal(); showAlert("Expenses saved", "Bank payments were added and will sync.", "success"); }}
         />
       )}
 

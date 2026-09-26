@@ -23,6 +23,7 @@ export function OpsProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [syncState, setSyncState] = useState({ status: "idle", pending: 0, errors: [] });
 
   const [sites, setSites] = useState([]);
@@ -169,6 +170,13 @@ export function OpsProvider({ children }) {
     await signOut();
     setUser(null);
     setSession(null);
+    setPasswordRecovery(false);
+  };
+
+  const handleSetPassword = async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw new Error(error.message || "Could not set a new password");
+    setPasswordRecovery(false);
   };
 
   const persistAndSync = useCallback(async (table, record) => {
@@ -274,6 +282,9 @@ export function OpsProvider({ children }) {
     })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordRecovery(true);
+      }
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         if (!s?.user) return;
         try {
@@ -351,7 +362,7 @@ export function OpsProvider({ children }) {
   }, [user?.id, user?.site_id, activeSite?.id, refreshLocal]);
 
   const value = {
-    user, session, loading, authError,
+    user, session, loading, authError, passwordRecovery,
     syncState, syncNow,
     sites, machines, profiles, activeSite, activeMachine,
     shifts, events, expenses, inspections, issues, issueMessages,
@@ -360,7 +371,7 @@ export function OpsProvider({ children }) {
     machineRun, workSession, downtime, hourMeter, machineStatus, machineBlocked,
     refreshLocal, persistAndSync, saveLocal,
     theme, setTheme, toggleTheme,
-    setAuthError, signIn: handleSignIn, signOut: handleSignOut,
+    setAuthError, signIn: handleSignIn, signOut: handleSignOut, setPassword: handleSetPassword,
   };
 
   return <OpsContext.Provider value={value}>{children}</OpsContext.Provider>;

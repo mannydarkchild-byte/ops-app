@@ -899,11 +899,22 @@ export async function openMechanicInspectionReport(batch, items, { machine, site
   const photoUrls = Object.fromEntries(Object.entries(photoMap).map(([id, { url }]) => [id, url]));
   const logoUrl = await resolveLogoDataUrl();
   const html = generateMechanicInspectionReportHTML(batch, items, { machine, site, mechanicName, photoUrls, logoUrl });
-  const w = window.open("", "_blank");
-  if (!w) throw new Error("Pop-up blocked — allow pop-ups to view the inspection report.");
-  w.document.write(html);
-  w.document.close();
-  w.document.title = `Mechanic Inspection · ${machine?.name || "Machine"} · ${fmtDateShort(batch.timestamp || items[0]?.timestamp)}`;
+  const title = `Mechanic Inspection · ${machine?.name || "Machine"} · ${fmtDateShort(batch.timestamp || items[0]?.timestamp)}`;
+  const sheets = [
+    {
+      name: "Inspection",
+      rows: [
+        ["Machine", machine?.name || ""],
+        ["Site", site?.name || ""],
+        ["Mechanic", mechanicName || ""],
+        ["When", fmtDateShort(batch.timestamp || items[0]?.timestamp)],
+        [],
+        ["Item", "Status", "Remarks"],
+        ...(items || []).map((i) => [i.item_name || i.name || "", i.status || "", i.remarks || i.note || ""]),
+      ],
+    },
+  ];
+  return { html, title, sheets };
 }
 
 export async function prepareOperationsReport(data, period, machine, site) {

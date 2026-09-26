@@ -14,6 +14,7 @@ import { fmtDate } from "../lib/utils.js";
 import { saveLocal } from "../lib/db.js";
 import { scheduleSync } from "../lib/sync/engine.js";
 import { openMechanicInspectionReport } from "../services/reports.js";
+import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
@@ -41,6 +42,7 @@ export function MechanicApp() {
   const [showParts, setShowParts] = useState(false);
   const [busy, setBusy] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
+  const [reportPreview, setReportPreview] = useState(null);
 
   const [inspectionFlow, setInspectionFlow] = useState(null);
   const [inspectionMachineId, setInspectionMachineId] = useState("");
@@ -154,11 +156,12 @@ export function MechanicApp() {
   const handleViewInspectionReport = async (batch) => {
     const machine = siteMachines.find((m) => m.id === batch.machine_id) || machines.find((m) => m.id === batch.machine_id);
     try {
-      await openMechanicInspectionReport(batch, batch.items, {
+      const doc = await openMechanicInspectionReport(batch, batch.items, {
         machine,
         site: activeSite,
         mechanicName: batch.mechanic_name || user?.name,
       });
+      setReportPreview(doc);
     } catch (e) {
       showAlert("Could not open report", e.message);
     }
@@ -317,7 +320,7 @@ export function MechanicApp() {
                     onClick={() => handleViewInspectionReport(batch)}
                     className="w-full border border-[#F5C518] text-[#F5C518] py-2.5 rounded-lg font-logo text-xs tracking-wider"
                   >
-                    VIEW / PRINT REPORT
+                    VIEW REPORT
                   </button>
                 </div>
               );
@@ -420,6 +423,15 @@ export function MechanicApp() {
           inventoryItems={inventoryItems}
           onSubmit={handleRequestParts}
           busy={busy}
+        />
+      )}
+
+      {reportPreview && (
+        <ReportPreviewModal
+          html={reportPreview.html}
+          title={reportPreview.title}
+          sheets={reportPreview.sheets}
+          onClose={() => setReportPreview(null)}
         />
       )}
     </AppPage>

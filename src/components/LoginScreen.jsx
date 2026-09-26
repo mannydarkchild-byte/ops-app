@@ -3,10 +3,11 @@ import { supabase } from "../lib/supabase.js";
 import { LogoMark, ThemeToggle } from "./AppShell.jsx";
 import { Button } from "./ui/Button.jsx";
 
-export function LoginScreen({ onLogin, error, loading }) {
-  const [mode, setMode] = useState("login");
+export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPassword }) {
+  const [mode, setMode] = useState(forcedMode || "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
   const [busy, setBusy] = useState(false);
   const [resetMsg, setResetMsg] = useState("");
   const [resetErr, setResetErr] = useState("");
@@ -22,10 +23,26 @@ export function LoginScreen({ onLogin, error, loading }) {
     if (!email) { setResetErr("Enter your email"); return; }
     setBusy(true);
     setResetErr("");
-    const { error: e } = await supabase.auth.resetPasswordForEmail(email);
+    const { error: e } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/`,
+    });
     setBusy(false);
     if (e) setResetErr(e.message);
     else setResetMsg("Check your email for reset link.");
+  };
+
+  const submitNewPassword = async () => {
+    if (!password || password.length < 6) { setResetErr("Use at least 6 characters"); return; }
+    if (password !== password2) { setResetErr("Those passwords do not match"); return; }
+    setBusy(true);
+    setResetErr("");
+    try {
+      await onSetPassword(password);
+    } catch (e) {
+      setResetErr(e.message || "Could not set a new password");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -40,7 +57,11 @@ export function LoginScreen({ onLogin, error, loading }) {
           <LogoMark size="lg" />
           <h1 className="font-logo text-ops-gold login-title">OPS</h1>
           <p className="font-body text-ops-text login-copy">
-            {mode === "login" ? "Open the app on this phone. Clock-in comes after that." : "We will email you a reset link."}
+            {mode === "newpass"
+              ? "Choose a new password for this phone."
+              : mode === "login"
+                ? "Open the app on this phone. Clock-in comes after that."
+                : "We will email you a reset link."}
           </p>
         </div>
 
@@ -93,6 +114,44 @@ export function LoginScreen({ onLogin, error, loading }) {
               Forgot password?
             </button>
             <p className="login-note">Works offline after the first time you open it.</p>
+          </form>
+        ) : mode === "newpass" ? (
+          <form
+            className="login-form"
+            onSubmit={(e) => { e.preventDefault(); submitNewPassword(); }}
+          >
+            <label className="login-label">
+              <span>New password</span>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="New password"
+                className="login-field"
+              />
+            </label>
+            <label className="login-label">
+              <span>Type it again</span>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={password2}
+                onChange={(e) => setPassword2(e.target.value)}
+                placeholder="Repeat password"
+                className="login-field"
+              />
+            </label>
+            {resetErr && <p className="login-error">{resetErr}</p>}
+            <Button
+              variant="primary"
+              size="md"
+              className="login-go font-logo"
+              onClick={submitNewPassword}
+              disabled={busy || !password || !password2}
+            >
+              {busy ? "Saving…" : "Save new password"}
+            </Button>
           </form>
         ) : (
           <form

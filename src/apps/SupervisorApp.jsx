@@ -216,11 +216,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const displayedPendingShifts = useMemo(() => {
 
-    if (verifyScope === "all") return pendingShifts;
+    const list = verifyScope === "all"
+      ? pendingShifts
+      : pendingShifts.filter((s) => s.assigned_supervisor_id === user?.id);
+    if (!verifyShiftId) return list;
+    return [...list].sort((a, b) => (a.id === verifyShiftId ? -1 : b.id === verifyShiftId ? 1 : 0));
 
-    return pendingShifts.filter((s) => s.assigned_supervisor_id === user?.id);
-
-  }, [pendingShifts, verifyScope, user?.id]);
+  }, [pendingShifts, verifyScope, user?.id, verifyShiftId]);
 
 
 
@@ -529,6 +531,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
     if (!verifyShiftId || verifyOpened.current) return;
     verifyOpened.current = true;
     setTab("verify");
+    setVerifyScope("all");
     onVerifyConsumed?.();
   }, [verifyShiftId, onVerifyConsumed]);
 

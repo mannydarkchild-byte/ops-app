@@ -45,7 +45,7 @@ function forgetVerifyParams() {
 }
 
 function RoleRouter() {
-  const { user, loading, authError, signIn } = useOps();
+  const { user, loading, authError, signIn, passwordRecovery, setPassword } = useOps();
   const [verifyParams, setVerifyParams] = useState(consumeVerifyParams);
 
   const clearVerifyLink = () => {
@@ -63,6 +63,10 @@ function RoleRouter() {
     </div>
   );
 }
+
+  if (passwordRecovery) {
+    return <LoginScreen mode="newpass" onSetPassword={setPassword} loading={loading} />;
+  }
 
   if (!user) {
     return <LoginScreen onLogin={signIn} error={authError} loading={loading} />;
