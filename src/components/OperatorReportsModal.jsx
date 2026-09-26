@@ -187,6 +187,7 @@ export function OperatorReportsModal({
                   </div>
                   <p className={`font-logo text-sm mb-3 ${BUCKET_COLOR[bucket]}`}>{BUCKET_LABEL[bucket]}</p>
                   {canView ? (
+                    <>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
@@ -206,6 +207,7 @@ export function OperatorReportsModal({
                       </button>
                     </div>
                     <ShiftPhotoFix shift={shift} user={user} onDone={() => setBusyId(null)} />
+                    </>
                   ) : (
                     <p className="font-body text-base text-[#F2F0EA]/55">
                       Finish the day to send this report to your supervisor.

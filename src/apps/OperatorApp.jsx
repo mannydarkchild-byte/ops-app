@@ -314,12 +314,18 @@ export function OperatorApp() {
       const { ended } = await wf.endMachineDay(user, activeMachine, activeSite, sessionShift, {
         endHour, photoRef: endPhotoRef, assignedSupervisor: sup,
       });
-      if (workSession) await wf.clockOut(user, workSession, { note: "End of machine day" });
       setShowEndDay(false);
       setShowRestart(false);
       setShowStop(false);
       setEndHour(""); setEndPhotoRef(null); setEndPhotoPreview(null);
       setSubmittedShift(ended);
+      if (workSession) {
+        try {
+          await wf.clockOut(user, workSession, { note: "End of machine day" });
+        } catch (clockErr) {
+          showAlert("Shift sent — clock out still needed", clockErr.message || "Tap Clock out to close your time.", "warning");
+        }
+      }
       await refreshLocal();
     } catch (e) { showAlert("Error", e.message, "error"); }
   };
@@ -333,6 +339,35 @@ export function OperatorApp() {
   };
 
   const dismissSubmitted = () => setSubmittedShift(null);
+
+  const handleClockOutAfterShift = async () => {
+    if (!workSession) return;
+    try {
+      await wf.clockOut(user, workSession, { note: "Clocked out after shift sent" });
+      await refreshLocal();
+    } catch (e) {
+      showAlert("Could not clock out", e.message, "error");
+    }
+  };
+
+  const handleClockOutTap = () => {
+    if (sessionShift) {
+      openEndDay();
+      return;
+    }
+    const alreadySent = submittedShift || shifts.some((s) => (
+      s.operator_id === user?.id
+      && workSession
+      && getShiftStatus(s) !== SHIFT.RUNNING
+      && s.started_at
+      && new Date(s.started_at) >= new Date(workSession.clock_in)
+    ));
+    if (alreadySent) {
+      handleClockOutAfterShift();
+      return;
+    }
+    setShowEarlyClockOut(true);
+  };
 
   const machineStatus = sessionShift ? "running" : sessionDowntime ? "stopped" : null;
 
@@ -359,7 +394,7 @@ export function OperatorApp() {
         ) : null
       }
     >
-        {workSession && !submittedShift && (
+        {workSession && (
           <div className="operator-pin-icons mb-4">
             <div className="operator-time-bar">
               <div className="min-w-0">
@@ -368,11 +403,9 @@ export function OperatorApp() {
                   On site since {new Date(workSession.clock_in).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
                 </p>
               </div>
-              {!sessionShift && (
-                <button type="button" onClick={() => setShowEarlyClockOut(true)} className="operator-clock-out font-logo">
-                  <IconLeave /> Clock out
-                </button>
-              )}
+              <button type="button" onClick={handleClockOutTap} className="operator-clock-out font-logo">
+                <IconLeave /> Clock out
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <button type="button" onClick={() => setShowMyReports(true)} className="relative flex flex-col items-center gap-1.5 py-2">
@@ -460,11 +493,16 @@ export function OperatorApp() {
                 Runtime {Math.round(submittedShift.runtime_minutes || 0)}m · Downtime {Math.round(submittedShift.downtime_minutes || 0)}m
               </p>
             )}
-            <p className="font-body text-sm text-[#F2F0EA]/60 mb-4">
+            <p className="font-body text-sm text-[#F2F0EA]/60 mb-2">
               {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED
                 ? "Waiting for supervisor to sign off."
-                : `Waiting for ${submittedShift.assigned_supervisor_name || "supervisor"} to sign off.`}
+                : `Waiting for ${submittedShift.assigned_supervisor_name || "supervisor"} to sign off. That is why the report says pending — your day is already sent.`}
             </p>
+            {workSession && (
+              <button type="button" onClick={handleClockOutAfterShift} className="w-full mb-3 bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold">
+                Clock out now
+              </button>
+            )}
             <SupervisorWhatsAppButtons
               supervisors={siteSupervisors}
               shift={submittedShift}

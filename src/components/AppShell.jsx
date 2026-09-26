@@ -326,11 +326,12 @@ export function AppPage({
   alert,
   banner,
   outdoor = false,
+  leaveApp = false,
 }) {
   return (
     <div className={`min-h-screen bg-ops-black text-ops-text pb-8 mobile-safe-bottom ${outdoor ? "operator-outdoor" : ""}`}>
       {alert}
-      <AppHeader subtitle={subtitle} context={context} showSite={showSite} leaveApp={outdoor} />
+      <AppHeader subtitle={subtitle} context={context} showSite={showSite} leaveApp={leaveApp || outdoor} />
       <OfflineBanner />
       <SyncQueueHint hasTabBar={Boolean(tabs?.length)} />
       {banner}

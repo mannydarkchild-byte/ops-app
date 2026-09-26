@@ -35,18 +35,34 @@ export async function clockIn(user, machine, site, { assignedSupervisor } = {}) 
 }
 
 export async function clockOut(user, workSession, { note, signatureRef, signatureName }) {
+  if (!workSession?.id) throw new Error("No active session to clock out");
   const now = nowISO();
   const updated = {
     ...workSession,
     clock_out: now,
     status: "ended",
-    notes: note || null,
+    notes: note || workSession.notes || null,
     supervisor_signature_ref: signatureRef,
     signature_name: signatureName,
     signature_date: now,
     updated_at: now,
   };
   await saveLocal("work_sessions", updated);
+  try {
+    await addEvent(user, { id: workSession.machine_id }, { id: workSession.site_id }, "CLOCK_OUT", {
+      note: note || "Clocked out",
+    });
+  } catch {}
+  if (navigator.onLine) {
+    try {
+      await supabase.from("work_sessions").update({
+        clock_out: now,
+        status: "ended",
+        notes: updated.notes,
+        updated_at: now,
+      }).eq("id", workSession.id);
+    } catch {}
+  }
   scheduleSync();
   return updated;
 }

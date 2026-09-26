@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useOps } from "../context/OpsContext.jsx";
 
@@ -127,7 +127,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
     refreshTick();
     const refreshId = setInterval(refreshTick, 15000);
     return () => { cancelled = true; clearInterval(refreshId); };
-  }, [user?.id, tab, refreshLocal]);
+  }, [user?.id, refreshLocal]);
 
   const siteMachines = useMemo(
 
@@ -550,9 +550,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
 
 
+  const verifyOpened = useRef(false);
+
   useEffect(() => {
 
-    if (!verifyShiftId) return;
+    if (!verifyShiftId || verifyOpened.current) return;
 
     const shift = shifts.find((s) => s.id === verifyShiftId);
 
@@ -561,6 +563,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
     const tokenOk = !verifyToken || shift.verification_token === verifyToken || !shift.verification_token;
 
     if (tokenOk && [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(getShiftStatus(shift))) {
+
+      verifyOpened.current = true;
 
       setTab("verify");
 
@@ -736,7 +740,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
       onTabChange={setTab}
       onSync={syncNow}
       maxWidth="max-w-2xl"
-      outdoor
+      leaveApp
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
@@ -748,7 +752,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
             {myPendingVerify > 0 && (
 
-              <button type="button" onClick={() => setTab("verify")} className="font-logo text-sm text-[#F5C518] hover:underline">
+              <button type="button" onClick={() => setTab("verify")} className="ops-chip font-logo text-sm text-[#F5C518] hover:underline">
 
                 {myPendingVerify} to sign off
 
@@ -758,7 +762,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
             {criticalIssues > 0 && (
 
-              <button type="button" onClick={() => setTab("issues")} className="font-logo text-[10px] text-[#EF4444] hover:underline">
+              <button type="button" onClick={() => setTab("issues")} className="ops-chip font-logo text-sm text-[#EF4444] hover:underline">
 
                 {criticalIssues} critical issue{criticalIssues !== 1 ? "s" : ""}
 
@@ -768,7 +772,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
             {openShiftsToClose.length > 0 && (
 
-              <button type="button" onClick={() => setTab("live")} className="font-logo text-sm text-[#F5C518] hover:underline">
+              <button type="button" onClick={() => setTab("live")} className="ops-chip font-logo text-sm text-[#F5C518] hover:underline">
 
                 {openShiftsToClose.length} open shift{openShiftsToClose.length !== 1 ? "s" : ""} to close
 
@@ -778,7 +782,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
             {stoppedMachines > 0 && (
 
-              <button type="button" onClick={() => setTab("live")} className="font-logo text-[10px] text-[#F97316] hover:underline">
+              <button type="button" onClick={() => setTab("live")} className="ops-chip font-logo text-sm text-[#F97316] hover:underline">
 
                 {stoppedMachines} machine{stoppedMachines !== 1 ? "s" : ""} stopped
 
