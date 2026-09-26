@@ -117,12 +117,12 @@ export async function resolveMediaRefsInRecord(record) {
   return stripUnresolvedMediaRefs(out);
 }
 
-export function pickMedia(kind, onResult) {
+export function pickMedia(kind, onResult, { fromGallery = false } = {}) {
   try {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = kind === "photo" ? "image/*" : kind === "audio" ? "audio/*" : "*/*";
-    input.capture = kind === "photo" ? "environment" : undefined;
+    if (kind === "photo" && !fromGallery) input.capture = "environment";
     input.style.display = "none";
     input.setAttribute("aria-hidden", "true");
 
@@ -157,7 +157,11 @@ export function pickMedia(kind, onResult) {
 }
 
 export function takePhoto(onResult) {
-  pickMedia("photo", onResult);
+  pickMedia("photo", onResult, { fromGallery: false });
+}
+
+export function pickGalleryPhoto(onResult) {
+  pickMedia("photo", onResult, { fromGallery: true });
 }
 
 /** Record voice note via MediaRecorder */

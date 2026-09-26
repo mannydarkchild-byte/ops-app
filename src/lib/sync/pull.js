@@ -25,6 +25,7 @@ const SITE_SCOPED_TABLES = new Set([
 ]);
 
 const CREATED_AT_TABLES = new Set(["issue_messages", "shift_corrections", "maintenance_parts", "inventory_movements"]);
+const CATALOG_TABLES = new Set(["sites", "machines", "profiles", "inventory_items", "site_settings"]);
 
 function applySiteFilter(query, table, siteId) {
   if (!siteId) return query;
@@ -129,12 +130,16 @@ export async function pullBootstrap({ siteId = null, daysBack = 90 } = {}) {
   for (const table of SYNC_TABLES) {
     try {
       let query = supabase.from(table).select("*");
-      if (!CREATED_AT_TABLES.has(table)) {
-        query = query.or(`updated_at.gte.${sinceISO},created_at.gte.${sinceISO}`);
-      } else {
-        query = query.gte("created_at", sinceISO);
+      if (!CATALOG_TABLES.has(table)) {
+        if (!CREATED_AT_TABLES.has(table)) {
+          query = query.or(`updated_at.gte.${sinceISO},created_at.gte.${sinceISO}`);
+        } else {
+          query = query.gte("created_at", sinceISO);
+        }
       }
-      query = applySiteFilter(query, table, siteId);
+      if (table !== "profiles") {
+        query = applySiteFilter(query, table, siteId);
+      }
       const { data, error } = await query.limit(5000);
       if (error) throw error;
       if (!data?.length) continue;
@@ -163,4 +168,16 @@ export async function pullBootstrap({ siteId = null, daysBack = 90 } = {}) {
 
   await setSyncMeta("bootstrapped_at", new Date().toISOString());
   return { pulled: totalPulled, errors };
+}
+
+/** Always refresh the people list — small table, must work offline after one Update. */
+export async function pullStaffDirectory() {
+  if (!navigator.onLine) return { pulled: 0 };
+  const { data, error } = await supabase.from("profiles").select("*");
+  if (error || !data?.length) return { pulled: 0, errors: error ? [error.message] : [] };
+  let pulled = 0;
+  for (const row of data) {
+    if (await mergeServerRow("profiles", row)) pulled += 1;
+  }
+  return { pulled };
 }

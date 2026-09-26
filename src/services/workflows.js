@@ -796,6 +796,61 @@ async function addEvent(user, machine, site, type, details = {}) {
   return ev;
 }
 
+/** Replace a blurry opening or closing hour-meter photo before sign-off. */
+export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, reading } = {}) {
+  if (!shift?.id) throw new Error("No shift to update");
+  if (!photoRef) throw new Error("Take or choose a clearer photo first");
+  if (getShiftStatus(shift) === SHIFT.VERIFIED) {
+    throw new Error("This shift is already signed off");
+  }
+  const now = nowISO();
+  const h = reading === "" || reading == null ? null : Number(reading);
+  if (h != null && (!Number.isFinite(h) || h < 0)) throw new Error("Enter a valid meter reading");
+
+  const type = side === "opening" ? "MACHINE_STARTED" : "METER_END_CAPTURED";
+  const events = await readTable("events");
+  const existing = events.find((e) => e.shift_id === shift.id && e.type === type);
+  if (existing) {
+    await saveLocal("events", {
+      ...existing,
+      photo_ref: photoRef,
+      note: [existing.note, `Photo replaced by ${actor?.name || "supervisor"}`].filter(Boolean).join(" | "),
+      updated_at: now,
+    });
+  } else {
+    await addEvent(actor, { id: shift.machine_id }, { id: shift.site_id }, type, {
+      shift_id: shift.id,
+      note: `Meter photo added by ${actor?.name || "supervisor"}`,
+      photo_ref: photoRef,
+    });
+  }
+
+  const patch = {
+    ...shift,
+    notes: [shift.notes, `Meter photo replaced by ${actor?.name || "supervisor"}`].filter(Boolean).join(" | "),
+    updated_at: now,
+  };
+  if (side === "opening" && h != null) {
+    patch.start_hour_meter = h;
+    if (shift.end_hour_meter != null) patch.hours_worked = meterHoursWorked(h, shift.end_hour_meter);
+  }
+  if (side === "closing" && h != null) {
+    patch.end_hour_meter = h;
+    patch.hours_worked = meterHoursWorked(shift.start_hour_meter, h);
+  }
+  await saveLocal("shifts", patch);
+  await recordHourReading(actor, { id: shift.machine_id }, { id: shift.site_id }, {
+    reading: h ?? Number(side === "opening" ? shift.start_hour_meter : shift.end_hour_meter) ?? 0,
+    photoRef,
+    readingAt: now,
+    source: "correction",
+    shiftId: shift.id,
+    notes: `${side} meter photo replaced`,
+  });
+  scheduleSync();
+  return patch;
+}
+
 export async function verifyShift(shift, supervisor, { action, reason, signatureDataUrl }) {
   if (action === "verify" && !signatureDataUrl) {
     throw new Error("Supervisor signature is required to verify");

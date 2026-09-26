@@ -1,4 +1,4 @@
-import { pickMedia } from "../../lib/media.js";
+import { pickGalleryPhoto, takePhoto } from "../../lib/media.js";
 
 /**
  * Hour meter capture — photo is required; operator reads value from photo manually.
@@ -18,8 +18,12 @@ export function MeterPhoto({
 }) {
   const hasPhoto = !!photo;
 
-  const handlePhoto = () => {
-    pickMedia("photo", ({ ref, data }) => onPhoto(ref, data));
+  const handleCamera = () => {
+    takePhoto(({ ref, data }) => onPhoto(ref, data));
+  };
+
+  const handleGallery = () => {
+    pickGalleryPhoto(({ ref, data }) => onPhoto(ref, data));
   };
 
   return (
@@ -31,16 +35,23 @@ export function MeterPhoto({
         </p>
         <button
           type="button"
-          onClick={handlePhoto}
+          onClick={handleCamera}
           className={`w-full min-h-[64px] py-5 rounded-xl font-logo font-bold text-lg tracking-wider border-2 active:scale-[0.99] ${
             hasPhoto
               ? "bg-[#22C55E] text-black border-[#22C55E]"
               : showPhotoError
                 ? "bg-[#0A0A0A] text-[#EF4444] border-[#EF4444]"
-                : "bg-[#0A0A0A] text-[#F2F0EA] border-[#2A2A2A]"
+                : "bg-[#F5C518] text-black border-[#F5C518]"
           }`}
         >
-          {hasPhoto ? "✓ METER PHOTO CAPTURED" : "📷 TAKE METER PHOTO"}
+          {hasPhoto ? "Retake with camera" : "Take photo with camera"}
+        </button>
+        <button
+          type="button"
+          onClick={handleGallery}
+          className="w-full mt-2 min-h-[56px] py-4 rounded-xl font-logo border-2 border-[#2A2A2A] text-[#F2F0EA]"
+        >
+          Use a photo already on this phone
         </button>
         {showPhotoError && !hasPhoto && (
           <p className="font-body text-xs text-[#EF4444] mt-2">Photo is required before you can continue.</p>

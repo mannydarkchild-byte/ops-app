@@ -5,6 +5,7 @@ import { SHIFT } from "../lib/constants.js";
 import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod } from "../lib/utils.js";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
+import { ShiftPhotoFix } from "./ShiftPhotoFix.jsx";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -204,6 +205,7 @@ export function OperatorReportsModal({
                         SAVE COPY
                       </button>
                     </div>
+                    <ShiftPhotoFix shift={shift} user={user} onDone={() => setBusyId(null)} />
                   ) : (
                     <p className="font-body text-base text-[#F2F0EA]/55">
                       Finish the day to send this report to your supervisor.

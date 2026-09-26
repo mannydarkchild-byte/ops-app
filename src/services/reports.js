@@ -29,48 +29,91 @@ async function resolveLogoDataUrl() {
 function reportPageStyles() {
   return `
   *{box-sizing:border-box}
-  body{margin:0;font-family:'Russo One',sans-serif;background:#F2F0EA;color:#2A2A2A;line-height:1.55;font-size:12px;letter-spacing:.04em;-webkit-font-smoothing:antialiased}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:#F2F0EA;color:#2A2A2A;line-height:1.5;font-size:14px;-webkit-font-smoothing:antialiased}
+  .font-brand{font-family:'Russo One',sans-serif;letter-spacing:.04em}
   .page{max-width:880px;margin:24px auto;background:#fff;border:1px solid #D9D7D0;min-height:calc(100vh - 48px)}
-  .header{padding:28px 40px 24px;border-bottom:3px solid #F5C518}
-  .header-row{display:flex;align-items:center;gap:24px}
-  .logo-wrap{flex-shrink:0;display:flex;align-items:center;justify-content:center}
-  .logo{width:80px;height:80px;border-radius:12px;border:2px solid #F5C518;object-fit:contain;background:#fff;padding:6px;display:block}
-  .logo-fallback{width:80px;height:80px;border-radius:12px;border:2px solid #F5C518;background:#FFFBEB;color:#F5C518;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center}
-  .header-text{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
-  .header h1{margin:0;font-size:20px;font-weight:400;color:#2A2A2A;letter-spacing:.08em;text-transform:uppercase;line-height:1.2}
-  .header-sub{margin:6px 0 0;font-size:14px;font-weight:400;color:#57534E;line-height:1.3;letter-spacing:.06em;text-transform:uppercase}
-  .header-meta{margin-top:8px;font-size:12px;color:#6B6960;display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px}
-  .header-meta span:not(:last-child)::after{content:"·";margin-left:20px;color:#C4C2BC}
-  .content{padding:28px 40px 40px}
-  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#D9D7D0;border:1px solid #D9D7D0;margin-bottom:28px}
-  .summary-cell{background:#fff;padding:16px 18px}
-  .summary-cell.highlight{background:#FFFBEB;border-left:3px solid #F5C518}
-  .summary-cell .label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6B6960;margin-bottom:4px;font-weight:400}
-  .summary-cell .value{font-size:20px;font-weight:400;color:#2A2A2A;letter-spacing:.04em}
-  .summary-cell.highlight .value{font-size:28px;color:#22C55E}
-  .summary-cell .sub{font-size:11px;color:#6B6960;margin-top:4px}
-  .timestamps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid #E8E6E0}
-  .timestamps .item .label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6B6960;margin-bottom:2px;font-weight:400}
-  .timestamps .item .value{font-size:12px;color:#2A2A2A}
-  section{margin-bottom:26px}
-  section h2{margin:0 0 10px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#2A2A2A;font-weight:400;padding-bottom:6px;border-bottom:1px solid #F5C518}
-  table{width:100%;border-collapse:collapse;font-size:11px}
-  thead th{text-align:left;padding:8px 10px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:400;color:#2A2A2A;background:#F2F0EA;border-bottom:2px solid #F5C518}
-  tbody td{padding:8px 10px;border-bottom:1px solid #E8E6E0;vertical-align:top;color:#2A2A2A}
-  tbody tr:last-child td{border-bottom:none}
-  .empty td{text-align:center;color:#6B6960;font-style:italic;padding:16px;border-bottom:none}
-  .callout{padding:14px 16px;background:#FFFBEB;border:1px solid #F5C518;border-left:3px solid #F5C518;margin-bottom:24px;font-size:11px;color:#57534E}
-  .footer{margin-top:28px;padding-top:14px;border-top:1px solid #E8E6E0;font-size:10px;color:#6B6960;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .note{font-size:11px;color:#6B6960;margin-top:10px;line-height:1.5}
-  @media print{
-    body{background:#fff;margin:0}
-    .page{margin:0;border:none;max-width:100%;min-height:auto}
-  }
+  .header{padding:28px 36px 22px;border-bottom:4px solid #F5C518}
+  .header-row{display:flex;align-items:center;gap:20px}
+  .logo-wrap{flex-shrink:0}
+  .logo{width:72px;height:72px;border-radius:12px;border:2px solid #F5C518;object-fit:contain;background:#fff;padding:6px;display:block}
+  .logo-fallback{width:72px;height:72px;border-radius:12px;border:2px solid #F5C518;background:#FFFBEB;color:#F5C518;font-size:16px;display:flex;align-items:center;justify-content:center}
+  .header-text{flex:1;min-width:0}
+  .header h1{margin:0;font-size:22px;color:#2A2A2A;text-transform:uppercase;line-height:1.15}
+  .header-sub{margin:6px 0 0;font-size:18px;color:#1C1917}
+  .header-meta{margin-top:8px;font-size:13px;color:#57534E;display:flex;flex-wrap:wrap;gap:6px 16px}
+  .content{padding:24px 36px 40px}
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+  .summary-cell{background:#FAFAF7;border:1px solid #E8E6E0;border-radius:12px;padding:16px 18px}
+  .summary-cell.highlight{background:#FFFBEB;border-color:#F5C518}
+  .summary-cell .label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6B6960;margin-bottom:4px}
+  .summary-cell .value{font-size:28px;color:#1C1917;line-height:1.1}
+  .summary-cell.highlight .value{color:#15803D}
+  .summary-cell .sub{font-size:13px;color:#57534E;margin-top:6px}
+  .timestamps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px}
+  .timestamps .item{background:#FAFAF7;border-radius:10px;padding:12px 14px}
+  .timestamps .item .label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6B6960;margin-bottom:4px}
+  .timestamps .item .value{font-size:14px;color:#1C1917}
+  section{margin-bottom:28px}
+  section h2{margin:0 0 12px;font-size:15px;text-transform:uppercase;color:#1C1917;padding-bottom:6px;border-bottom:2px solid #F5C518}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{text-align:left;padding:8px 10px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#57534E;background:#F2F0EA;border-bottom:2px solid #F5C518}
+  tbody td{padding:10px;border-bottom:1px solid #E8E6E0;vertical-align:top}
+  .empty td{text-align:center;color:#6B6960;font-style:italic;padding:16px}
+  .callout{padding:14px 16px;background:#FFFBEB;border-left:4px solid #F5C518;margin-bottom:20px;font-size:14px;color:#44403C}
+  .footer{margin-top:28px;padding-top:14px;border-top:1px solid #E8E6E0;font-size:12px;color:#6B6960;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .note{font-size:13px;color:#6B6960;margin-top:10px;line-height:1.45}
+  .chart-bar{display:flex;height:22px;border-radius:999px;overflow:hidden;background:#E8E6E0}
+  .chart-bar-run{background:#22C55E}
+  .chart-bar-down{background:#EF4444}
+  .chart-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:13px}
+  .leg-run::before,.leg-down::before{content:"";display:inline-block;width:10px;height:10px;border-radius:99px;margin-right:6px}
+  .leg-run::before{background:#22C55E}
+  .leg-down::before{background:#EF4444}
+  .hbar{margin:8px 0 12px}
+  .hbar-label{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:4px}
+  .hbar-track{height:12px;background:#F2F0EA;border-radius:99px;overflow:hidden}
+  .hbar-fill{height:100%;background:#EF4444;border-radius:99px}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .tile{border-radius:12px;padding:12px;text-align:center;border:1px solid #E8E6E0}
+  .tile strong{display:block;font-size:24px;line-height:1.1}
+  .tile span{font-size:12px;color:#57534E}
+  .tile-ok{background:#ECFDF5}
+  .tile-act{background:#FFFBEB}
+  .tile-bad{background:#FEF2F2}
+  @media print{body{background:#fff}.page{margin:0;border:none;max-width:100%}}
   @media (max-width:640px){
-    .header,.content{padding:20px}
-    .summary,.timestamps{grid-template-columns:1fr}
-    .header-meta span:not(:last-child)::after{display:none}
+    .header,.content{padding:18px}
+    .summary,.timestamps,.tiles{grid-template-columns:1fr}
   }`;
+}
+
+function runStopChart(runtimeMin, downtimeMin) {
+  const run = Math.max(0, Number(runtimeMin || 0));
+  const down = Math.max(0, Number(downtimeMin || 0));
+  const total = Math.max(1, run + down);
+  return `<div class="chart-bar" role="img" aria-label="Runtime versus downtime">
+    <span class="chart-bar-run" style="width:${(run / total) * 100}%"></span>
+    <span class="chart-bar-down" style="width:${(down / total) * 100}%"></span>
+  </div>
+  <div class="chart-legend">
+    <span class="leg-run">Running ${formatDurationMinutes(run)}</span>
+    <span class="leg-down">Stopped ${formatDurationMinutes(down)}</span>
+  </div>`;
+}
+
+function downtimeReasonChart(stops) {
+  const byReason = {};
+  for (const s of stops) {
+    const key = s.reason || "Other";
+    byReason[key] = (byReason[key] || 0) + Number(s.downtime_minutes || 0);
+  }
+  const rows = Object.entries(byReason).sort((a, b) => b[1] - a[1]);
+  if (!rows.length) return "";
+  const max = Math.max(1, ...rows.map(([, min]) => min));
+  return rows.map(([reason, min]) => `<div class="hbar">
+    <div class="hbar-label"><span>${esc(reason)}</span><strong>${formatDurationMinutes(min)}</strong></div>
+    <div class="hbar-track"><div class="hbar-fill" style="width:${(min / max) * 100}%"></div></div>
+  </div>`).join("");
 }
 
 function shiftPrestart(inspections, shift) {
@@ -107,7 +150,7 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
 
   const timelineItems = [
     ...milestones.map((m) => ({ kind: "milestone", at: new Date(m.at).getTime(), ...m })),
-    ...periods.map((p) => ({ kind: "period", at: p.start, ...p })),
+    ...periods.filter((p) => p.state === "stopped").map((p) => ({ kind: "period", at: p.start, ...p })),
   ].sort((a, b) => a.at - b.at);
 
   const timelineRows = timelineItems.map((item) => {
@@ -127,9 +170,15 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
     return `<span class="badge ${cls}">${esc(status)}</span>`;
   };
 
+  const prestartOk = prestart.filter((i) => /^ok$/i.test(i.status || "")).length;
+  const prestartAction = prestart.filter((i) => /action/i.test(i.status || "")).length;
+  const prestartBad = prestart.filter((i) => /attention|need|fail/i.test(i.status || "")).length;
+  const prestartProblems = prestart.filter((i) => !/^ok$/i.test(i.status || ""));
+  const downtimeChart = downtimeReasonChart(stops);
+
   return `<!doctype html><html><head><meta charset="utf-8"><title>Daily Report · ${esc(shift.operator_name)} · ${titleDate}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Russo+One&display=swap" rel="stylesheet"/>
 <style>${reportPageStyles()}
   .badge{display:inline-block;padding:1px 7px;border-radius:3px;font-size:10px;font-weight:600}
   .badge-ok{background:#ECFDF5;color:#15803D;border:1px solid #BBF7D0}
@@ -158,8 +207,8 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
     : `<div class="logo-fallback">OPS</div>`}
       </div>
       <div class="header-text">
-        <h1>Daily Shift Report</h1>
-        <p class="header-sub">${esc(shift.operator_name || "Operator")}</p>
+        <h1 class="font-brand">Daily Shift Report</h1>
+        <p class="header-sub font-brand">${esc(shift.operator_name || "Operator")}</p>
         <div class="header-meta">
           <span>${esc(site?.name || "Site")}</span>
           <span>${esc(machine?.name || machine?.id || "Machine")}</span>
@@ -173,17 +222,17 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
     <div class="summary">
       <div class="summary-cell highlight">
         <div class="label">Billable hours</div>
-        <div class="value">${Number(shift.hours_worked || 0).toFixed(1)}h</div>
+        <div class="value font-brand">${Number(shift.hours_worked || 0).toFixed(1)}h</div>
         <div class="sub">Meter ${shift.start_hour_meter}h → ${shift.end_hour_meter}h</div>
       </div>
       <div class="summary-cell">
         <div class="label">Runtime</div>
-        <div class="value">${formatDurationMinutes(shift.runtime_minutes || 0)}</div>
+        <div class="value font-brand">${formatDurationMinutes(shift.runtime_minutes || 0)}</div>
         <div class="sub">App-tracked</div>
       </div>
       <div class="summary-cell">
         <div class="label">Downtime</div>
-        <div class="value">${formatDurationMinutes(shift.downtime_minutes || 0)}</div>
+        <div class="value font-brand">${formatDurationMinutes(shift.downtime_minutes || 0)}</div>
         <div class="sub">App-tracked</div>
       </div>
     </div>
@@ -195,16 +244,23 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
     </div>
 
     <section>
-      <h2>Pre-start inspection</h2>
-      <table><thead><tr><th>Item</th><th>Status</th><th>Remarks</th><th>Photo</th></tr></thead><tbody>
-${prestart.length
-    ? prestart.map((i) => {
-      const photoUrl = prestartPhotoUrls[i.id];
-      return `<tr><td>${esc(i.item_name)}</td><td>${statusBadge(i.status)}</td><td>${esc(i.remark || "—")}</td><td>${
-        photoUrl ? `<img src="${esc(photoUrl)}" alt="" style="max-width:120px;max-height:80px;object-fit:contain;border:1px solid #E8E6E0"/>` : "—"
-      }</td></tr>`;
-    }).join("")
-    : '<tr class="empty"><td colspan="4">No pre-start records on this device</td></tr>'}
+      <h2 class="font-brand">How the machine ran</h2>
+      ${runStopChart(shift.runtime_minutes, shift.downtime_minutes)}
+    </section>
+
+    <section>
+      <h2 class="font-brand">Pre-start</h2>
+      ${prestart.length ? `<div class="tiles">
+        <div class="tile tile-ok"><strong class="font-brand">${prestartOk}</strong><span>OK</span></div>
+        <div class="tile tile-act"><strong class="font-brand">${prestartAction}</strong><span>Action taken</span></div>
+        <div class="tile tile-bad"><strong class="font-brand">${prestartBad}</strong><span>Needs attention</span></div>
+      </div>` : ""}
+      <table><thead><tr><th>Item</th><th>Status</th><th>Remarks</th></tr></thead><tbody>
+${prestartProblems.length
+    ? prestartProblems.map((i) => `<tr><td>${esc(i.item_name)}</td><td>${statusBadge(i.status)}</td><td>${esc(i.remark || "—")}</td></tr>`).join("")
+    : prestart.length
+      ? '<tr class="empty"><td colspan="3">All pre-start items were OK</td></tr>'
+      : '<tr class="empty"><td colspan="3">No pre-start records on this device</td></tr>'}
       </tbody></table>
     </section>
 
@@ -220,15 +276,15 @@ ${prestart.length
     </section>` : ""}
 
     <section>
-      <h2>Shift activity</h2>
+      <h2 class="font-brand">What happened</h2>
       <table><thead><tr><th>Time</th><th>Event</th><th>Detail</th><th>Duration</th></tr></thead><tbody>
 ${timelineRows || '<tr class="empty"><td colspan="4">No activity logged</td></tr>'}
       </tbody></table>
-      <p class="note">Repeated stop/start logs within 30 seconds are merged into single running or downtime periods with calculated duration.</p>
     </section>
 
     <section>
-      <h2>Downtime</h2>
+      <h2 class="font-brand">Downtime</h2>
+      ${downtimeChart || ""}
       <table><thead><tr><th>Reason</th><th>Stopped</th><th>Duration</th><th>Notes</th></tr></thead><tbody>
 ${stops.length
     ? stops.map((s) => {
@@ -240,7 +296,7 @@ ${stops.length
     </section>
 
     <section>
-      <h2>Diesel</h2>
+      <h2 class="font-brand">Diesel</h2>
       <table><thead><tr><th>Time</th><th>Litres</th><th>Meter</th><th>Tank</th><th>Note</th></tr></thead><tbody>
 ${shiftFuel.length
     ? shiftFuel.map((f) => `<tr><td>${fmtDate(f.timestamp)}</td><td>${Number(f.litres || 0).toFixed(1)} L</td><td>${f.hour_meter}h</td><td>${esc(f.tank_level || "—")}</td><td>${esc(f.note || "")}</td></tr>`).join("")
@@ -249,7 +305,7 @@ ${shiftFuel.length
     </section>
 
     ${(openingPhotoUrl || closingPhotoUrl) ? `<section>
-      <h2>Hour meter photos</h2>
+      <h2 class="font-brand">Hour meter photos</h2>
       <div class="photos">
         ${openingPhotoUrl ? `<figure><img src="${esc(openingPhotoUrl)}" alt="Opening meter"/><figcaption>Opening reading · ${shift.start_hour_meter}h</figcaption></figure>` : ""}
         ${closingPhotoUrl ? `<figure><img src="${esc(closingPhotoUrl)}" alt="Closing meter"/><figcaption>Closing reading · ${shift.end_hour_meter}h</figcaption></figure>` : ""}
@@ -667,7 +723,7 @@ export function generateTimesheetReportHTML(workSessions, period, site, { logoUr
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Timesheet · ${esc(periodLabel)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Russo+One&display=swap" rel="stylesheet"/>
 <style>${reportPageStyles()}</style></head><body>
 <div class="page">
   <header class="header">

@@ -35,11 +35,16 @@ export function inPeriod(iso, period) {
   return t >= period.start.getTime() && t <= period.end.getTime();
 }
 
-/** Supervisors at the same site as the operator */
+function isSupervisorRole(role) {
+  return String(role || "").toLowerCase() === ROLES.SUPERVISOR;
+}
+
+/** Supervisors the operator can pick — same site first, then any supervisor already on this phone. */
 export function getSiteSupervisors(profiles, siteId) {
-  return (profiles || []).filter(
-    (p) => p.role === ROLES.SUPERVISOR && p.site_id === siteId && p.active !== false
-  );
+  const all = (profiles || []).filter((p) => isSupervisorRole(p.role) && p.active !== false);
+  if (!siteId) return all;
+  const onSite = all.filter((p) => !p.site_id || p.site_id === siteId);
+  return onSite.length ? onSite : all;
 }
 
 /** Suggest day (06–18) or night supervisor from shift_band on profile */

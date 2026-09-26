@@ -34,6 +34,7 @@ import { SignaturePad } from "../components/ui/SignaturePad.jsx";
 
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
+import { ShiftPhotoFix } from "../components/ShiftPhotoFix.jsx";
 
 
 
@@ -1092,6 +1093,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
                   <button onClick={() => openReasonModal(r, "correct")} disabled={verifyBusy === r.id} className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold">Send back</button>
 
                   <button type="button" onClick={() => handleViewReport(r)} className="w-full border border-[#2A2A2A] text-[#F2F0EA] py-4 rounded-xl font-logo">Open report</button>
+
+                  <ShiftPhotoFix shift={r} user={user} onDone={() => refreshLocal()} />
 
                 </div>
 

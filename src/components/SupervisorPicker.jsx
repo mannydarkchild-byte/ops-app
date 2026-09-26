@@ -7,7 +7,7 @@ export function SupervisorPicker({ supervisors, value, onChange, suggestedId = n
   if (!supervisors.length) {
     return (
       <p className="font-body text-sm text-ops-text py-2">
-        No supervisors on this phone yet. You can still clock in, then tap Update when you have signal.
+        No supervisors on this phone yet. When you have signal, tap Update so every supervisor on this site is saved here for offline.
       </p>
     );
   }

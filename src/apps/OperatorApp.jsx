@@ -24,6 +24,7 @@ import { FuelModal } from "../components/FuelModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { OperatorReportsModal, reportBucket } from "../components/OperatorReportsModal.jsx";
 import { OperatorWelcome } from "../components/OperatorWelcome.jsx";
+import { ShiftPhotoFix } from "../components/ShiftPhotoFix.jsx";
 
 export function OperatorApp() {
   const {
@@ -470,6 +471,11 @@ export function OperatorApp() {
               machine={activeMachine}
               site={activeSite}
               assignedSupervisorId={submittedShift.assigned_supervisor_id}
+            />
+            <ShiftPhotoFix
+              shift={submittedShift}
+              user={user}
+              onDone={(updated) => { setSubmittedShift(updated); refreshLocal(); }}
             />
             <button type="button" onClick={() => setShowMyReports(true)} className="w-full mb-3 bg-[#F5C518] text-black py-4 rounded-xl font-logo text-base font-bold">
               VIEW MY REPORTS
