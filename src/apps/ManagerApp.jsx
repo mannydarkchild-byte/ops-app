@@ -45,7 +45,7 @@ const EXPENSE_FILTERS = [
 export function ManagerApp() {
   const {
     user, shifts, events, expenses, fuelLogs, inspections, issues, issueMessages,
-    workSessions, machines, profiles, submissions, activeSite, inventoryItems, syncNow, refreshLocal,
+    workSessions, machines, profiles, submissions, hourReadings, activeSite, inventoryItems, syncNow, refreshLocal,
     getSettingsForSite,
   } = useOps();
 
@@ -306,8 +306,8 @@ export function ManagerApp() {
   }), [events, fuelLogs, issues, primaryMachine?.id]);
 
   const reportContext = useMemo(() => ({
-    events, inspections, fuelLogs, site: activeSite,
-  }), [events, inspections, fuelLogs, activeSite]);
+    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings,
+  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings]);
 
   const getReportPeriod = () => {
     const presets = getDatePresets();
@@ -757,6 +757,7 @@ export function ManagerApp() {
         <ReportPreviewModal
           html={reportPreview.html}
           title={reportPreview.title}
+          sheets={reportPreview.sheets}
           onClose={() => setReportPreview(null)}
         />
       )}

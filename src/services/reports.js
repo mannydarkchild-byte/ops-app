@@ -26,6 +26,153 @@ async function resolveLogoDataUrl() {
   }
 }
 
+function firstMedia(...vals) {
+  return vals.find((v) => typeof v === "string" && v.trim());
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Embed media so srcDoc / PDF can show it (blob: URLs are invisible in the report iframe). */
+async function embedMedia(ref) {
+  if (!ref) return null;
+  const url = (await resolveMediaUrl(ref)) || (ref.startsWith("http") || ref.startsWith("data:") ? ref : null);
+  if (!url) return null;
+  if (url.startsWith("data:")) return url;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return url.startsWith("http") ? url : null;
+    const blob = await res.blob();
+    if (!blob?.size) return url.startsWith("http") ? url : null;
+    return await blobToDataUrl(blob);
+  } catch {
+    return url.startsWith("http") ? url : null;
+  }
+}
+
+function eventPhotoRef(ev) {
+  return firstMedia(ev?.photo_ref, ev?.photo_data, ev?.photo);
+}
+
+function readingPhotoRef(row) {
+  return firstMedia(row?.photo_ref, row?.photo_data, row?.photo);
+}
+
+function pickShiftEvent(events, shiftId, types) {
+  const matches = (events || []).filter((e) => e.shift_id === shiftId && types.includes(e.type));
+  return matches.find((e) => eventPhotoRef(e)) || matches[0] || null;
+}
+
+function pickShiftReading(readings, shiftId, sources) {
+  const list = (readings || []).filter((r) => r.shift_id === shiftId);
+  const bySource = list.filter((r) => sources.includes(r.source));
+  const pool = bySource.length ? bySource : list;
+  return pool.find((r) => readingPhotoRef(r)) || pool[0] || null;
+}
+
+async function resolveMeterPhotos(shift, events, hourReadings) {
+  const startEv = pickShiftEvent(events, shift.id, ["MACHINE_STARTED"]);
+  const endEv = pickShiftEvent(events, shift.id, ["METER_END_CAPTURED", "MACHINE_ENDED"]);
+  const shiftReadings = (hourReadings || []).filter((r) => r.shift_id === shift.id);
+  const byTime = [...shiftReadings].sort((a, b) => new Date(a.reading_at || a.created_at || 0) - new Date(b.reading_at || b.created_at || 0));
+  const openingReading = pickShiftReading(hourReadings, shift.id, ["opening"]) || byTime[0] || null;
+  const closingReading = pickShiftReading(hourReadings, shift.id, ["closing"]) || (byTime.length > 1 ? byTime[byTime.length - 1] : null);
+  const openingRef = firstMedia(eventPhotoRef(startEv), readingPhotoRef(openingReading));
+  const closingRef = firstMedia(eventPhotoRef(endEv), readingPhotoRef(closingReading));
+  const [openingPhotoUrl, closingPhotoUrl] = await Promise.all([embedMedia(openingRef), embedMedia(closingRef)]);
+  return { openingPhotoUrl, closingPhotoUrl };
+}
+
+function dayKey(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function buildPerformanceTrend(shift, { shifts = [], fuelLogs = [] }, days = 14) {
+  const end = new Date(shift.started_at || Date.now());
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+  start.setHours(0, 0, 0, 0);
+  const points = [];
+  for (let i = 0; i < days; i += 1) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = dayKey(d.toISOString());
+    points.push({
+      key,
+      label: d.toLocaleDateString("en-ZA", { day: "numeric", month: "short" }),
+      billable: 0,
+      runtimeH: 0,
+      downH: 0,
+      diesel: 0,
+      isToday: key === dayKey(shift.started_at),
+    });
+  }
+  const byKey = Object.fromEntries(points.map((p) => [p.key, p]));
+  for (const s of shifts) {
+    if (shift.machine_id && s.machine_id !== shift.machine_id) continue;
+    if (!s.started_at) continue;
+    const p = byKey[dayKey(s.started_at)];
+    if (!p) continue;
+    p.billable += Number(s.hours_worked || 0);
+    p.runtimeH += Number(s.runtime_minutes || 0) / 60;
+    p.downH += Number(s.downtime_minutes || 0) / 60;
+  }
+  for (const f of fuelLogs) {
+    if (shift.machine_id && f.machine_id !== shift.machine_id) continue;
+    if (!f.timestamp) continue;
+    const p = byKey[dayKey(f.timestamp)];
+    if (p) p.diesel += Number(f.litres || 0);
+  }
+  return points;
+}
+
+function trendChartSvg(points) {
+  const w = 760;
+  const h = 210;
+  const padL = 36;
+  const padR = 10;
+  const padT = 16;
+  const padB = 34;
+  const innerW = w - padL - padR;
+  const innerH = h - padT - padB;
+  const max = Math.max(1, ...points.flatMap((p) => [p.billable, p.runtimeH, p.downH]));
+  const xAt = (i) => padL + (points.length <= 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
+  const yAt = (v) => padT + innerH - (Number(v || 0) / max) * innerH;
+  const series = (key) => points.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i).toFixed(1)},${yAt(p[key]).toFixed(1)}`).join(" ");
+  const ticks = points.map((p, i) => {
+    if (points.length > 10 && i % 2 && !p.isToday) return "";
+    return `<text x="${xAt(i).toFixed(1)}" y="${h - 10}" text-anchor="middle" class="trend-tick">${esc(p.label)}</text>`;
+  }).join("");
+  const today = points.find((p) => p.isToday);
+  const todayDot = today
+    ? `<circle cx="${xAt(points.indexOf(today)).toFixed(1)}" cy="${yAt(today.billable).toFixed(1)}" r="5" fill="#F5C518" stroke="#1C1917" stroke-width="1.5"/>`
+    : "";
+  return `<svg class="trend-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="Fourteen day operation trend">
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + innerH}" stroke="#D9D7D0"/>
+    <line x1="${padL}" y1="${padT + innerH}" x2="${w - padR}" y2="${padT + innerH}" stroke="#D9D7D0"/>
+    <text x="8" y="${padT + 8}" class="trend-tick">${max.toFixed(0)}h</text>
+    <path d="${series("billable")}" fill="none" stroke="#F5C518" stroke-width="3" stroke-linejoin="round"/>
+    <path d="${series("runtimeH")}" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="${series("downH")}" fill="none" stroke="#EF4444" stroke-width="2.5" stroke-linejoin="round"/>
+    ${todayDot}
+    ${ticks}
+  </svg>
+  <div class="chart-legend">
+    <span class="leg-bill">Meter hours</span>
+    <span class="leg-run">Runtime</span>
+    <span class="leg-down">Downtime</span>
+  </div>`;
+}
+
 function reportPageStyles() {
   return `
   *{box-sizing:border-box}
@@ -66,9 +213,13 @@ function reportPageStyles() {
   .chart-bar-run{background:#22C55E}
   .chart-bar-down{background:#EF4444}
   .chart-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:13px}
-  .leg-run::before,.leg-down::before{content:"";display:inline-block;width:10px;height:10px;border-radius:99px;margin-right:6px}
+  .leg-run::before,.leg-down::before,.leg-bill::before{content:"";display:inline-block;width:10px;height:10px;border-radius:99px;margin-right:6px}
   .leg-run::before{background:#22C55E}
   .leg-down::before{background:#EF4444}
+  .leg-bill::before{background:#F5C518}
+  .trend-svg{width:100%;height:auto;display:block;background:#FAFAF7;border:1px solid #E8E6E0;border-radius:12px}
+  .trend-tick{font-size:10px;fill:#6B6960}
+  .photo-placeholder{min-height:160px;display:flex;align-items:center;justify-content:center;background:#FAFAF7;color:#6B6960;font-size:13px;padding:16px;text-align:center}
   .hbar{margin:8px 0 12px}
   .hbar-label{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:4px}
   .hbar-track{height:12px;background:#F2F0EA;border-radius:99px;overflow:hidden}
@@ -133,15 +284,16 @@ async function resolveInspectionPhotoMap(items) {
   const map = {};
   await Promise.all(
     (items || []).map(async (item) => {
-      if (!item.photo_ref) return;
-      const url = await resolveMediaUrl(item.photo_ref);
+      const ref = firstMedia(item.photo_ref, item.photo, item.photo_data);
+      if (!ref) return;
+      const url = await embedMedia(ref);
       if (url) map[item.id] = { url, label: item.item_name };
     })
   );
   return map;
 }
 
-export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls = {} }) {
+export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls = {}, trendPoints = [] }) {
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = fuelLogs.filter((f) => f.shift_id === shift.id);
@@ -248,6 +400,12 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
       ${runStopChart(shift.runtime_minutes, shift.downtime_minutes)}
     </section>
 
+    ${trendPoints.length ? `<section>
+      <h2 class="font-brand">Operation trend — last 14 days</h2>
+      <p class="note" style="margin-top:0">Daily meter hours, runtime and downtime for ${esc(machine?.name || "this machine")}. Gold dot is this report’s day.</p>
+      ${trendChartSvg(trendPoints)}
+    </section>` : ""}
+
     <section>
       <h2 class="font-brand">Pre-start</h2>
       ${prestart.length ? `<div class="tiles">
@@ -304,27 +462,40 @@ ${shiftFuel.length
       </tbody></table>
     </section>
 
-    ${(openingPhotoUrl || closingPhotoUrl) ? `<section>
+    <section>
       <h2 class="font-brand">Hour meter photos</h2>
       <div class="photos">
-        ${openingPhotoUrl ? `<figure><img src="${esc(openingPhotoUrl)}" alt="Opening meter"/><figcaption>Opening reading · ${shift.start_hour_meter}h</figcaption></figure>` : ""}
-        ${closingPhotoUrl ? `<figure><img src="${esc(closingPhotoUrl)}" alt="Closing meter"/><figcaption>Closing reading · ${shift.end_hour_meter}h</figcaption></figure>` : ""}
+        <figure>
+          ${openingPhotoUrl
+    ? `<img src="${esc(openingPhotoUrl)}" alt="Opening meter"/>`
+    : `<div class="photo-placeholder">Opening meter photo not on this phone yet</div>`}
+          <figcaption>Opening reading · ${shift.start_hour_meter ?? "—"}h</figcaption>
+        </figure>
+        <figure>
+          ${closingPhotoUrl
+    ? `<img src="${esc(closingPhotoUrl)}" alt="Closing meter"/>`
+    : `<div class="photo-placeholder">Closing meter photo not on this phone yet</div>`}
+          <figcaption>Closing reading · ${shift.end_hour_meter ?? "—"}h</figcaption>
+        </figure>
       </div>
-    </section>` : ""}
+    </section>
 
     <section>
       <div class="signoff">
         <div class="signoff-head">
           <h2>Supervisor sign-off</h2>
           <div class="signoff-meta">
-            <p><strong>Verified by:</strong> ${esc(shift.supervisor_signature_name || "Supervisor")}</p>
+            <p><strong>Verified by:</strong> ${esc(shift.supervisor_signature_name || shift.verified_by || "Supervisor")}</p>
             <p><strong>Verified at:</strong> ${fmtDate(shift.verified_at || shift.ended_at)}</p>
             ${shift.assigned_supervisor_name ? `<p><strong>Assigned:</strong> ${esc(shift.assigned_supervisor_name)}</p>` : ""}
           </div>
         </div>
-        ${signatureUrl
-    ? `<div class="signature-box"><div class="signature-label">Authorised signature</div><img src="${esc(signatureUrl)}" alt="Supervisor signature"/></div>`
-    : "<p class=\"note\"><em>Signature image not available on this device — sync when online.</em></p>"}
+        <div class="signature-box">
+          <div class="signature-label">Authorised signature</div>
+          ${signatureUrl
+    ? `<img src="${esc(signatureUrl)}" alt="Supervisor signature"/>`
+    : `<p class="note" style="margin:8px 0 0">${esc(shift.supervisor_signature_name || "Signature not on this phone yet — tap Update and open the report again.")}</p>`}
+        </div>
         <p class="note">Signed daily report for billing reference. Billable hours are taken from hour meter readings only; runtime and downtime are app-tracked operational metrics.</p>
       </div>
     </section>
@@ -338,30 +509,106 @@ ${shiftFuel.length
 </body></html>`;
 }
 
-export async function prepareShiftDailyReport(shift, { events, inspections, fuelLogs, machine, site }) {
-  const sigRef = shift.supervisor_signature_ref || shift.supervisor_signature;
-  const startEv = events.find((e) => e.shift_id === shift.id && e.type === "MACHINE_STARTED");
-  const endEv = events.find((e) => e.shift_id === shift.id && e.type === "METER_END_CAPTURED");
+function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, trendPoints = [] }) {
+  const { milestones, periods } = buildShiftActivityTimeline(shift, events);
+  const stops = consolidateShiftStops(events, shift);
+  const shiftFuel = (fuelLogs || []).filter((f) => f.shift_id === shift.id);
+  const prestart = shiftPrestart(inspections, shift);
+  const timeline = [
+    ...milestones.map((m) => [fmtDate(m.at), m.label, m.detail || "", ""]),
+    ...periods.filter((p) => p.state === "stopped").map((p) => [
+      `${fmtDate(new Date(p.start).toISOString())} – ${fmtDate(new Date(p.end).toISOString())}`,
+      "Stopped",
+      p.reason || "Downtime",
+      formatDurationMinutes(p.minutes),
+    ]),
+  ];
+  return [
+    {
+      name: "Summary",
+      rows: [
+        ["Daily Shift Report"],
+        ["Site", site?.name || ""],
+        ["Machine", machine?.name || machine?.id || ""],
+        ["Operator", shift.operator_name || ""],
+        ["Date", fmtDateShort(shift.started_at)],
+        ["Started", fmtDate(shift.started_at)],
+        ["Ended", fmtDate(shift.ended_at)],
+        ["Verified by", shift.supervisor_signature_name || ""],
+        ["Verified at", fmtDate(shift.verified_at || shift.ended_at)],
+        ["Opening meter (h)", shift.start_hour_meter ?? ""],
+        ["Closing meter (h)", shift.end_hour_meter ?? ""],
+        ["Billable hours", Number(shift.hours_worked || 0)],
+        ["Runtime (min)", Number(shift.runtime_minutes || 0)],
+        ["Downtime (min)", Number(shift.downtime_minutes || 0)],
+      ],
+    },
+    { name: "Events", rows: [["Time", "Event", "Detail", "Duration"], ...timeline] },
+    {
+      name: "Downtime",
+      rows: [
+        ["Reason", "Stopped", "Duration", "Notes"],
+        ...stops.map((s) => [
+          s.reason || "",
+          fmtDate(s.stopped_at),
+          formatDurationMinutes(s.downtime_minutes || 0),
+          s.note || "",
+        ]),
+      ],
+    },
+    {
+      name: "Diesel",
+      rows: [
+        ["Time", "Litres", "Meter", "Tank", "Note"],
+        ...shiftFuel.map((f) => [
+          fmtDate(f.timestamp),
+          Number(f.litres || 0),
+          f.hour_meter ?? "",
+          f.tank_level || "",
+          f.note || "",
+        ]),
+      ],
+    },
+    {
+      name: "Pre-start",
+      rows: [
+        ["Item", "Status", "Remarks"],
+        ...prestart.map((i) => [i.item_name || "", i.status || "", i.remark || ""]),
+      ],
+    },
+    {
+      name: "Trend",
+      rows: [
+        ["Date", "Meter hours", "Runtime hours", "Downtime hours", "Diesel L"],
+        ...trendPoints.map((p) => [p.label, p.billable, Number(p.runtimeH.toFixed(2)), Number(p.downH.toFixed(2)), p.diesel]),
+      ],
+    },
+  ];
+}
+
+export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [] }) {
+  const sigRef = firstMedia(shift.supervisor_signature_ref, shift.supervisor_signature);
   const prestartItems = shiftPrestart(inspections, shift);
   const prestartPhotoMap = await resolveInspectionPhotoMap(prestartItems);
   const prestartPhotoUrls = Object.fromEntries(
     Object.entries(prestartPhotoMap).map(([id, { url }]) => [id, url])
   );
+  const trendPoints = buildPerformanceTrend(shift, { shifts, fuelLogs });
 
-  const [signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl] = await Promise.all([
-    resolveMediaUrl(sigRef),
-    resolveMediaUrl(startEv?.photo_ref),
-    resolveMediaUrl(endEv?.photo_ref),
+  const [{ openingPhotoUrl, closingPhotoUrl }, signatureUrl, logoUrl] = await Promise.all([
+    resolveMeterPhotos(shift, events, hourReadings),
+    embedMedia(sigRef),
     resolveLogoDataUrl(),
   ]);
 
   const html = generateShiftDailyReportHTML(shift, {
-    events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls,
+    events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls, trendPoints,
   });
 
   return {
     html,
     title: `Daily Report · ${shift.operator_name} · ${fmtDateShort(shift.started_at)}`,
+    sheets: buildDailyReportSheets(shift, { events, inspections, fuelLogs, machine, site, trendPoints }),
   };
 }
 
@@ -371,29 +618,9 @@ export async function openShiftDailyReport(shift, ctx) {
 }
 
 export async function downloadShiftDailyReport(shift, ctx) {
-  const sigRef = shift.supervisor_signature_ref || shift.supervisor_signature;
-  const startEv = ctx.events.find((e) => e.shift_id === shift.id && e.type === "MACHINE_STARTED");
-  const endEv = ctx.events.find((e) => e.shift_id === shift.id && e.type === "METER_END_CAPTURED");
-  const prestartItems = shiftPrestart(ctx.inspections, shift);
-  const prestartPhotoMap = await resolveInspectionPhotoMap(prestartItems);
-  const prestartPhotoUrls = Object.fromEntries(
-    Object.entries(prestartPhotoMap).map(([id, { url }]) => [id, url])
-  );
-  const [signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl] = await Promise.all([
-    resolveMediaUrl(sigRef),
-    resolveMediaUrl(startEv?.photo_ref),
-    resolveMediaUrl(endEv?.photo_ref),
-    resolveLogoDataUrl(),
-  ]);
-  const html = generateShiftDailyReportHTML(shift, {
-    ...ctx, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls,
-  });
-  const blob = new Blob([html], { type: "text/html" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `DailyReport_${shift.operator_name?.replace(/\s+/g, "_") || "shift"}_${fmtDateShort(shift.started_at).replace(/\//g, "-")}.html`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  const { html, title } = await prepareShiftDailyReport(shift, ctx);
+  const { downloadReportFile } = await import("../lib/reportShare.js");
+  return downloadReportFile(html, title);
 }
 
 export function generateFullReportHTML(data, period, periodLabel, machine, site, { logoUrl, machines = [] } = {}) {
@@ -685,7 +912,26 @@ export async function prepareOperationsReport(data, period, machine, site) {
     logoUrl,
     machines: machine ? [machine] : [],
   });
-  return { html, title: `Operations Report · ${period.label}` };
+  const runs = data?.shifts || [];
+  const inRange = (iso) => iso && period?.start && period?.end && new Date(iso) >= period.start && new Date(iso) <= period.end;
+  const periodShifts = runs.filter((r) => inRange(r.started_at));
+  const sheets = [
+    {
+      name: "Shifts",
+      rows: [
+        ["Operator", "Date", "Hours", "Runtime min", "Downtime min", "Signed by"],
+        ...periodShifts.map((s) => [
+          s.operator_name || "",
+          fmtDateShort(s.started_at),
+          Number(s.hours_worked || 0),
+          Number(s.runtime_minutes || 0),
+          Number(s.downtime_minutes || 0),
+          s.supervisor_signature_name || "",
+        ]),
+      ],
+    },
+  ];
+  return { html, title: `Operations Report · ${period.label}`, sheets };
 }
 
 /** Returns { html, title } for in-app full-screen viewer */
@@ -799,5 +1045,36 @@ export async function printTimesheetReport(workSessions, period, site, machines 
   const logoUrl = await resolveLogoDataUrl();
   const label = period?.label || "All time";
   const html = generateTimesheetReportHTML(workSessions, period, site, { logoUrl, machines });
-  return { html, title: `Timesheet · ${label}` };
+  const rows = buildTimesheetRows(workSessions, { siteId: site?.id, period: period || null });
+  const summary = summarizeTimesheet(rows);
+  const machineName = (id) => machines.find((m) => m.id === id)?.name || "—";
+  const sheets = [
+    {
+      name: "Summary",
+      rows: [
+        ["Timesheet", label],
+        ["Site", site?.name || ""],
+        ["Hours on site", summary.hours],
+        ["Sessions", summary.sessions],
+        ["Clocked out", summary.ended],
+        ["Left without starting", summary.leftEarly],
+        ["Still on site", summary.onSite],
+      ],
+    },
+    {
+      name: "By operator",
+      rows: [
+        ["Operator", "Sessions", "Hours", "Left early"],
+        ...summary.byOperator.map((op) => [op.operator_name, op.sessions, op.hours, op.leftEarly]),
+      ],
+    },
+    {
+      name: "Clock in out",
+      rows: [
+        ["Operator", "Date", "In", "Out", "Hours", "Status", "Machine", "Note"],
+        ...rows.map((r) => [r.operator_name, r.dateLabel, r.inLabel, r.outLabel, r.hours, r.statusLabel, machineName(r.machine_id), r.notes || ""]),
+      ],
+    },
+  ];
+  return { html, title: `Timesheet · ${label}`, sheets };
 }

@@ -46,6 +46,7 @@ export function OperatorReportsModal({
   events,
   inspections,
   fuelLogs,
+  hourReadings = [],
   site,
   cycleStartDay = 26,
 }) {
@@ -103,8 +104,8 @@ export function OperatorReportsModal({
   const machineName = (id) => machines.find((m) => m.id === id)?.name || "Machine";
 
   const reportContext = useMemo(
-    () => ({ events, inspections, fuelLogs, site }),
-    [events, inspections, fuelLogs, site]
+    () => ({ events, inspections, fuelLogs, site, shifts, hourReadings }),
+    [events, inspections, fuelLogs, site, shifts, hourReadings]
   );
 
   const viewReport = async (shift) => {
@@ -224,6 +225,7 @@ export function OperatorReportsModal({
         <ReportPreviewModal
           html={preview.html}
           title={preview.title}
+          sheets={preview.sheets}
           onClose={() => setPreview(null)}
         />
       )}

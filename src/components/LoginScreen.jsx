@@ -37,7 +37,7 @@ export function LoginScreen({ onLogin, error, loading }) {
 
       <div className="login-wrap px-5 pb-[max(2rem,env(safe-area-inset-bottom))] w-full mx-auto">
         <div className="login-brand">
-          <LogoMark size="xxl" />
+          <LogoMark size="lg" />
           <h1 className="font-logo text-ops-gold login-title">OPS</h1>
           <p className="font-body text-ops-text login-copy">
             {mode === "login" ? "Open the app on this phone. Clock-in comes after that." : "We will email you a reset link."}
@@ -78,7 +78,7 @@ export function LoginScreen({ onLogin, error, loading }) {
 
             <Button
               variant="primary"
-              size="lg"
+              size="md"
               className="login-go font-logo"
               onClick={submitLogin}
               disabled={busy || loading || !email || !password}
@@ -116,7 +116,7 @@ export function LoginScreen({ onLogin, error, loading }) {
             {resetMsg && <p className="login-ok">{resetMsg}</p>}
             <Button
               variant="teal"
-              size="lg"
+              size="md"
               className="login-go"
               onClick={submitReset}
               disabled={busy || !email}

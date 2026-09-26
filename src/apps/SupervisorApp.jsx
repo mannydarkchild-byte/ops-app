@@ -66,7 +66,7 @@ const REPORT_FILTERS = [
 
 export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
-  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, inspections, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
+  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, inspections, hourReadings, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
 
   const siteConfig = useMemo(
     () => getSettingsForSite(user?.site_id || activeSite?.id),
@@ -406,9 +406,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
   const reportContext = useMemo(() => ({
 
-    events, inspections, fuelLogs, site: activeSite,
+    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings,
 
-  }), [events, inspections, fuelLogs, activeSite]);
+  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings]);
 
 
 
@@ -454,7 +454,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
       const doc = await openShiftDailyReport(shift, { ...reportContext, machine });
       const result = await shareReportFile(doc.html, doc.title);
       if (result === "downloaded") {
-        showAlert("Saved on this phone", "Open WhatsApp or email and attach that file.", "success");
+        showAlert("Saved on this phone", "The PDF is in your downloads. Send it from WhatsApp or email.", "success");
       }
     } catch (e) {
       if (e?.name === "AbortError") return;
@@ -1475,6 +1475,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
         <ReportPreviewModal
           html={reportPreview.html}
           title={reportPreview.title}
+          sheets={reportPreview.sheets}
           onClose={() => setReportPreview(null)}
         />
       )}

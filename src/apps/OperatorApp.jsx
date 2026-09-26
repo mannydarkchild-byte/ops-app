@@ -29,7 +29,7 @@ import { ShiftPhotoFix } from "../components/ShiftPhotoFix.jsx";
 export function OperatorApp() {
   const {
     user, activeMachine, activeSite, machines, machineRun, workSession, downtime, hourMeter, events,
-    shifts, profiles, issues, issueMessages, inspections, workSessions, fuelLogs, refreshLocal, machineBlocked,
+    shifts, profiles, issues, issueMessages, inspections, workSessions, fuelLogs, hourReadings, refreshLocal, machineBlocked,
     getSettingsForSite,
   } = useOps();
 
@@ -679,6 +679,7 @@ export function OperatorApp() {
           events={events}
           inspections={inspections}
           fuelLogs={fuelLogs}
+          hourReadings={hourReadings}
           site={activeSite}
           cycleStartDay={siteConfig.billing_cycle_start_day}
         />

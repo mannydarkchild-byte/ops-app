@@ -1,13 +1,12 @@
 import { useState } from "react";
 import {
   downloadReportFile,
-  openReportEmail,
-  openReportWhatsApp,
+  shareExcelFile,
   shareReportFile,
 } from "../lib/reportShare.js";
 
-/** Full-screen report viewer — download or share, no print. */
-export function ReportPreviewModal({ html, title, onClose }) {
+/** Full-screen report viewer — PDF / WhatsApp / email / Excel. */
+export function ReportPreviewModal({ html, title, sheets, onClose }) {
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
 
@@ -16,8 +15,10 @@ export function ReportPreviewModal({ html, title, onClose }) {
     setNote("");
     try {
       const result = await fn();
-      if (result === "downloaded") {
-        setNote("Saved on this phone. Open WhatsApp or email and attach that file.");
+      if (result === "shared") {
+        setNote("Report sent with the file attached.");
+      } else if (result === "downloaded") {
+        setNote("Saved on this phone.");
       }
     } catch (e) {
       if (e?.name === "AbortError") return;
@@ -52,26 +53,26 @@ export function ReportPreviewModal({ html, title, onClose }) {
           <button
             type="button"
             disabled={!!busy}
-            onClick={() => run("share", () => shareReportFile(html, title))}
-            className="bg-[#22C55E] text-black rounded-xl font-logo font-bold disabled:opacity-50"
+            onClick={() => run("whatsapp", () => shareReportFile(html, title, title))}
+            className="bg-[#25D366] text-black rounded-xl font-logo font-bold disabled:opacity-50"
           >
-            {busy === "share" ? "Opening…" : "Share"}
+            {busy === "whatsapp" ? "Making PDF…" : "WhatsApp"}
           </button>
           <button
             type="button"
             disabled={!!busy}
-            onClick={() => openReportWhatsApp(title, "OPS daily report")}
-            className="border border-[#25D366] text-[#25D366] rounded-xl font-logo disabled:opacity-50"
-          >
-            WhatsApp
-          </button>
-          <button
-            type="button"
-            disabled={!!busy}
-            onClick={() => openReportEmail(title, "OPS daily report")}
+            onClick={() => run("email", () => shareReportFile(html, title, title))}
             className="border border-[#2A2A2A] text-[#F2F0EA] rounded-xl font-logo disabled:opacity-50"
           >
-            Email
+            {busy === "email" ? "Making PDF…" : "Email"}
+          </button>
+          <button
+            type="button"
+            disabled={!!busy}
+            onClick={() => run("excel", () => shareExcelFile(sheets, title))}
+            className="border border-[#F5C518] text-[#F5C518] rounded-xl font-logo disabled:opacity-50"
+          >
+            {busy === "excel" ? "Making Excel…" : "Excel"}
           </button>
         </div>
         {note && <p className="font-body text-[#F5C518]">{note}</p>}
