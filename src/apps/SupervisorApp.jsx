@@ -24,7 +24,6 @@ import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
-import { downloadReportFile, shareReportFile } from "../lib/reportShare.js";
 
 import * as wf from "../services/workflows.js";
 
@@ -431,36 +430,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
 
-  const handleDownloadReport = async (shift) => {
+  const handleDownloadReport = (shift) => handleViewReport(shift);
 
-    const machine = machines.find((m) => m.id === shift.machine_id);
-
-    try {
-
-      const doc = await openShiftDailyReport(shift, { ...reportContext, machine });
-      await downloadReportFile(doc.html, doc.title);
-
-    } catch (e) {
-
-      showAlert("Could not save report", e.message, "error");
-
-    }
-
-  };
-
-  const handleShareReport = async (shift) => {
-    const machine = machines.find((m) => m.id === shift.machine_id);
-    try {
-      const doc = await openShiftDailyReport(shift, { ...reportContext, machine });
-      const result = await shareReportFile(doc.html, doc.title);
-      if (result === "downloaded") {
-        showAlert("Saved on this phone", "The PDF is in your downloads. Send it from WhatsApp or email.", "success");
-      }
-    } catch (e) {
-      if (e?.name === "AbortError") return;
-      showAlert("Could not share report", e.message, "error");
-    }
-  };
+  const handleShareReport = (shift) => handleViewReport(shift);
 
 
 
