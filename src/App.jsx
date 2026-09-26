@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { OpsProvider, useOps } from "./context/OpsContext.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { OperatorApp } from "./apps/OperatorApp.jsx";
@@ -8,22 +8,50 @@ import { ManagerApp } from "./apps/ManagerApp.jsx";
 import { AdminApp } from "./apps/AdminApp.jsx";
 import { ROLES } from "./lib/constants.js";
 
-function readVerifyParams() {
+const VERIFY_ONCE_KEY = "ops_verify_once";
+
+function stripVerifyFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("verify") && !params.has("token")) return;
+  params.delete("verify");
+  params.delete("token");
+  const qs = params.toString();
+  window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash || ""}`);
+}
+
+function consumeVerifyParams() {
   const params = new URLSearchParams(window.location.search);
   const verify = params.get("verify");
   const token = params.get("token");
-  if (verify) return { verifyShiftId: verify, verifyToken: token };
-  return { verifyShiftId: null, verifyToken: null };
+  if (verify) {
+    try {
+      sessionStorage.setItem(VERIFY_ONCE_KEY, JSON.stringify({ verifyShiftId: verify, verifyToken: token }));
+    } catch {}
+    stripVerifyFromUrl();
+  }
+  try {
+    const raw = sessionStorage.getItem(VERIFY_ONCE_KEY);
+    if (!raw) return { verifyShiftId: null, verifyToken: null };
+    const parsed = JSON.parse(raw);
+    return { verifyShiftId: parsed.verifyShiftId || null, verifyToken: parsed.verifyToken || null };
+  } catch {
+    return { verifyShiftId: null, verifyToken: null };
+  }
+}
+
+function forgetVerifyParams() {
+  try { sessionStorage.removeItem(VERIFY_ONCE_KEY); } catch {}
+  stripVerifyFromUrl();
 }
 
 function RoleRouter() {
   const { user, loading, authError, signIn } = useOps();
-  const [verifyParams, setVerifyParams] = useState(readVerifyParams);
+  const [verifyParams, setVerifyParams] = useState(consumeVerifyParams);
 
-  useEffect(() => {
-    const p = readVerifyParams();
-    if (p.verifyShiftId) setVerifyParams(p);
-  }, []);
+  const clearVerifyLink = () => {
+    forgetVerifyParams();
+    setVerifyParams({ verifyShiftId: null, verifyToken: null });
+  };
 
   if (loading) {
   return (
@@ -46,7 +74,13 @@ function RoleRouter() {
     case ROLES.MECHANIC:
       return <MechanicApp />;
     case ROLES.SUPERVISOR:
-      return <SupervisorApp verifyShiftId={verifyParams.verifyShiftId} verifyToken={verifyParams.verifyToken} />;
+      return (
+        <SupervisorApp
+          verifyShiftId={verifyParams.verifyShiftId}
+          verifyToken={verifyParams.verifyToken}
+          onVerifyConsumed={clearVerifyLink}
+        />
+      );
     case ROLES.MANAGER:
       return <ManagerApp />;
     case ROLES.ADMIN:

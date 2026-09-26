@@ -441,6 +441,81 @@ export async function closeOpenShift(supervisor, machine, shift, { endHour, note
   return closed;
 }
 
+function assertOwnEditableShift(user, shift) {
+  if (!user?.id || !shift?.id) throw new Error("No shift to change");
+  if (shift.operator_id !== user.id) throw new Error("You can only change your own shift");
+  if (getShiftStatus(shift) === SHIFT.VERIFIED) {
+    throw new Error("This shift is already signed off. Ask a supervisor if it must change.");
+  }
+}
+
+/** Operator edits their own unsigned shift — times, meters, notes, supervisor. */
+export async function updateOwnShift(user, shift, patch = {}) {
+  assertOwnEditableShift(user, shift);
+  const now = nowISO();
+  const startMeter = patch.start_hour_meter != null ? Number(patch.start_hour_meter) : Number(shift.start_hour_meter);
+  const endMeter = patch.end_hour_meter != null && patch.end_hour_meter !== ""
+    ? Number(patch.end_hour_meter)
+    : (shift.end_hour_meter != null ? Number(shift.end_hour_meter) : null);
+  if (patch.start_hour_meter != null && (!Number.isFinite(startMeter) || startMeter < 0)) {
+    throw new Error("Enter a valid opening meter");
+  }
+  if (patch.end_hour_meter != null && patch.end_hour_meter !== "" && (!Number.isFinite(endMeter) || endMeter < 0)) {
+    throw new Error("Enter a valid closing meter");
+  }
+  if (endMeter != null && startMeter != null && endMeter < startMeter) {
+    throw new Error("Closing meter cannot be below opening");
+  }
+  const updated = {
+    ...shift,
+    start_hour_meter: Number.isFinite(startMeter) ? startMeter : shift.start_hour_meter,
+    end_hour_meter: endMeter,
+    hours_worked: endMeter != null && Number.isFinite(startMeter) ? meterHoursWorked(startMeter, endMeter) : shift.hours_worked,
+    started_at: patch.started_at || shift.started_at,
+    ended_at: patch.ended_at !== undefined ? (patch.ended_at || null) : shift.ended_at,
+    notes: patch.notes !== undefined ? patch.notes : shift.notes,
+    assigned_supervisor_id: patch.assigned_supervisor_id !== undefined ? patch.assigned_supervisor_id : shift.assigned_supervisor_id,
+    assigned_supervisor_name: patch.assigned_supervisor_name !== undefined ? patch.assigned_supervisor_name : shift.assigned_supervisor_name,
+    updated_at: now,
+  };
+  await saveLocal("shifts", updated);
+  if (navigator.onLine) {
+    try {
+      await supabase.from("shifts").update({
+        start_hour_meter: updated.start_hour_meter,
+        end_hour_meter: updated.end_hour_meter,
+        hours_worked: updated.hours_worked,
+        started_at: updated.started_at,
+        ended_at: updated.ended_at,
+        notes: updated.notes,
+        assigned_supervisor_id: updated.assigned_supervisor_id,
+        assigned_supervisor_name: updated.assigned_supervisor_name,
+        updated_at: now,
+      }).eq("id", shift.id).eq("operator_id", user.id);
+    } catch {}
+  }
+  scheduleSync();
+  return updated;
+}
+
+/** Operator removes an unsigned shift that is cluttering or blocking start. */
+export async function deleteOwnShift(user, shift) {
+  assertOwnEditableShift(user, shift);
+  const wasRunning = getShiftStatus(shift) === SHIFT.RUNNING;
+  if (navigator.onLine) {
+    const { error } = await supabase.from("shifts").delete().eq("id", shift.id).eq("operator_id", user.id);
+    if (error) {
+      throw new Error(error.message || "Could not remove this shift on the server. Get signal and try again, or ask a supervisor to close it on Live.");
+    }
+  } else if (wasRunning) {
+    throw new Error("Need a connection to remove an open shift so the next start is not blocked.");
+  }
+  await dropLocalRecord("shifts", shift.id);
+  if (wasRunning && shift.machine_id) await releaseMachineLock(shift.machine_id);
+  scheduleSync();
+  return { removed: true };
+}
+
 export async function recordHourReading(user, machine, site, { reading, photoRef, readingAt, source = "manual", shiftId, notes }) {
   const row = {
     id: makeId("HR"),

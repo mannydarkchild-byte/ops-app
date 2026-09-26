@@ -64,7 +64,7 @@ const REPORT_FILTERS = [
 
 
 
-export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
+export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVerifyConsumed }) {
 
   const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, inspections, hourReadings, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
 
@@ -550,29 +550,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
 
 
+  const [linkShiftId] = useState(verifyShiftId);
   const verifyOpened = useRef(false);
 
   useEffect(() => {
-
     if (!verifyShiftId || verifyOpened.current) return;
-
-    const shift = shifts.find((s) => s.id === verifyShiftId);
-
-    if (!shift) return;
-
-    const tokenOk = !verifyToken || shift.verification_token === verifyToken || !shift.verification_token;
-
-    if (tokenOk && [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(getShiftStatus(shift))) {
-
-      verifyOpened.current = true;
-
-      setTab("verify");
-
-      setVerifyTarget(shift);
-
-    }
-
-  }, [verifyShiftId, verifyToken, shifts]);
+    verifyOpened.current = true;
+    setTab("verify");
+    onVerifyConsumed?.();
+  }, [verifyShiftId, onVerifyConsumed]);
 
 
 
@@ -974,7 +960,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
 
 
-            {verifyShiftId && pendingShifts.some((s) => s.id === verifyShiftId) && (
+            {linkShiftId && pendingShifts.some((s) => s.id === linkShiftId) && (
 
               <div className="bg-[#F5C518]/10 border border-[#F5C518]/30 rounded-xl p-3 mb-2">
 
@@ -1050,7 +1036,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null }) {
 
                     ? "border-[#F97316] bg-[#F97316]/5"
 
-                    : r.id === verifyShiftId
+                    : r.id === linkShiftId
 
                       ? "border-[#F5C518]"
 

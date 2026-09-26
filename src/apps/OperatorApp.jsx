@@ -25,6 +25,7 @@ import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { OperatorReportsModal, reportBucket } from "../components/OperatorReportsModal.jsx";
 import { OperatorWelcome } from "../components/OperatorWelcome.jsx";
 import { ShiftPhotoFix } from "../components/ShiftPhotoFix.jsx";
+import { OperatorShiftTools } from "../components/OperatorShiftTools.jsx";
 
 export function OperatorApp() {
   const {
@@ -134,6 +135,15 @@ export function OperatorApp() {
       s.operator_id === user?.id && ["sent_back", "pending"].includes(reportBucket(s))
     ).length,
     [shifts, user?.id]
+  );
+
+  const leftoverOpen = useMemo(
+    () => (shifts || []).filter((s) =>
+      s.operator_id === user?.id
+      && getShiftStatus(s) === SHIFT.RUNNING
+      && s.id !== sessionShift?.id
+    ),
+    [shifts, user?.id, sessionShift?.id]
   );
 
   /** Shift sent back by supervisor — operator must fix and resubmit before starting again */
@@ -473,6 +483,28 @@ export function OperatorApp() {
           />
         )}
 
+        {leftoverOpen.length > 0 && !submittedShift && (
+          <div className="mb-4 bg-[#1a1212] border border-[#EF4444]/40 rounded-2xl p-4">
+            <p className="font-logo text-[#EF4444] mb-2">Open shift still on this machine</p>
+            <p className="font-body text-[#F2F0EA]/75 mb-3">
+              This leftover is blocking a new start. Edit it, or delete it to clean your workspace.
+            </p>
+            {leftoverOpen.map((shift) => (
+              <div key={shift.id} className="mb-3 last:mb-0">
+                <p className="font-logo text-[#F2F0EA] mb-1">
+                  {machines.find((m) => m.id === shift.machine_id)?.name || "Machine"} · {new Date(shift.started_at).toLocaleString("en-ZA")}
+                </p>
+                <OperatorShiftTools
+                  shift={shift}
+                  user={user}
+                  supervisors={siteSupervisors}
+                  onDone={refreshLocal}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
 
         {/* Day complete — WhatsApp supervisor */}
         {submittedShift && (
@@ -680,8 +712,10 @@ export function OperatorApp() {
           inspections={inspections}
           fuelLogs={fuelLogs}
           hourReadings={hourReadings}
+          profiles={profiles}
           site={activeSite}
           cycleStartDay={siteConfig.billing_cycle_start_day}
+          onChanged={refreshLocal}
         />
       )}
       {showEarlyClockOut && (

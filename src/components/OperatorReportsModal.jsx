@@ -6,6 +6,7 @@ import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod } from "../lib
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
 import { ShiftPhotoFix } from "./ShiftPhotoFix.jsx";
+import { OperatorShiftTools } from "./OperatorShiftTools.jsx";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -39,6 +40,7 @@ const BUCKET_COLOR = {
 
 export function OperatorReportsModal({
   onClose,
+  onChanged,
   user,
   shifts,
   workSessions,
@@ -47,6 +49,7 @@ export function OperatorReportsModal({
   inspections,
   fuelLogs,
   hourReadings = [],
+  profiles = [],
   site,
   cycleStartDay = 26,
 }) {
@@ -102,6 +105,8 @@ export function OperatorReportsModal({
   );
 
   const machineName = (id) => machines.find((m) => m.id === id)?.name || "Machine";
+  const supervisors = (profiles || []).filter((p) => String(p.role || "").toLowerCase() === "supervisor" && p.active !== false);
+  const afterChange = () => { onChanged?.(); };
 
   const reportContext = useMemo(
     () => ({ events, inspections, fuelLogs, site, shifts, hourReadings }),
@@ -208,11 +213,15 @@ export function OperatorReportsModal({
                       </button>
                     </div>
                     <ShiftPhotoFix shift={shift} user={user} onDone={() => setBusyId(null)} />
+                    <OperatorShiftTools shift={shift} user={user} supervisors={supervisors} onDone={afterChange} />
                     </>
                   ) : (
-                    <p className="font-body text-base text-[#F2F0EA]/55">
-                      Finish the day to send this report to your supervisor.
+                    <>
+                    <p className="font-body text-base text-[#F2F0EA]/55 mb-2">
+                      Finish the day to send this report to your supervisor. Or remove it if this leftover is blocking you.
                     </p>
+                    <OperatorShiftTools shift={shift} user={user} supervisors={supervisors} onDone={afterChange} />
+                    </>
                   )}
                 </div>
               );
