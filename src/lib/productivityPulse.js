@@ -1,6 +1,6 @@
 import { buildShiftActivityTimeline } from "./shiftMetrics.js";
 import { SHIFT } from "./constants.js";
-import { getShiftStatus } from "./utils.js";
+import { dedupeShifts, getShiftStatus } from "./utils.js";
 import { ownerForStopReason } from "./stopReasons.js";
 
 function dayBounds(ref = new Date()) {
@@ -12,11 +12,14 @@ function dayBounds(ref = new Date()) {
   return { start: start.getTime(), end: end.getTime() };
 }
 
-/** Build run/stop periods for one machine inside [fromMs, toMs], extending open run to `nowMs`. */
+/**
+ * Build non-overlapping run/stop periods for one machine inside [fromMs, toMs].
+ * Overlapping shifts/events are flattened so the stock line never goes backward in time.
+ */
 export function buildMachinePeriods({ machineId, shifts = [], events = [], fromMs, toMs, nowMs = Date.now() }) {
   const windowEnd = Math.min(toMs, nowMs);
-  const machineShifts = (shifts || []).filter((s) => s.machine_id === machineId);
-  const periods = [];
+  const machineShifts = dedupeShifts((shifts || []).filter((s) => s.machine_id === machineId));
+  const raw = [];
 
   for (const shift of machineShifts) {
     const shiftStart = new Date(shift.started_at || 0).getTime();
@@ -28,14 +31,16 @@ export function buildMachinePeriods({ machineId, shifts = [], events = [], fromM
     if (!Number.isFinite(shiftStart) || shiftEnd <= fromMs || shiftStart > windowEnd) continue;
 
     const timeline = buildShiftActivityTimeline(
-      { ...shift, ended_at: shiftStillOpen ? new Date(windowEnd).toISOString() : shift.ended_at },
+      { ...shift, ended_at: shiftStillOpen ? new Date(windowEnd).toISOString() : (shift.ended_at || shift.verified_at) },
       events
     );
+
+    let added = 0;
     for (const p of timeline.periods || []) {
       const start = Math.max(fromMs, p.start);
       const end = Math.min(windowEnd, p.end);
       if (end <= start) continue;
-      periods.push({
+      raw.push({
         ...p,
         start,
         end,
@@ -43,14 +48,29 @@ export function buildMachinePeriods({ machineId, shifts = [], events = [], fromM
         shiftId: shift.id,
         operatorName: shift.operator_name,
       });
+      added += 1;
     }
 
-    // Running shift with no event timeline yet — treat as continuous run from start.
-    if (shiftStillOpen && (!timeline.periods || !timeline.periods.length) && shiftStart < windowEnd) {
+    // Running shift with no event timeline yet — continuous run from start (or window).
+    if (!added && shiftStillOpen && shiftStart < windowEnd) {
       const start = Math.max(fromMs, shiftStart);
       const end = windowEnd;
       if (end > start) {
-        periods.push({
+        raw.push({
+          state: "running",
+          start,
+          end,
+          minutes: Math.max(0, Math.round((end - start) / 60000)),
+          shiftId: shift.id,
+          operatorName: shift.operator_name,
+        });
+      }
+    } else if (!added && !shiftStillOpen && shiftStart < windowEnd) {
+      // Closed shift with no MACHINE_STARTED events — treat whole shift as running.
+      const start = Math.max(fromMs, shiftStart);
+      const end = Math.min(windowEnd, shiftEnd);
+      if (end > start) {
+        raw.push({
           state: "running",
           start,
           end,
@@ -62,54 +82,107 @@ export function buildMachinePeriods({ machineId, shifts = [], events = [], fromM
     }
   }
 
-  periods.sort((a, b) => a.start - b.start);
-  return mergeAdjacentPeriods(periods);
+  return flattenToSingleTimeline(raw, fromMs, windowEnd);
 }
 
-function mergeAdjacentPeriods(periods) {
+/** Cut overlapping periods into one chronological run/stop line (stop wins ties). */
+function flattenToSingleTimeline(periods, fromMs, toMs) {
   if (!periods.length) return [];
-  const out = [{ ...periods[0] }];
-  for (let i = 1; i < periods.length; i += 1) {
-    const last = out[out.length - 1];
-    const next = periods[i];
-    if (last.state === next.state && Math.abs(next.start - last.end) < 2000) {
-      last.end = Math.max(last.end, next.end);
+  const cuts = new Set([fromMs, toMs]);
+  for (const p of periods) {
+    if (p.start > fromMs && p.start < toMs) cuts.add(p.start);
+    if (p.end > fromMs && p.end < toMs) cuts.add(p.end);
+  }
+  const times = [...cuts].sort((a, b) => a - b);
+  const slices = [];
+
+  for (let i = 0; i < times.length - 1; i += 1) {
+    const start = times[i];
+    const end = times[i + 1];
+    if (end <= start) continue;
+    const mid = (start + end) / 2;
+    const covering = periods.filter((p) => p.start <= mid && p.end > mid);
+    if (!covering.length) continue;
+    const stopped = covering.find((p) => p.state === "stopped");
+    const chosen = stopped || covering.find((p) => p.state === "running") || covering[0];
+    const slice = {
+      state: chosen.state,
+      start,
+      end,
+      reason: chosen.reason,
+      note: chosen.note,
+      shiftId: chosen.shiftId,
+      operatorName: chosen.operatorName,
+      minutes: Math.max(0, Math.round((end - start) / 60000)),
+    };
+    const last = slices[slices.length - 1];
+    if (last && last.state === slice.state && Math.abs(slice.start - last.end) < 2) {
+      last.end = slice.end;
       last.minutes = Math.max(0, Math.round((last.end - last.start) / 60000));
-      if (!last.reason && next.reason) last.reason = next.reason;
+      if (!last.reason && slice.reason) last.reason = slice.reason;
+      if (!last.operatorName && slice.operatorName) last.operatorName = slice.operatorName;
     } else {
-      out.push({ ...next });
+      slices.push(slice);
     }
   }
-  return out;
+  return slices;
 }
 
-/** True-stock series: +minutes while running, −minutes while stopped. */
+/**
+ * True-stock series: +minutes while running, −minutes while stopped.
+ * Points are always increasing in time — flat across idle gaps.
+ */
 export function buildStockSeries(periods) {
   if (!periods.length) return { points: [], endScore: 0, runtimeMin: 0, downtimeMin: 0 };
+  const ordered = [...periods].sort((a, b) => a.start - b.start || a.end - b.end);
   let score = 0;
   let runtimeMin = 0;
   let downtimeMin = 0;
-  const points = [{ t: periods[0].start, score: 0, state: "start" }];
-  for (const p of periods) {
-    const mins = Math.max(0, (p.end - p.start) / 60000);
+  let lastT = ordered[0].start;
+  const points = [{ t: lastT, score: 0, state: "start" }];
+
+  for (const p of ordered) {
+    const startT = Math.max(p.start, lastT);
+    const endT = Math.max(p.end, startT);
+    // Hold score flat across any gap before this period.
+    if (startT > lastT) {
+      points.push({ t: startT, score, state: "gap" });
+      lastT = startT;
+    }
+    const mins = Math.max(0, (endT - startT) / 60000);
+    if (mins <= 0) continue;
     if (p.state === "running") {
       score += mins;
       runtimeMin += mins;
-    } else {
+    } else if (p.state === "stopped") {
       score -= mins;
       downtimeMin += mins;
     }
     points.push({
-      t: p.end,
+      t: endT,
       score,
       state: p.state,
       reason: p.reason,
       minutes: Math.round(mins),
       operatorName: p.operatorName,
     });
+    lastT = endT;
   }
+
+  // Drop near-duplicate timestamps that can jitter the path.
+  const cleaned = [];
+  for (const pt of points) {
+    const prev = cleaned[cleaned.length - 1];
+    if (prev && Math.abs(pt.t - prev.t) < 500 && Math.abs(pt.score - prev.score) < 0.01) {
+      cleaned[cleaned.length - 1] = { ...prev, ...pt, t: Math.max(prev.t, pt.t) };
+      continue;
+    }
+    if (prev && pt.t < prev.t) continue; // never go backward
+    cleaned.push(pt);
+  }
+
   return {
-    points,
+    points: cleaned,
     endScore: score,
     runtimeMin: Math.round(runtimeMin),
     downtimeMin: Math.round(downtimeMin),

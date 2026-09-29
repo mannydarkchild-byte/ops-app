@@ -9,12 +9,14 @@ export function StockChartSvg({ points, width = 760, height = 240, className = "
       </div>
     );
   }
-  const scores = points.map((p) => p.score);
+  // Always draw left→right in time so the path cannot cross itself.
+  const series = [...points].sort((a, b) => a.t - b.t);
+  const scores = series.map((p) => p.score);
   const minS = Math.min(0, ...scores);
   const maxS = Math.max(1, ...scores);
   const span = Math.max(1, maxS - minS);
-  const t0 = points[0].t;
-  const t1 = points[points.length - 1].t;
+  const t0 = series[0].t;
+  const t1 = series[series.length - 1].t;
   const tSpan = Math.max(1, t1 - t0);
   const padL = 44;
   const padR = 14;
@@ -25,9 +27,9 @@ export function StockChartSvg({ points, width = 760, height = 240, className = "
   const xAt = (t) => padL + ((t - t0) / tSpan) * innerW;
   const yAt = (s) => padT + innerH - ((s - minS) / span) * innerH;
   const zeroY = yAt(0);
-  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(p.t).toFixed(1)},${yAt(p.score).toFixed(1)}`).join(" ");
-  const stopMarks = points.filter((p) => p.state === "stopped" && p.reason);
-  const tickCount = Math.min(6, points.length);
+  const path = series.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(p.t).toFixed(1)},${yAt(p.score).toFixed(1)}`).join(" ");
+  const stopMarks = series.filter((p) => p.state === "stopped" && p.reason);
+  const tickCount = Math.min(6, series.length);
   const ticks = [];
   for (let i = 0; i < tickCount; i += 1) {
     const t = t0 + (tSpan * i) / Math.max(1, tickCount - 1);
@@ -36,7 +38,7 @@ export function StockChartSvg({ points, width = 760, height = 240, className = "
       label: new Date(t).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }),
     });
   }
-  const end = points[points.length - 1];
+  const end = series[series.length - 1];
 
   return (
     <svg className={className} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Machine productivity">
@@ -67,12 +69,13 @@ export function stockChartSvgHtml(points, { esc, formatDurationMinutes: fmt }) {
   if (!points?.length) {
     return `<p class="note">No run/stop timeline on this phone yet for a productivity chart.</p>`;
   }
-  const scores = points.map((p) => p.score);
+  const series = [...points].sort((a, b) => a.t - b.t);
+  const scores = series.map((p) => p.score);
   const minS = Math.min(0, ...scores);
   const maxS = Math.max(1, ...scores);
   const span = Math.max(1, maxS - minS);
-  const t0 = points[0].t;
-  const t1 = points[points.length - 1].t;
+  const t0 = series[0].t;
+  const t1 = series[series.length - 1].t;
   const tSpan = Math.max(1, t1 - t0);
   const w = 760;
   const h = 240;
@@ -85,8 +88,8 @@ export function stockChartSvgHtml(points, { esc, formatDurationMinutes: fmt }) {
   const xAt = (t) => padL + ((t - t0) / tSpan) * innerW;
   const yAt = (s) => padT + innerH - ((s - minS) / span) * innerH;
   const zeroY = yAt(0);
-  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(p.t).toFixed(1)},${yAt(p.score).toFixed(1)}`).join(" ");
-  const stopMarks = points
+  const path = series.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(p.t).toFixed(1)},${yAt(p.score).toFixed(1)}`).join(" ");
+  const stopMarks = series
     .filter((p) => p.state === "stopped" && p.reason)
     .map((p) => {
       const x = xAt(p.t).toFixed(1);
@@ -94,14 +97,14 @@ export function stockChartSvgHtml(points, { esc, formatDurationMinutes: fmt }) {
       return `<circle cx="${x}" cy="${y}" r="4.5" fill="#EF4444" stroke="#fff" stroke-width="1.5"><title>${esc(p.reason)} · −${p.minutes || 0}m</title></circle>`;
     })
     .join("");
-  const tickCount = Math.min(6, points.length);
+  const tickCount = Math.min(6, series.length);
   const ticks = [];
   for (let i = 0; i < tickCount; i += 1) {
     const t = t0 + (tSpan * i) / Math.max(1, tickCount - 1);
     const label = new Date(t).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
     ticks.push(`<text x="${xAt(t).toFixed(1)}" y="${h - 10}" text-anchor="middle" class="trend-tick">${esc(label)}</text>`);
   }
-  const endScore = points[points.length - 1].score;
+  const endScore = series[series.length - 1].score;
   const endLabel = endScore >= 0 ? `+${fmt(endScore)} net` : `−${fmt(Math.abs(endScore))} net`;
   return `<svg class="trend-svg stock-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="Shift productivity stock chart">
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + innerH}" stroke="#D9D7D0"/>
@@ -112,7 +115,7 @@ export function stockChartSvgHtml(points, { esc, formatDurationMinutes: fmt }) {
     ${minS < 0 ? `<text x="6" y="${(padT + innerH).toFixed(1)}" class="trend-tick">−${fmt(Math.abs(minS))}</text>` : ""}
     <path d="${path}" fill="none" stroke="#1C1917" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
     ${stopMarks}
-    <circle cx="${xAt(points[points.length - 1].t).toFixed(1)}" cy="${yAt(endScore).toFixed(1)}" r="5.5" fill="#F5C518" stroke="#1C1917" stroke-width="1.5"/>
+    <circle cx="${xAt(series[series.length - 1].t).toFixed(1)}" cy="${yAt(endScore).toFixed(1)}" r="5.5" fill="#F5C518" stroke="#1C1917" stroke-width="1.5"/>
     ${ticks.join("")}
   </svg>
   <div class="chart-legend">
