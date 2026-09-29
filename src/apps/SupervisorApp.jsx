@@ -16,7 +16,7 @@ import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
 import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 
-import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod } from "../lib/utils.js";
+import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, dedupeShifts } from "../lib/utils.js";
 
 import { formatSyncErrorMessage } from "../lib/labels.js";
 import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
@@ -24,6 +24,7 @@ import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
+import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
 
 import * as wf from "../services/workflows.js";
 
@@ -107,6 +108,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
+  const [showPulse, setShowPulse] = useState(false);
   const [closeShift, setCloseShift] = useState(null);
   const [closeMeter, setCloseMeter] = useState("");
   const [closeBusy, setCloseBusy] = useState(false);
@@ -288,7 +290,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const signedReports = useMemo(() => {
 
-    return shifts
+    return dedupeShifts(shifts
 
       .filter((s) =>
 
@@ -300,7 +302,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
       )
 
-      .filter((s) => !reportPeriod || inPeriod(s.verified_at || s.ended_at, reportPeriod))
+      .filter((s) => !reportPeriod || inPeriod(s.verified_at || s.ended_at, reportPeriod)))
 
       .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0));
 
@@ -407,9 +409,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const reportContext = useMemo(() => ({
 
-    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings,
+    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings, siteSettings: siteConfig,
 
-  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings]);
+  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings, siteConfig]);
 
 
 
@@ -758,7 +760,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
         {tab === "live" && (
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="space-y-3 mb-4">
+            <PulseOpenButton onClick={() => setShowPulse(true)} />
+            <div className="grid grid-cols-2 gap-3">
             <Kpi
               label="On site now"
               value={String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id).length + openShiftsToClose.length)}
@@ -766,6 +770,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
               color="#F5C518"
             />
             <Kpi label="To sign off" value={String(myPendingVerify)} sub="Tap Sign Off" color="#22C55E" />
+            </div>
           </div>
         )}
 
@@ -1440,6 +1445,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
           onClose={() => setReportPreview(null)}
         />
       )}
+
+      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
 
     </AppPage>
 

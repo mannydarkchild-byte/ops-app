@@ -1,6 +1,9 @@
 import { SHIFT } from "../lib/constants.js";
+import { ownerForStopReason } from "../lib/stopReasons.js";
 import { resolveMediaUrl } from "../lib/media.js";
 import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinutes } from "../lib/shiftMetrics.js";
+import { buildStockSeries } from "../lib/productivityPulse.js";
+import { stockChartSvgHtml } from "../components/StockChart.jsx";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { esc, fmtDate, fmtDateShort, money, shiftBillableValue } from "../lib/utils.js";
 
@@ -173,6 +176,20 @@ function trendChartSvg(points) {
   </div>`;
 }
 
+/** True-stock productivity: climbs while running, falls while stopped. End = runtime − downtime. */
+function stockProductivitySvg(shift, events, siteSettings) {
+  const { periods } = buildShiftActivityTimeline(shift, events);
+  if (!periods.length) {
+    return `<p class="note">No run/stop timeline on this phone yet for a productivity chart.</p>`;
+  }
+  const { points } = buildStockSeries(periods);
+  const withOwners = points.map((p) => ({
+    ...p,
+    owner: p.state === "stopped" ? ownerForStopReason(p.reason, siteSettings) : null,
+  }));
+  return stockChartSvgHtml(withOwners, { esc, formatDurationMinutes });
+}
+
 function reportPageStyles() {
   return `
   *{box-sizing:border-box}
@@ -224,6 +241,9 @@ function reportPageStyles() {
   .hbar-label{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:4px}
   .hbar-track{height:12px;background:#F2F0EA;border-radius:99px;overflow:hidden}
   .hbar-fill{height:100%;background:#EF4444;border-radius:99px}
+  .owner-row{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+  .owner-chip{display:inline-block;padding:6px 10px;background:#F2F0EA;border:1px solid #D9D7D0;border-radius:8px;font-size:12px;color:#1C1917}
+  .owner-tag{font-style:normal;color:#6B6960;font-size:11px;margin-left:6px}
   .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
   .tile{border-radius:12px;padding:12px;text-align:center;border:1px solid #E8E6E0}
   .tile strong{display:block;font-size:24px;line-height:1.1}
@@ -252,19 +272,27 @@ function runStopChart(runtimeMin, downtimeMin) {
   </div>`;
 }
 
-function downtimeReasonChart(stops) {
+function downtimeReasonChart(stops, siteSettings) {
   const byReason = {};
+  const byOwner = {};
   for (const s of stops) {
     const key = s.reason || "Other";
+    const owner = ownerForStopReason(key, siteSettings);
     byReason[key] = (byReason[key] || 0) + Number(s.downtime_minutes || 0);
+    byOwner[owner] = (byOwner[owner] || 0) + Number(s.downtime_minutes || 0);
   }
   const rows = Object.entries(byReason).sort((a, b) => b[1] - a[1]);
   if (!rows.length) return "";
   const max = Math.max(1, ...rows.map(([, min]) => min));
-  return rows.map(([reason, min]) => `<div class="hbar">
-    <div class="hbar-label"><span>${esc(reason)}</span><strong>${formatDurationMinutes(min)}</strong></div>
+  const ownerSummary = Object.entries(byOwner)
+    .sort((a, b) => b[1] - a[1])
+    .map(([owner, min]) => `<span class="owner-chip"><strong>${esc(owner)}</strong> ${formatDurationMinutes(min)}</span>`)
+    .join("");
+  const bars = rows.map(([reason, min]) => `<div class="hbar">
+    <div class="hbar-label"><span>${esc(reason)} <em class="owner-tag">${esc(ownerForStopReason(reason, siteSettings))}</em></span><strong>${formatDurationMinutes(min)}</strong></div>
     <div class="hbar-track"><div class="hbar-fill" style="width:${(min / max) * 100}%"></div></div>
   </div>`).join("");
+  return `<div class="owner-row">${ownerSummary}</div>${bars}`;
 }
 
 function shiftPrestart(inspections, shift) {
@@ -293,7 +321,7 @@ async function resolveInspectionPhotoMap(items) {
   return map;
 }
 
-export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls = {}, trendPoints = [] }) {
+export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls = {}, siteSettings }) {
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = fuelLogs.filter((f) => f.shift_id === shift.id);
@@ -311,7 +339,7 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
     }
     const range = `${fmtDate(new Date(item.start).toISOString())} – ${fmtDate(new Date(item.end).toISOString())}`;
     if (item.state === "stopped") {
-      return `<tr><td>${range}</td><td>Stopped</td><td>${esc(item.reason || "Downtime")}</td><td>${formatDurationMinutes(item.minutes)}${item.note ? ` · ${esc(item.note)}` : ""}</td></tr>`;
+      return `<tr><td>${range}</td><td>Stopped</td><td>${esc(item.reason || "Downtime")} · ${esc(ownerForStopReason(item.reason, siteSettings))}</td><td>${formatDurationMinutes(item.minutes)}${item.note ? ` · ${esc(item.note)}` : ""}</td></tr>`;
     }
     return `<tr><td>${range}</td><td>Running</td><td>—</td><td>${formatDurationMinutes(item.minutes)}</td></tr>`;
   }).join("");
@@ -326,7 +354,7 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
   const prestartAction = prestart.filter((i) => /action/i.test(i.status || "")).length;
   const prestartBad = prestart.filter((i) => /attention|need|fail/i.test(i.status || "")).length;
   const prestartProblems = prestart.filter((i) => !/^ok$/i.test(i.status || ""));
-  const downtimeChart = downtimeReasonChart(stops);
+  const downtimeChart = downtimeReasonChart(stops, siteSettings);
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Daily Report · ${esc(shift.operator_name)} · ${titleDate}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -400,11 +428,11 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
       ${runStopChart(shift.runtime_minutes, shift.downtime_minutes)}
     </section>
 
-    ${trendPoints.length ? `<section>
-      <h2 class="font-brand">Operation trend — last 14 days</h2>
-      <p class="note" style="margin-top:0">Daily meter hours, runtime and downtime for ${esc(machine?.name || "this machine")}. Gold dot is this report’s day.</p>
-      ${trendChartSvg(trendPoints)}
-    </section>` : ""}
+    <section>
+      <h2 class="font-brand">Machine productivity</h2>
+      <p class="note" style="margin-top:0">Stock-style score for this shift only. Climbs while the machine runs, falls while it is stopped. End point is runtime minus downtime. Red dots are stops.</p>
+      ${stockProductivitySvg(shift, events, siteSettings)}
+    </section>
 
     <section>
       <h2 class="font-brand">Pre-start</h2>
@@ -443,13 +471,13 @@ ${timelineRows || '<tr class="empty"><td colspan="4">No activity logged</td></tr
     <section>
       <h2 class="font-brand">Downtime</h2>
       ${downtimeChart || ""}
-      <table><thead><tr><th>Reason</th><th>Stopped</th><th>Duration</th><th>Notes</th></tr></thead><tbody>
+      <table><thead><tr><th>Reason</th><th>Owner</th><th>Stopped</th><th>Duration</th><th>Notes</th></tr></thead><tbody>
 ${stops.length
     ? stops.map((s) => {
       const endLabel = s.restarted_at ? fmtDate(s.restarted_at) : (shift.ended_at ? fmtDate(shift.ended_at) : "—");
-      return `<tr><td>${esc(s.reason)}</td><td>${fmtDate(s.stopped_at)}${s.restarted_at ? ` → ${endLabel}` : ""}</td><td>${formatDurationMinutes(s.downtime_minutes || 0)}</td><td>${esc(s.note || "")}</td></tr>`;
+      return `<tr><td>${esc(s.reason)}</td><td>${esc(ownerForStopReason(s.reason, siteSettings))}</td><td>${fmtDate(s.stopped_at)}${s.restarted_at ? ` → ${endLabel}` : ""}</td><td>${formatDurationMinutes(s.downtime_minutes || 0)}</td><td>${esc(s.note || "")}</td></tr>`;
     }).join("")
-    : '<tr class="empty"><td colspan="4">No stops recorded</td></tr>'}
+    : '<tr class="empty"><td colspan="5">No stops recorded</td></tr>'}
       </tbody></table>
     </section>
 
@@ -509,7 +537,7 @@ ${shiftFuel.length
 </body></html>`;
 }
 
-function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, trendPoints = [] }) {
+function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, siteSettings }) {
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = (fuelLogs || []).filter((f) => f.shift_id === shift.id);
@@ -519,10 +547,15 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
     ...periods.filter((p) => p.state === "stopped").map((p) => [
       `${fmtDate(new Date(p.start).toISOString())} – ${fmtDate(new Date(p.end).toISOString())}`,
       "Stopped",
-      p.reason || "Downtime",
+      `${p.reason || "Downtime"} (${ownerForStopReason(p.reason, siteSettings)})`,
       formatDurationMinutes(p.minutes),
     ]),
   ];
+  const ownerTotals = {};
+  for (const s of stops) {
+    const owner = ownerForStopReason(s.reason, siteSettings);
+    ownerTotals[owner] = (ownerTotals[owner] || 0) + Number(s.downtime_minutes || 0);
+  }
   return [
     {
       name: "Summary",
@@ -547,13 +580,17 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
     {
       name: "Downtime",
       rows: [
-        ["Reason", "Stopped", "Duration", "Notes"],
+        ["Reason", "Owner", "Stopped", "Duration", "Notes"],
         ...stops.map((s) => [
           s.reason || "",
+          ownerForStopReason(s.reason, siteSettings),
           fmtDate(s.stopped_at),
           formatDurationMinutes(s.downtime_minutes || 0),
           s.note || "",
         ]),
+        [],
+        ["Owner totals"],
+        ...Object.entries(ownerTotals).map(([owner, min]) => [owner, "", "", formatDurationMinutes(min), ""]),
       ],
     },
     {
@@ -576,24 +613,16 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
         ...prestart.map((i) => [i.item_name || "", i.status || "", i.remark || ""]),
       ],
     },
-    {
-      name: "Trend",
-      rows: [
-        ["Date", "Meter hours", "Runtime hours", "Downtime hours", "Diesel L"],
-        ...trendPoints.map((p) => [p.label, p.billable, Number(p.runtimeH.toFixed(2)), Number(p.downH.toFixed(2)), p.diesel]),
-      ],
-    },
   ];
 }
 
-export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [] }) {
+export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [], siteSettings }) {
   const sigRef = firstMedia(shift.supervisor_signature_ref, shift.supervisor_signature);
   const prestartItems = shiftPrestart(inspections, shift);
   const prestartPhotoMap = await resolveInspectionPhotoMap(prestartItems);
   const prestartPhotoUrls = Object.fromEntries(
     Object.entries(prestartPhotoMap).map(([id, { url }]) => [id, url])
   );
-  const trendPoints = buildPerformanceTrend(shift, { shifts, fuelLogs });
 
   const [{ openingPhotoUrl, closingPhotoUrl }, signatureUrl, logoUrl] = await Promise.all([
     resolveMeterPhotos(shift, events, hourReadings),
@@ -602,13 +631,13 @@ export async function prepareShiftDailyReport(shift, { events = [], inspections 
   ]);
 
   const html = generateShiftDailyReportHTML(shift, {
-    events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls, trendPoints,
+    events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls, siteSettings,
   });
 
   return {
     html,
     title: `Daily Report · ${shift.operator_name} · ${fmtDateShort(shift.started_at)}`,
-    sheets: buildDailyReportSheets(shift, { events, inspections, fuelLogs, machine, site, trendPoints }),
+    sheets: buildDailyReportSheets(shift, { events, inspections, fuelLogs, machine, site, siteSettings }),
   };
 }
 

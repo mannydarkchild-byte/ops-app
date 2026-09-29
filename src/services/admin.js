@@ -6,6 +6,7 @@ import {
   resolveSiteSettings,
   clampCycleDay,
 } from "../lib/siteConfig.js";
+import { normalizeStopReasons } from "../lib/stopReasons.js";
 import { scheduleSync } from "../lib/sync/engine.js";
 
 export async function createSite({ name, code, timezone }) {
@@ -106,6 +107,9 @@ export async function updateSiteSettings(siteId, fields) {
     billing_cycle_start_day: fields.billing_cycle_start_day != null
       ? clampCycleDay(fields.billing_cycle_start_day)
       : current.billing_cycle_start_day,
+    stop_reasons: fields.stop_reasons != null
+      ? normalizeStopReasons(fields.stop_reasons)
+      : current.stop_reasons,
     updated_at: now,
   };
   await saveLocal("site_settings", updated);

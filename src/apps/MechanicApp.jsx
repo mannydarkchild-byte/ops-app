@@ -15,6 +15,7 @@ import { saveLocal } from "../lib/db.js";
 import { scheduleSync } from "../lib/sync/engine.js";
 import { openMechanicInspectionReport } from "../services/reports.js";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
+import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
@@ -43,6 +44,7 @@ export function MechanicApp() {
   const [busy, setBusy] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
+  const [showPulse, setShowPulse] = useState(false);
 
   const [inspectionFlow, setInspectionFlow] = useState(null);
   const [inspectionMachineId, setInspectionMachineId] = useState("");
@@ -255,6 +257,7 @@ export function MechanicApp() {
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
       <div className="space-y-4">
+        <PulseOpenButton onClick={() => setShowPulse(true)} />
         {tab === "repairs" && (
           <section>
             <h2 className="font-logo text-[#F5C518] text-lg tracking-wider mb-3">My repairs ({myJobs.length})</h2>
@@ -434,6 +437,7 @@ export function MechanicApp() {
           onClose={() => setReportPreview(null)}
         />
       )}
+      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
     </AppPage>
   );
 }

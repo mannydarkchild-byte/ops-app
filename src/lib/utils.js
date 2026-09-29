@@ -122,6 +122,43 @@ export function stopReasonToIssueArea(reason) {
   return map[reason] || "Mechanical";
 }
 
+/**
+ * Collapse near-duplicate shifts (same operator + machine started within a few minutes).
+ * Keeps the most complete row so lists never show the same day twice.
+ */
+export function dedupeShifts(shifts) {
+  const list = [...(shifts || [])].sort(
+    (a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0)
+  );
+  const kept = [];
+  const score = (s) => {
+    const st = getShiftStatus(s);
+    let n = 0;
+    if (st === SHIFT.VERIFIED) n += 40;
+    else if (st === SHIFT.WAITING_FOR_VERIFICATION || st === SHIFT.RESUBMITTED) n += 25;
+    else if (st === SHIFT.CORRECTION_REQUIRED) n += 15;
+    if (s.end_hour_meter != null) n += 10;
+    if (s.supervisor_signature_ref || s.supervisor_signature_name) n += 8;
+    n += Math.min(20, Number(s.hours_worked || 0));
+    return n;
+  };
+  for (const shift of list) {
+    const twin = kept.find((k) =>
+      k.operator_id === shift.operator_id
+      && k.machine_id === shift.machine_id
+      && Math.abs(new Date(k.started_at || 0) - new Date(shift.started_at || 0)) < 5 * 60 * 1000
+    );
+    if (!twin) {
+      kept.push(shift);
+      continue;
+    }
+    if (score(shift) > score(twin)) {
+      kept[kept.indexOf(twin)] = shift;
+    }
+  }
+  return kept;
+}
+
 export function getPrimaryMachine(machines, siteId, siteSettings = null) {
   if (!machines?.length) return null;
   const onSite = machines.filter((m) => m.site_id === siteId && m.active !== false);

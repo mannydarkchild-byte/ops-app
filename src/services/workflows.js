@@ -7,7 +7,7 @@ import { canCloseIssue, getShiftStatus } from "../lib/utils.js";
 import { makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
 import { getPrestartConfigForSite, getInspectionConfigForSite } from "../lib/siteConfig.js";
-import { reconcileMachineOpenState } from "../lib/machineStatus.js";
+import { reconcileMachineOpenState, fetchServerOpenShift } from "../lib/machineStatus.js";
 import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
 export async function clockIn(user, machine, site, { assignedSupervisor } = {}) {
   if (!assignedSupervisor?.id) {
@@ -188,22 +188,22 @@ export async function startMachine(user, machine, site, { hourMeter, photoRef, v
   }
 
   const existingShifts = await readTable("shifts");
-  const existingRun = existingShifts.find(
+  const runningOnMachine = existingShifts.filter(
     (s) => s.machine_id === machine.id && (s.shift_status === SHIFT.RUNNING || s.status === SHIFT.RUNNING)
   );
-  if (existingRun) {
-    const belongsToThisClockIn = existingRun.operator_id === user.id
-      && (!workSessionClockIn || new Date(existingRun.started_at) >= new Date(workSessionClockIn));
-    const liveOnServer = remote.known && remote.shift && remote.shift.id === existingRun.id;
-    if (belongsToThisClockIn && (liveOnServer || !remote.known)) {
-      return { run: existingRun, lock: { accepted: true }, alreadyRunning: true };
-    }
-    if (remote.known && remote.shift && remote.shift.id === existingRun.id && !belongsToThisClockIn) {
-      const who = existingRun.operator_name || "An operator";
-      const when = existingRun.started_at ? new Date(existingRun.started_at).toLocaleString() : "earlier";
+  const ownRun = runningOnMachine.find((s) => s.operator_id === user.id);
+  // Never open a second shift for the same operator on this machine.
+  if (ownRun) {
+    return { run: ownRun, lock: { accepted: true }, alreadyRunning: true };
+  }
+  for (const stale of runningOnMachine) {
+    const liveOnServer = remote.known && remote.shift && remote.shift.id === stale.id;
+    if (liveOnServer) {
+      const who = stale.operator_name || "An operator";
+      const when = stale.started_at ? new Date(stale.started_at).toLocaleString() : "earlier";
       throw new Error(`${who} did not end their shift (started ${when}). A supervisor must close it on the Live tab.`);
     }
-    await dropLocalRecord("shifts", existingRun.id);
+    await dropLocalRecord("shifts", stale.id);
   }
 
   let baseline = Number(machine.start_hour_meter || 0);
@@ -294,7 +294,22 @@ export async function restartMachine(user, machine, site, machineRun, downtime, 
   if (!downtime) throw new Error("No open stop to restart from");
   if (downtime.status === "closed") return downtime;
 
-  const lock = await acquireMachineLock(machine.id, machineRun.id, user.id);
+  let lock = await acquireMachineLock(machine.id, machineRun.id, user.id);
+  if (!lock.accepted) {
+    // Stop released the lock locally, but the server may still think this same shift is running.
+    // That must not block restart — it is the same day, not a new start.
+    const remote = await fetchServerOpenShift(machine.id);
+    const sameShift = remote.known && remote.shift
+      && remote.shift.id === machineRun.id
+      && remote.shift.operator_id === user.id;
+    if (sameShift || (remote.known && !remote.shift)) {
+      try { await releaseMachineLock(machine.id); } catch {}
+      lock = await acquireMachineLock(machine.id, machineRun.id, user.id);
+      if (!lock.accepted && sameShift) {
+        lock = { accepted: true, forced: true };
+      }
+    }
+  }
   if (!lock.accepted) throw new Error(lock.reason || "Could not restart");
 
   const now = nowISO();

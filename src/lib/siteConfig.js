@@ -5,6 +5,7 @@ import {
   INSPECTION_GROUPS,
   PRIMARY_MACHINE_CODE,
 } from "./constants.js";
+import { DEFAULT_STOP_REASONS, normalizeStopReasons } from "./stopReasons.js";
 
 export const DEFAULT_BILLING_CYCLE_START_DAY = 26;
 
@@ -22,6 +23,7 @@ export function defaultSiteSettings(siteId) {
     prestart_items: [...PRESTART_INSPECTION_ITEMS],
     prestart_status_options: [...PRESTART_STATUS_OPTIONS],
     inspection_groups: JSON.parse(JSON.stringify(INSPECTION_GROUPS)),
+    stop_reasons: DEFAULT_STOP_REASONS.map((r) => ({ ...r })),
     created_at: now,
     updated_at: now,
   };
@@ -35,6 +37,7 @@ export function resolveSiteSettings(row) {
     prestart_items: row?.prestart_items?.length ? row.prestart_items : defaults.prestart_items,
     prestart_status_options: row?.prestart_status_options?.length ? row.prestart_status_options : defaults.prestart_status_options,
     inspection_groups: row?.inspection_groups?.length ? row.inspection_groups : defaults.inspection_groups,
+    stop_reasons: normalizeStopReasons(row?.stop_reasons),
     billing_cycle_start_day: clampCycleDay(row?.billing_cycle_start_day),
   };
 }

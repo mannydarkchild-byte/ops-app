@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Modal } from "./ui/Modal.jsx";
 import { ReportPreviewModal } from "./ReportPreviewModal.jsx";
 import { SHIFT } from "../lib/constants.js";
-import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod } from "../lib/utils.js";
+import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod, dedupeShifts } from "../lib/utils.js";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
 import { ShiftPhotoFix } from "./ShiftPhotoFix.jsx";
@@ -52,6 +52,7 @@ export function OperatorReportsModal({
   profiles = [],
   site,
   cycleStartDay = 26,
+  siteSettings,
 }) {
   const [filter, setFilter] = useState("all");
   const [preview, setPreview] = useState(null);
@@ -64,8 +65,7 @@ export function OperatorReportsModal({
   );
 
   const mine = useMemo(
-    () => (shifts || [])
-      .filter((s) => s.operator_id === user?.id)
+    () => dedupeShifts((shifts || []).filter((s) => s.operator_id === user?.id))
       .sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0)),
     [shifts, user?.id]
   );
@@ -109,8 +109,8 @@ export function OperatorReportsModal({
   const afterChange = () => { onChanged?.(); };
 
   const reportContext = useMemo(
-    () => ({ events, inspections, fuelLogs, site, shifts, hourReadings }),
-    [events, inspections, fuelLogs, site, shifts, hourReadings]
+    () => ({ events, inspections, fuelLogs, site, shifts, hourReadings, siteSettings }),
+    [events, inspections, fuelLogs, site, shifts, hourReadings, siteSettings]
   );
 
   const viewReport = async (shift) => {

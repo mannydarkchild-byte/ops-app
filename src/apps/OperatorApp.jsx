@@ -12,7 +12,9 @@ import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
 import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
-import { STOP_REASONS, ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS, EARLY_CLOCK_OUT_GUIDE, STOP_REASON_GUIDE } from "../lib/constants.js";
+import { ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS, EARLY_CLOCK_OUT_GUIDE, STOP_REASON_GUIDE } from "../lib/constants.js";
+import { stopReasonGroups, ownerForStopReason } from "../lib/stopReasons.js";
+import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
 import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
@@ -58,6 +60,9 @@ export function OperatorApp() {
   const [earlyClockOutNote, setEarlyClockOutNote] = useState("");
   const [suggestReport, setSuggestReport] = useState(null);
   const [reportPrefill, setReportPrefill] = useState(null);
+  const [showPulse, setShowPulse] = useState(false);
+
+  const stopGroups = useMemo(() => stopReasonGroups(siteConfig), [siteConfig]);
 
   const [stopReason, setStopReason] = useState("");
   const [stopNote, setStopNote] = useState("");
@@ -455,6 +460,10 @@ export function OperatorApp() {
           />
         )}
 
+        {!showWelcome && (
+          <PulseOpenButton onClick={() => setShowPulse(true)} className="mb-4" />
+        )}
+
         {!workSession && !submittedShift && !showWelcome && (
           <button
             type="button"
@@ -715,6 +724,7 @@ export function OperatorApp() {
           profiles={profiles}
           site={activeSite}
           cycleStartDay={siteConfig.billing_cycle_start_day}
+          siteSettings={siteConfig}
           onChanged={refreshLocal}
         />
       )}
@@ -748,13 +758,19 @@ export function OperatorApp() {
       )}
       {showStop && (
         <Modal title="STOP MACHINE" color="red" onClose={() => setShowStop(false)}>
-          <FormSection step={1} title="Stop reason" description="Why is the machine stopping?" accent="#EF4444">
+          <FormSection step={1} title="Stop reason" description="Why is the machine stopping? This points downtime to Darkchild or Berlington." accent="#EF4444">
             <select value={stopReason} onChange={(e) => setStopReason(e.target.value)} className="w-full bg-[#0A0A0A] border p-4 rounded-xl text-[#F2F0EA] text-lg min-h-[60px]">
               <option value="">Select reason…</option>
-              {STOP_REASONS.map((x) => <option key={x}>{x}</option>)}
+              {stopGroups.map((group) => (
+                <optgroup key={group.owner} label={group.hint}>
+                  {group.reasons.map((x) => <option key={x} value={x}>{x}</option>)}
+                </optgroup>
+              ))}
             </select>
             {stopReason && (
-              <ChoiceHint>{statusGuide(STOP_REASON_GUIDE, stopReason)}</ChoiceHint>
+              <ChoiceHint>
+                {statusGuide(STOP_REASON_GUIDE, stopReason)} Owner: {ownerForStopReason(stopReason, siteConfig)}.
+              </ChoiceHint>
             )}
           </FormSection>
           <FormSection step={2} title="Details" description="What happened? What was done?" accent="#EF4444">
@@ -793,6 +809,7 @@ export function OperatorApp() {
           </button>
         </Modal>
       )}
+      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
     </AppPage>
   );
 }

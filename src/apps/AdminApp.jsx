@@ -27,6 +27,7 @@ import { AdminSitesPanel } from "../components/admin/AdminSitesPanel.jsx";
 import { AdminMachinesPanel } from "../components/admin/AdminMachinesPanel.jsx";
 import { AdminChecklistsPanel } from "../components/admin/AdminChecklistsPanel.jsx";
 import { AdminActivityPanel } from "../components/admin/AdminActivityPanel.jsx";
+import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
 
 
 
@@ -71,6 +72,7 @@ export function AdminApp() {
   const [showInactive, setShowInactive] = useState(false);
 
   const [alert, setAlert] = useState({ isOpen: false });
+  const [showPulse, setShowPulse] = useState(false);
 
   const showAlert = (title, message) => setAlert({ isOpen: true, title, message, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -236,6 +238,7 @@ export function AdminApp() {
 
         {tab === "dashboard" && (
           <div className="space-y-4">
+            <PulseOpenButton onClick={() => setShowPulse(true)} />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Kpi label="Billable hours" value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${dashboard.overview.machinesRunning} running`} color="#22C55E" />
               <Kpi label="Revenue" value={formatAdminMetric(dashboard.overview.revenue, "money")} sub="Verified shifts" color="#F5C518" />
@@ -612,6 +615,8 @@ export function AdminApp() {
         />
 
       )}
+
+      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
 
     </AppPage>
 

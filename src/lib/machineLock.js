@@ -19,6 +19,19 @@ export async function acquireMachineLock(machineId, shiftId, operatorId) {
       operatorName: remoteOpen.shift.operator_name,
     };
   }
+  // Same operator restarting the same shift — server still shows running after a Stop. That is fine.
+  if (remoteOpen.known && remoteOpen.shift && remoteOpen.shift.id === shiftId && remoteOpen.shift.operator_id === operatorId) {
+    const lock = {
+      machine_id: machineId,
+      shift_id: shiftId,
+      operator_id: operatorId,
+      status: "locked",
+      locked_at: new Date().toISOString(),
+      synced: true,
+    };
+    await db.machine_locks.put(lock);
+    return { accepted: true, sameShift: true };
+  }
 
   const existing = await db.machine_locks.get(machineId);
   if (existing?.status === "locked" && existing.operator_id !== operatorId && existing.shift_id !== shiftId) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { updateSiteSettings } from "../../services/admin.js";
 import { resolveSiteSettings } from "../../lib/siteConfig.js";
+import { StopReasonsEditor } from "../StopReasonsEditor.jsx";
 
 export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }) {
   const [siteId, setSiteId] = useState(sites[0]?.id || "");
@@ -9,6 +10,11 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
 
   const settings = useMemo(
     () => resolveSiteSettings(siteSettings.find((s) => s.site_id === siteId)),
+    [siteSettings, siteId]
+  );
+
+  const settingsRow = useMemo(
+    () => siteSettings.find((s) => s.site_id === siteId),
     [siteSettings, siteId]
   );
 
@@ -62,10 +68,11 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
         ))}
       </select>
 
-      <div className="flex gap-1">
+      <div className="flex gap-1 flex-wrap">
         {[
           { id: "prestart", label: "Pre-start" },
           { id: "mechanic", label: "Mechanic inspection" },
+          { id: "stops", label: "Stop owners" },
         ].map((t) => (
           <button
             key={t.id}
@@ -110,14 +117,27 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={save}
-        disabled={busy || !siteId}
-        className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold text-xs disabled:opacity-40"
-      >
-        SAVE CHECKLISTS
-      </button>
+      {tab === "stops" && (
+        <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
+          <StopReasonsEditor
+            siteId={siteId}
+            siteSettingsRow={settingsRow}
+            onSaved={onSaved}
+            showAlert={showAlert}
+          />
+        </div>
+      )}
+
+      {tab !== "stops" && (
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy || !siteId}
+          className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold text-xs disabled:opacity-40"
+        >
+          SAVE CHECKLISTS
+        </button>
+      )}
     </div>
   );
 }

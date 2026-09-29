@@ -12,14 +12,18 @@ import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import { SignedReportCard } from "../components/SignedReportCard.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
 import { ISSUE, SHIFT } from "../lib/constants.js";
+import { ownerForStopReason } from "../lib/stopReasons.js";
 import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 import {
-  fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, money, shiftBillableValue,
+  fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, money, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
 import { ManagerPartsPanel } from "../components/manager/ManagerPartsPanel.jsx";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
+import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
+import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
+import { Modal } from "../components/ui/Modal.jsx";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
@@ -46,7 +50,7 @@ export function ManagerApp() {
   const {
     user, shifts, events, expenses, fuelLogs, inspections, issues, issueMessages,
     workSessions, machines, profiles, submissions, hourReadings, activeSite, inventoryItems, syncNow, refreshLocal,
-    getSettingsForSite,
+    getSettingsForSite, siteSettings,
   } = useOps();
 
   const [tab, setTab] = useState("overview");
@@ -60,12 +64,19 @@ export function ManagerApp() {
   const [showImportExpenses, setShowImportExpenses] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
+  const [showPulse, setShowPulse] = useState(false);
+  const [showStopOwners, setShowStopOwners] = useState(false);
   const showAlert = (title, message, type = "info") =>
     setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
   const siteConfig = useMemo(
     () => getSettingsForSite(user?.site_id),
     [getSettingsForSite, user?.site_id]
+  );
+
+  const siteSettingsRow = useMemo(
+    () => siteSettings.find((s) => s.site_id === user?.site_id),
+    [siteSettings, user?.site_id]
   );
 
   const primaryMachine = useMemo(
@@ -181,12 +192,13 @@ export function ManagerApp() {
     const map = {};
     for (const e of stops) {
       const reason = e.reason || "Other";
-      map[reason] = (map[reason] || 0) + Number(e.downtime_minutes || 0);
+      const label = `${reason} · ${ownerForStopReason(reason, siteConfig)}`;
+      map[label] = (map[label] || 0) + Number(e.downtime_minutes || 0);
     }
     return Object.entries(map)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
-  }, [events, primaryMachine?.id, billingPeriod]);
+  }, [events, primaryMachine?.id, billingPeriod, siteConfig]);
 
   const siteMachines = useMemo(
     () => machines.filter((m) => m.site_id === user?.site_id && m.active !== false),
@@ -244,13 +256,13 @@ export function ManagerApp() {
   );
 
   const signedReports = useMemo(
-    () => warriorShifts
+    () => dedupeShifts(warriorShifts
       .filter(
         (s) =>
           s.shift_status === SHIFT.VERIFIED &&
           (s.supervisor_signature_ref || s.supervisor_signature_name || s.verified_at)
       )
-      .filter((s) => !signedPeriod || inPeriod(s.verified_at || s.ended_at, signedPeriod))
+      .filter((s) => !signedPeriod || inPeriod(s.verified_at || s.ended_at, signedPeriod)))
       .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0)),
     [warriorShifts, signedPeriod]
   );
@@ -306,8 +318,8 @@ export function ManagerApp() {
   }), [events, fuelLogs, issues, primaryMachine?.id]);
 
   const reportContext = useMemo(() => ({
-    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings,
-  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings]);
+    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings, siteSettings: siteConfig,
+  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings, siteConfig]);
 
   const getReportPeriod = () => {
     const presets = getDatePresets(siteConfig.billing_cycle_start_day);
@@ -407,6 +419,14 @@ export function ManagerApp() {
 
         {tab === "overview" && (
           <div className="space-y-4">
+            <PulseOpenButton onClick={() => setShowPulse(true)} />
+            <button
+              type="button"
+              onClick={() => setShowStopOwners(true)}
+              className="w-full border border-[#2A2A2A] text-[#F2F0EA]/80 py-3 rounded-xl font-logo text-xs tracking-wider"
+            >
+              Edit stop reasons &amp; owners
+            </button>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Kpi label="Billable Hours" value={`${cycleStats.hours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} signed shifts`} color="#22C55E" />
               <Kpi label="Revenue" value={money(cycleStats.revenue)} sub={`R${primaryMachine.billable_rate}/h meter rate`} color="#22C55E" />
@@ -735,6 +755,19 @@ export function ManagerApp() {
           sheets={reportPreview.sheets}
           onClose={() => setReportPreview(null)}
         />
+      )}
+
+      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
+
+      {showStopOwners && (
+        <Modal title="STOP REASONS & OWNERS" color="yellow" onClose={() => setShowStopOwners(false)}>
+          <StopReasonsEditor
+            siteId={user?.site_id}
+            siteSettingsRow={siteSettingsRow}
+            onSaved={async () => { await refreshLocal(); setShowStopOwners(false); }}
+            showAlert={showAlert}
+          />
+        </Modal>
       )}
     </AppPage>
   );

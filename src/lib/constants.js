@@ -26,10 +26,69 @@ export const ISSUE = {
   RESOLVED: "RESOLVED",
 };
 
+/** Who owns the downtime when this stop reason is chosen. */
+export const STOP_OWNERS = {
+  DARKCHILD: "Darkchild",
+  BERLINGTON: "Berlington",
+  SITE: "Site / operations",
+};
+
+/**
+ * Darkchild → engine & electrical.
+ * Berlington → consumables (mesh, diesel, oil, belts).
+ * Site → waiting, weather, safety, planned stops.
+ */
+export const STOP_REASON_OWNER = {
+  "Engine Problem": STOP_OWNERS.DARKCHILD,
+  "Electrical Breakdown": STOP_OWNERS.DARKCHILD,
+  "Mechanical Breakdown": STOP_OWNERS.DARKCHILD,
+  "Track Problem": STOP_OWNERS.DARKCHILD,
+  "Hydraulic Breakdown": STOP_OWNERS.BERLINGTON,
+  "Screen Problem": STOP_OWNERS.BERLINGTON,
+  "Conveyor/Belt Problem": STOP_OWNERS.BERLINGTON,
+  "No Diesel": STOP_OWNERS.BERLINGTON,
+  "Waiting for Material": STOP_OWNERS.SITE,
+  "Waiting for Loader": STOP_OWNERS.SITE,
+  Weather: STOP_OWNERS.SITE,
+  "Planned Maintenance": STOP_OWNERS.SITE,
+  "Safety Stop": STOP_OWNERS.SITE,
+  Cleaning: STOP_OWNERS.SITE,
+  "End of Operating Period": STOP_OWNERS.SITE,
+  Strike: STOP_OWNERS.SITE,
+  Other: STOP_OWNERS.SITE,
+};
+
+export function stopReasonOwner(reason) {
+  return STOP_REASON_OWNER[reason] || STOP_OWNERS.SITE;
+}
+
 /** Stop reasons that should prompt "Also report a problem?" */
 export const MECHANICAL_STOP_REASONS = [
   "Mechanical Breakdown", "Hydraulic Breakdown", "Electrical Breakdown",
   "Engine Problem", "Screen Problem", "Conveyor/Belt Problem", "Track Problem",
+];
+
+/** Grouped stop reasons for the operator picker (owner first). */
+export const STOP_REASON_GROUPS = [
+  {
+    owner: STOP_OWNERS.DARKCHILD,
+    hint: "Engine & electrical — Darkchild",
+    reasons: ["Engine Problem", "Electrical Breakdown", "Mechanical Breakdown", "Track Problem"],
+  },
+  {
+    owner: STOP_OWNERS.BERLINGTON,
+    hint: "Consumables — Berlington (mesh, diesel, oil, belts)",
+    reasons: ["Hydraulic Breakdown", "Screen Problem", "Conveyor/Belt Problem", "No Diesel"],
+  },
+  {
+    owner: STOP_OWNERS.SITE,
+    hint: "Site / operations",
+    reasons: [
+      "Waiting for Material", "Waiting for Loader", "Weather",
+      "Planned Maintenance", "Safety Stop", "Cleaning",
+      "End of Operating Period", "Strike", "Other",
+    ],
+  },
 ];
 
 /** Starter parts list for Warrior 2100 — site can add more in admin later */
@@ -62,12 +121,7 @@ export const SYNC_STATUS = {
   CONFLICT: "conflict",
 };
 
-export const STOP_REASONS = [
-  "Mechanical Breakdown", "Hydraulic Breakdown", "Electrical Breakdown",
-  "Engine Problem", "Screen Problem", "Conveyor/Belt Problem", "Track Problem",
-  "Waiting for Material", "Waiting for Loader", "No Diesel", "Weather",
-  "Planned Maintenance", "Safety Stop", "Cleaning", "End of Operating Period", "Strike", "Other",
-];
+export const STOP_REASONS = STOP_REASON_GROUPS.flatMap((g) => g.reasons);
 
 /** Operator clocks out before pre-start or before starting the machine */
 export const EARLY_CLOCK_OUT_REASONS = [
@@ -207,7 +261,7 @@ export const ALLOWED_COLUMNS = {
   maintenance_parts: ["id", "maintenance_job_id", "inventory_item_id", "part_name", "quantity", "notes", "created_at"],
   inventory_items: ["id", "site_id", "sku", "name", "category", "quantity_on_hand", "unit", "reorder_level", "created_at", "updated_at"],
   inventory_movements: ["id", "site_id", "inventory_item_id", "maintenance_job_id", "quantity_change", "reason", "performed_by", "performed_by_name", "created_at"],
-  site_settings: ["id", "site_id", "billing_cycle_start_day", "primary_machine_id", "prestart_items", "prestart_status_options", "inspection_groups", "created_at", "updated_at"],
+  site_settings: ["id", "site_id", "billing_cycle_start_day", "primary_machine_id", "prestart_items", "prestart_status_options", "inspection_groups", "stop_reasons", "created_at", "updated_at"],
 };
 
 /** Operator pre-start checklist (14 items) — before starting machine */
