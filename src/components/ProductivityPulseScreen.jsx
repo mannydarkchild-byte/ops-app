@@ -160,7 +160,7 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
 
       <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3">
         <p className="font-body text-xs text-[#F2F0EA]/50 mb-2 px-1">
-          Climbs while the machine runs. Falls while it is stopped. Gold tip is where this window stands.
+          Vertical axis is net time: each running minute adds, each stopped minute subtracts. Zero is the start of this window. Horizontal axis is clock time (or the date, on Cycle). Gold tip is where it stands now.
         </p>
         <StockChartSvg points={pulse?.points || []} />
       </div>
