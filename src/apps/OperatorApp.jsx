@@ -26,7 +26,6 @@ import { FuelModal } from "../components/FuelModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { OperatorReportsModal, reportBucket } from "../components/OperatorReportsModal.jsx";
 import { OperatorWelcome } from "../components/OperatorWelcome.jsx";
-import { ShiftPhotoFix } from "../components/ShiftPhotoFix.jsx";
 import { OperatorShiftTools } from "../components/OperatorShiftTools.jsx";
 
 export function OperatorApp() {
@@ -270,7 +269,7 @@ export function OperatorApp() {
       });
       clearPrestartDraft();
       await refreshLocal();
-      showAlert("Inspection Complete", "Pre-start saved. Tap Start Machine below.", "success");
+      showAlert("Inspection Complete", "Pre-start saved. Tap Start machine at the bottom.", "success");
     } catch (e) { showAlert("Incomplete", e.message, "warning"); }
   };
 
@@ -390,7 +389,16 @@ export function OperatorApp() {
     setShowEarlyClockOut(true);
   };
 
-  const machineStatus = sessionShift ? "running" : sessionDowntime ? "stopped" : null;
+  const machineStatus = sessionShift && sessionDowntime ? "stopped" : sessionShift ? "running" : null;
+  const machineFab = submittedShift || showWelcome || sheet || correctionShift
+    ? null
+    : sessionShift && sessionDowntime
+      ? "restart"
+      : sessionShift
+        ? "stop"
+        : workSession && prestartDone && !blocked
+          ? "start"
+          : null;
 
   return (
     <AppPage
@@ -515,10 +523,15 @@ export function OperatorApp() {
               site={activeSite}
               assignedSupervisorId={submittedShift.assigned_supervisor_id}
             />
-            <ShiftPhotoFix
+            <OperatorShiftTools
               shift={submittedShift}
               user={user}
-              onDone={(updated) => { setSubmittedShift(updated); refreshLocal(); }}
+              supervisors={siteSupervisors}
+              onDone={(updated) => {
+                if (updated?.removed) setSubmittedShift(null);
+                else if (updated) setSubmittedShift(updated);
+                refreshLocal();
+              }}
             />
             <button type="button" onClick={dismissSubmitted} className="w-full py-2 font-ui text-sm text-ops-muted">
               Done
@@ -534,7 +547,7 @@ export function OperatorApp() {
                   ? "bg-ops-green/10 border-ops-green/35 text-ops-green"
                   : "bg-ops-red/10 border-ops-red/35 text-ops-red"
               }`}>
-                {machineStatus === "running" ? "Machine running" : `Stopped — ${downtime?.reason || "downtime"}`}
+                {machineStatus === "running" ? "Machine running" : `Stopped — ${sessionDowntime?.reason || "downtime"}`}
               </div>
             )}
 
@@ -597,9 +610,6 @@ export function OperatorApp() {
                     onPhoto={(ref, preview) => { setStartPhotoRef(ref); setStartPhotoPreview(preview); setStartPhotoError(false); }}
                     showPhotoError={startPhotoError}
                   />
-                  <Button type="button" variant="primary" size="lg" className="w-full mt-4 font-logo" onClick={handleStart}>
-                    <IconPlay /> Start machine
-                  </Button>
                 </FormSection>
               </div>
             )}
@@ -622,10 +632,9 @@ export function OperatorApp() {
                   {shiftDowntimeMin > 0 && (
                     <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
                   )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button type="button" variant="danger" size="lg" className="font-logo" onClick={() => setShowStop(true)}><IconStop /> Stop machine</Button>
-                    <Button type="button" variant="primary" size="lg" className="font-logo" onClick={openEndDay}>Finish day</Button>
-                  </div>
+                  <button type="button" onClick={openEndDay} className="w-full py-2 font-ui text-sm text-ops-muted underline underline-offset-2">
+                    Finish day
+                  </button>
                 </FormSection>
               </div>
             )}
@@ -636,10 +645,9 @@ export function OperatorApp() {
                 <p className="operator-group-explain">The machine is stopped. You are still on site. Restart it, or finish day to clock out.</p>
                 <FormSection title="Machine stopped" description={`Reason: ${sessionDowntime.reason}.`} accent="#B91C1C">
                   <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{Math.floor(downtimeSeconds / 60)} min down</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button type="button" variant="teal" size="lg" onClick={() => setShowRestart(true)}>Restart machine</Button>
-                    <Button type="button" variant="primary" size="lg" onClick={openEndDay}>Finish day</Button>
-                  </div>
+                  <button type="button" onClick={openEndDay} className="w-full py-2 font-ui text-sm text-ops-muted underline underline-offset-2">
+                    Finish day
+                  </button>
                 </FormSection>
               </div>
             )}
@@ -781,6 +789,22 @@ export function OperatorApp() {
             Send shift and clock out
           </button>
         </Modal>
+      )}
+      {machineFab && <div className="h-20" aria-hidden="true" />}
+      {machineFab === "start" && (
+        <button type="button" className="ops-fab ops-fab-start" onClick={handleStart}>
+          <IconPlay /> Start machine
+        </button>
+      )}
+      {machineFab === "stop" && (
+        <button type="button" className="ops-fab ops-fab-stop" onClick={() => setShowStop(true)}>
+          <IconStop /> Stop machine
+        </button>
+      )}
+      {machineFab === "restart" && (
+        <button type="button" className="ops-fab ops-fab-start" onClick={() => setShowRestart(true)}>
+          <IconPlay /> Start machine
+        </button>
       )}
     </AppPage>
   );

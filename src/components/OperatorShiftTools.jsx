@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { SHIFT } from "../lib/constants.js";
 import { getShiftStatus } from "../lib/utils.js";
-import { deleteOwnShift, submitOwnOpenShift, updateOwnShift } from "../services/workflows.js";
+import { deleteOwnShift, replaceShiftMeterPhoto, submitOwnOpenShift, updateOwnShift } from "../services/workflows.js";
+import { MeterPhoto } from "./ui/MeterPhoto.jsx";
 import { SupervisorPicker } from "./SupervisorPicker.jsx";
 
 function toLocalInput(iso) {
@@ -29,6 +30,9 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
   const [endedAt, setEndedAt] = useState(toLocalInput(shift.ended_at));
   const [notes, setNotes] = useState(shift.notes || "");
   const [supervisorId, setSupervisorId] = useState(shift.assigned_supervisor_id || "");
+  const [photoSide, setPhotoSide] = useState("");
+  const [photoRef, setPhotoRef] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
 
   if (!shift || getShiftStatus(shift) === SHIFT.VERIFIED) return null;
 
@@ -39,7 +43,7 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
     setError("");
     try {
       const supervisor = supervisors.find((s) => s.id === supervisorId) || null;
-      const updated = isOpenShift
+      let updated = isOpenShift
         ? await submitOwnOpenShift(user, shift, {
             startHour: startMeter,
             endHour: endMeter,
@@ -57,7 +61,17 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
             assigned_supervisor_id: supervisor?.id || shift.assigned_supervisor_id || null,
             assigned_supervisor_name: supervisor?.name || shift.assigned_supervisor_name || null,
           });
+      if (photoRef && photoSide) {
+        updated = await replaceShiftMeterPhoto(user, updated, {
+          side: photoSide,
+          photoRef,
+          reading: photoSide === "opening" ? startMeter : endMeter,
+        });
+      }
       setOpen(false);
+      setPhotoSide("");
+      setPhotoRef(null);
+      setPhotoPreview(null);
       onDone?.(updated);
     } catch (e) {
       setError(e.message || "Could not save");
@@ -83,11 +97,13 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
   return (
     <div className="mt-3 space-y-2">
       {!open ? (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="border-2 border-[#F5C518] text-[#F5C518] py-3.5 rounded-xl font-logo text-sm"
+            className={isOpenShift
+              ? "min-h-12 px-4 rounded-xl bg-[#F5C518] text-black font-ui text-sm font-semibold"
+              : "py-2 font-ui text-sm text-[#F5C518] underline underline-offset-2"}
           >
             {isOpenShift ? "Finish leftover" : "Edit shift"}
           </button>
@@ -95,9 +111,9 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
             type="button"
             onClick={remove}
             disabled={!!busy}
-            className="border-2 border-[#EF4444] text-[#EF4444] py-3.5 rounded-xl font-logo text-sm disabled:opacity-40"
+            className="py-2 font-ui text-sm text-[#EF4444] disabled:opacity-40"
           >
-            {busy === "delete" ? "Removing…" : "Delete shift"}
+            {busy === "delete" ? "Removing…" : "Delete"}
           </button>
         </div>
       ) : (
@@ -128,6 +144,45 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
               <SupervisorPicker supervisors={supervisors} value={supervisorId} onChange={setSupervisorId} />
             </div>
           )}
+          <div className="mb-3">
+            {!photoSide ? (
+              <button
+                type="button"
+                onClick={() => setPhotoSide("closing")}
+                className="font-ui text-sm text-[#F5C518] underline underline-offset-2"
+              >
+                Replace a blurry meter photo
+              </button>
+            ) : (
+              <>
+                <p className="font-ui text-xs text-[#F2F0EA]/70 mb-2">Clearer meter photo</p>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => { setPhotoSide("opening"); setPhotoRef(null); setPhotoPreview(null); }}
+                    className={`min-h-10 rounded-xl font-ui text-sm ${photoSide === "opening" ? "bg-[#F5C518] text-black" : "border border-[#2A2A2A] text-[#F2F0EA]"}`}
+                  >
+                    Opening
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPhotoSide("closing"); setPhotoRef(null); setPhotoPreview(null); }}
+                    className={`min-h-10 rounded-xl font-ui text-sm ${photoSide === "closing" ? "bg-[#F5C518] text-black" : "border border-[#2A2A2A] text-[#F2F0EA]"}`}
+                  >
+                    Closing
+                  </button>
+                </div>
+                <MeterPhoto
+                  value={photoSide === "opening" ? startMeter : endMeter}
+                  onValue={photoSide === "opening" ? setStartMeter : setEndMeter}
+                  photo={photoPreview}
+                  onPhoto={(ref, data) => { setPhotoRef(ref); setPhotoPreview(data); }}
+                  hint="Take a clear photo. The reading above updates if you type a new one."
+                  required={false}
+                />
+              </>
+            )}
+          </div>
           {isOpenShift && supervisors.length === 0 && (
             <p className="font-body text-[#EF4444] mb-2">No supervisor on this phone. Ask admin to add one before you send this.</p>
           )}

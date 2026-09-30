@@ -5,7 +5,6 @@ import { SHIFT } from "../lib/constants.js";
 import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod, dedupeShifts } from "../lib/utils.js";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
-import { ShiftPhotoFix } from "./ShiftPhotoFix.jsx";
 import { OperatorShiftTools } from "./OperatorShiftTools.jsx";
 
 const FILTERS = [
@@ -212,7 +211,6 @@ export function OperatorReportsModal({
                         SAVE COPY
                       </button>
                     </div>
-                    <ShiftPhotoFix shift={shift} user={user} onDone={() => setBusyId(null)} />
                     <OperatorShiftTools shift={shift} user={user} supervisors={supervisors} onDone={afterChange} />
                     </>
                   ) : (
