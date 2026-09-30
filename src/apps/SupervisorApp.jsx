@@ -1398,7 +1398,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
             className="w-full mt-4 bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40">
 
-            {verifyBusy ? "VERIFYING…" : "VERIFY WITH SIGNATURE"}
+            {verifyBusy ? "Signing off…" : "Sign off"}
 
           </button>
 

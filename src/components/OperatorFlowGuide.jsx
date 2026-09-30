@@ -8,7 +8,7 @@ export function OperatorFlowGuide({ currentStep }) {
   return (
     <div className="mb-4">
       <p className="font-logo text-xs tracking-wider text-[#F5C518]">
-        {meta.stepNum ? `STEP ${meta.stepNum} OF ${meta.total}` : "NEEDS A FIX"}
+        {meta.stepNum ? `Step ${meta.stepNum} of ${meta.total}` : "Needs a fix"}
       </p>
       <p className="font-logo text-3xl text-ops-text mt-1">{meta.title}</p>
       <p className="font-body text-lg text-ops-muted mt-2 leading-snug">{meta.hint}</p>

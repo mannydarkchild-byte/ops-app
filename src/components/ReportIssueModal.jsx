@@ -183,7 +183,7 @@ export function ReportIssueModal({
         disabled={busy || !canSubmit}
         className="w-full bg-[#EF4444] text-white py-4 rounded-xl font-logo font-bold text-base disabled:opacity-40"
       >
-        {busy ? "SUBMITTING…" : "SUBMIT PROBLEM"}
+        {busy ? "Sending…" : "Report problem"}
       </button>
     </Modal>
   );

@@ -50,7 +50,7 @@ export function FuelModal({ onClose, currentMeter, user, machine, site, shiftId,
       </FormSection>
 
       <button type="button" onClick={submit} disabled={busy || !litres || !hourMeter} className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40">
-        {busy ? "SAVING…" : "SAVE DIESEL LOG"}
+        {busy ? "Saving…" : "Save diesel"}
       </button>
     </Modal>
   );

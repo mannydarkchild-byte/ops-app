@@ -9,10 +9,40 @@ import { storeMediaDataUrl } from "../lib/media.js";
 import { getPrestartConfigForSite, getInspectionConfigForSite } from "../lib/siteConfig.js";
 import { reconcileMachineOpenState, fetchServerOpenShift } from "../lib/machineStatus.js";
 import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
+
+const actionInflight = new Map();
+
+/** One in-flight action per key. A second call waits on the first result instead of creating another record. */
+function withInflight(key, fn) {
+  const pending = actionInflight.get(key);
+  if (pending) return pending;
+  const job = Promise.resolve().then(fn).finally(() => {
+    if (actionInflight.get(key) === job) actionInflight.delete(key);
+  });
+  actionInflight.set(key, job);
+  return job;
+}
+
+function ownRunningShift(shifts, machineId, operatorId) {
+  return (shifts || []).find((s) =>
+    s.machine_id === machineId
+    && s.operator_id === operatorId
+    && getShiftStatus(s) === SHIFT.RUNNING
+  ) || null;
+}
+
 export async function clockIn(user, machine, site, { assignedSupervisor } = {}) {
+  return withInflight(`clockin:${user?.id}`, () => clockInOnce(user, machine, site, { assignedSupervisor }));
+}
+
+async function clockInOnce(user, machine, site, { assignedSupervisor } = {}) {
   if (!assignedSupervisor?.id) {
     throw new Error("Select the supervisor on duty before clocking in");
   }
+  const existing = (await readTable("work_sessions")).find(
+    (s) => s.operator_id === user.id && s.status === "active"
+  );
+  if (existing) return existing;
   const s = {
     id: makeId("WORK"),
     site_id: site?.id,
@@ -35,7 +65,12 @@ export async function clockIn(user, machine, site, { assignedSupervisor } = {}) 
 }
 
 export async function clockOut(user, workSession, { note, signatureRef, signatureName }) {
+  return withInflight(`clockout:${workSession?.id || user?.id}`, () => clockOutOnce(user, workSession, { note, signatureRef, signatureName }));
+}
+
+async function clockOutOnce(user, workSession, { note, signatureRef, signatureName }) {
   if (!workSession?.id) throw new Error("No active session to clock out");
+  if (workSession.status && workSession.status !== "active") return workSession;
   const now = nowISO();
   const updated = {
     ...workSession,
@@ -69,8 +104,15 @@ export async function clockOut(user, workSession, { note, signatureRef, signatur
 
 /** Clock out before pre-start or before starting the machine — reason required */
 export async function clockOutEarly(user, workSession, machine, site, { reason, note = "" }) {
+  return withInflight(`clockout:${workSession?.id || user?.id}`, () => clockOutEarlyOnce(user, workSession, machine, site, { reason, note }));
+}
+
+async function clockOutEarlyOnce(user, workSession, machine, site, { reason, note = "" }) {
   if (!reason?.trim()) throw new Error("Select a reason for clocking out");
-  if (workSession.status !== "active") throw new Error("No active session to clock out");
+  if (!workSession?.id || workSession.status !== "active") {
+    if (workSession?.status && workSession.status !== "active") return workSession;
+    throw new Error("No active session to clock out");
+  }
 
   const now = nowISO();
   const detail = [reason, note?.trim()].filter(Boolean).join(" — ");
@@ -177,7 +219,11 @@ export async function completeMechanicInspection(user, machine, site, { results,
   });
 }
 
-export async function startMachine(user, machine, site, { hourMeter, photoRef, verifiedShifts, workSessionClockIn } = {}) {
+export async function startMachine(user, machine, site, options = {}) {
+  return withInflight(`start:${machine?.id}`, () => startMachineOnce(user, machine, site, options));
+}
+
+async function startMachineOnce(user, machine, site, { hourMeter, photoRef, verifiedShifts, workSessionClockIn } = {}) {
   if (!photoRef) throw new Error("Hour meter photo is required");
   const h = Number(hourMeter);
   if (!Number.isFinite(h) || h < 0) throw new Error("Enter a valid hour meter reading");
@@ -189,11 +235,20 @@ export async function startMachine(user, machine, site, { hourMeter, photoRef, v
 
   const existingShifts = await readTable("shifts");
   const runningOnMachine = existingShifts.filter(
-    (s) => s.machine_id === machine.id && (s.shift_status === SHIFT.RUNNING || s.status === SHIFT.RUNNING)
+    (s) => s.machine_id === machine.id && getShiftStatus(s) === SHIFT.RUNNING
   );
-  const ownRun = runningOnMachine.find((s) => s.operator_id === user.id);
+  const ownRun = ownRunningShift(runningOnMachine, machine.id, user.id)
+    || (remote.known && remote.shift?.operator_id === user.id ? remote.shift : null);
   // Never open a second shift for the same operator on this machine.
   if (ownRun) {
+    if (!existingShifts.some((s) => s.id === ownRun.id)) {
+      await saveLocal("shifts", {
+        ...ownRun,
+        machine_id: machine.id,
+        operator_id: user.id,
+        shift_status: getShiftStatus(ownRun) || SHIFT.RUNNING,
+      });
+    }
     return { run: ownRun, lock: { accepted: true }, alreadyRunning: true };
   }
   for (const stale of runningOnMachine) {
@@ -234,6 +289,12 @@ export async function startMachine(user, machine, site, { hourMeter, photoRef, v
   const lock = await acquireMachineLock(machine.id, run.id, user.id);
   if (!lock.accepted) throw new Error(lock.reason || "Could not start machine");
 
+  const raced = ownRunningShift(await readTable("shifts"), machine.id, user.id);
+  if (raced && raced.id !== run.id) {
+    await acquireMachineLock(machine.id, raced.id, user.id);
+    return { run: raced, lock: { accepted: true }, alreadyRunning: true };
+  }
+
   await saveLocal("shifts", run);
   await addEvent(user, machine, site, "MACHINE_STARTED", { shift_id: run.id, note: `Started at ${h}h`, photo_ref: photoRef });
   await recordHourReading(user, machine, site, {
@@ -249,6 +310,10 @@ export async function startMachine(user, machine, site, { hourMeter, photoRef, v
 }
 
 export async function stopMachine(user, machine, site, machineRun, { reason, note }) {
+  return withInflight(`stop:${machineRun?.id}`, () => stopMachineOnce(user, machine, site, machineRun, { reason, note }));
+}
+
+async function stopMachineOnce(user, machine, site, machineRun, { reason, note }) {
   if (!reason) throw new Error("Select a stop reason");
   const now = nowISO();
   const events = await readTable("events");
@@ -291,6 +356,10 @@ export async function stopMachine(user, machine, site, machineRun, { reason, not
 }
 
 export async function restartMachine(user, machine, site, machineRun, downtime, { note }) {
+  return withInflight(`restart:${machineRun?.id}`, () => restartMachineOnce(user, machine, site, machineRun, downtime, { note }));
+}
+
+async function restartMachineOnce(user, machine, site, machineRun, downtime, { note }) {
   if (!downtime) throw new Error("No open stop to restart from");
   if (downtime.status === "closed") return downtime;
 
@@ -346,7 +415,14 @@ async function closeOpenDowntimeForShift(shiftId, endTime) {
   return events.map((e) => (e.id === openStop.id ? closed : e));
 }
 
-export async function endMachineDay(user, machine, site, machineRun, { endHour, photoRef, assignedSupervisor }) {
+export async function endMachineDay(user, machine, site, machineRun, options = {}) {
+  return withInflight(`end:${machineRun?.id}`, () => endMachineDayOnce(user, machine, site, machineRun, options));
+}
+
+async function endMachineDayOnce(user, machine, site, machineRun, { endHour, photoRef, assignedSupervisor }) {
+  if (machineRun && getShiftStatus(machineRun) && getShiftStatus(machineRun) !== SHIFT.RUNNING) {
+    return { ended: machineRun, alreadyEnded: true };
+  }
   if (!photoRef) throw new Error("Closing hour meter photo is required");
   const h = Number(endHour);
   if (!Number.isFinite(h) || h < Number(machineRun.start_hour_meter)) throw new Error("Enter valid ending meter");
@@ -620,6 +696,18 @@ export async function recordHourReading(user, machine, site, { reading, photoRef
 }
 
 export async function addFuelLog(user, machine, site, shiftId, data) {
+  return withInflight(`fuel:${user?.id}:${machine?.id}`, () => addFuelLogOnce(user, machine, site, shiftId, data));
+}
+
+async function addFuelLogOnce(user, machine, site, shiftId, data) {
+  const recent = (await readTable("fuel_logs")).find((f) =>
+    f.operator_id === user.id
+    && f.machine_id === machine.id
+    && Number(f.litres) === Number(data.litres)
+    && Number(f.hour_meter) === Number(data.hourMeter)
+    && Date.now() - new Date(f.timestamp || 0).getTime() < 20000
+  );
+  if (recent) return recent;
   const log = {
     id: makeId("FUEL"),
     site_id: site?.id,
@@ -875,7 +963,11 @@ export async function completeRepair(mechanic, job, issue, breakdown, note = "")
   return updated;
 }
 
-export async function reportIssue(user, machine, site, profiles, { area, priority, description, mediaRef, mediaType }) {
+export async function reportIssue(user, machine, site, profiles, payload) {
+  return withInflight(`issue:${user?.id}`, () => reportIssueOnce(user, machine, site, profiles, payload));
+}
+
+async function reportIssueOnce(user, machine, site, profiles, { area, priority, description, mediaRef, mediaType }) {
   const now = nowISO();
   const reporterRole = user.role || ROLES.OPERATOR;
   const siteSups = profiles.filter((p) => p.role === ROLES.SUPERVISOR && p.site_id === site?.id && p.active !== false);
@@ -1024,7 +1116,12 @@ export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, rea
   return patch;
 }
 
-export async function verifyShift(shift, supervisor, { action, reason, signatureDataUrl }) {
+export async function verifyShift(shift, supervisor, options) {
+  return withInflight(`verify:${shift?.id}`, () => verifyShiftOnce(shift, supervisor, options));
+}
+
+async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDataUrl }) {
+  if (action === "verify" && getShiftStatus(shift) === SHIFT.VERIFIED) return shift;
   if (action === "verify" && !signatureDataUrl) {
     throw new Error("Supervisor signature is required to verify");
   }
