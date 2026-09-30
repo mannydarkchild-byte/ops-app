@@ -21,17 +21,17 @@ import { ManagerPartsPanel } from "../components/manager/ManagerPartsPanel.jsx";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
-import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
+import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
-  { id: "overview", label: "Overview", icon: "📊" },
-  { id: "issues", label: "Issues", icon: "💬" },
-  { id: "parts", label: "Parts", icon: "📦" },
-  { id: "expenses", label: "Expenses", icon: "💰" },
-  { id: "reports", label: "Reports", icon: "📋" },
+  { id: "overview", label: "Home" },
+  { id: "pulse", label: "Pulse" },
+  { id: "issues", label: "Issues" },
+  { id: "reports", label: "Reports" },
+  { id: "more", label: "More" },
 ];
 
 const REPORT_FILTERS = [
@@ -64,7 +64,7 @@ export function ManagerApp() {
   const [showImportExpenses, setShowImportExpenses] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
-  const [showPulse, setShowPulse] = useState(false);
+  const [moreView, setMoreView] = useState(null);
   const [showStopOwners, setShowStopOwners] = useState(false);
   const showAlert = (title, message, type = "info") =>
     setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
@@ -381,7 +381,7 @@ export function ManagerApp() {
       showSite={false}
       tabs={tabItems}
       activeTab={tab}
-      onTabChange={setTab}
+      onTabChange={(id) => { setTab(id); setMoreView(null); }}
       onSync={syncNow}
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
@@ -419,14 +419,6 @@ export function ManagerApp() {
 
         {tab === "overview" && (
           <div className="space-y-4">
-            <PulseOpenButton onClick={() => setShowPulse(true)} />
-            <button
-              type="button"
-              onClick={() => setShowStopOwners(true)}
-              className="w-full border border-[#2A2A2A] text-[#F2F0EA]/80 py-3 rounded-xl font-logo text-xs tracking-wider"
-            >
-              Edit stop reasons &amp; owners
-            </button>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Kpi label="Billable Hours" value={`${cycleStats.hours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} signed shifts`} color="#22C55E" />
               <Kpi label="Revenue" value={money(cycleStats.revenue)} sub={`R${primaryMachine.billable_rate}/h meter rate`} color="#22C55E" />
@@ -470,14 +462,6 @@ export function ManagerApp() {
                 limit={15}
               />
             </div>
-
-            <button
-              type="button"
-              onClick={() => setShowBackdate(true)}
-              className="w-full border border-[#00A4A6] text-[#00A4A6] py-4 rounded-xl font-logo font-bold text-xs tracking-wider"
-            >
-              📸 BACKDATE HOUR READING
-            </button>
           </div>
         )}
 
@@ -512,7 +496,39 @@ export function ManagerApp() {
           </div>
         )}
 
-        {tab === "parts" && (
+        {tab === "pulse" && <ProductivityPulseScreen embedded />}
+
+        {tab === "more" && !moreView && (
+          <div className="space-y-2">
+            {[
+              ["parts", "Parts"],
+              ["expenses", "Expenses"],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setMoreView(id)}
+                className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4"
+              >
+                {label}
+              </button>
+            ))}
+            <button type="button" onClick={() => setShowStopOwners(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4">
+              Stop reasons and owners
+            </button>
+            <button type="button" onClick={() => setShowBackdate(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4">
+              Backdate hour reading
+            </button>
+          </div>
+        )}
+
+        {tab === "more" && moreView && (
+          <button type="button" onClick={() => setMoreView(null)} className="mb-3 font-ui text-sm text-[#F5C518]">
+            Back
+          </button>
+        )}
+
+        {tab === "more" && moreView === "parts" && (
           <ManagerPartsPanel
             siteId={user?.site_id}
             inventoryItems={inventoryItems}
@@ -521,7 +537,7 @@ export function ManagerApp() {
           />
         )}
 
-        {tab === "expenses" && (
+        {tab === "more" && moreView === "expenses" && (
           <div className="space-y-3">
             <button
               type="button"
@@ -756,8 +772,6 @@ export function ManagerApp() {
           onClose={() => setReportPreview(null)}
         />
       )}
-
-      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
 
       {showStopOwners && (
         <Modal title="STOP REASONS & OWNERS" color="yellow" onClose={() => setShowStopOwners(false)}>

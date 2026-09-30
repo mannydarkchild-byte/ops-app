@@ -376,10 +376,10 @@ button,
   }
 }
 
-/* Operator outdoor — extra contrast and larger tap targets in sunlight */
+/* Operator — same type scale as the other roles. Contrast stays high in sunlight. */
 .operator-outdoor {
   -webkit-text-size-adjust: 100%;
-  font-size: 20px;
+  font-size: 16px;
 }
 
 .operator-pin-icons {
@@ -411,28 +411,28 @@ button,
 }
 
 .operator-welcome-name {
-  font-size: 2.6rem;
-  line-height: 1.05;
+  font-size: 1.75rem;
+  line-height: 1.15;
   color: var(--ops-text);
   margin: 0 0 0.5rem;
 }
 
 .operator-welcome-date {
-  font-size: 1.2rem;
+  font-size: 0.95rem;
   color: var(--ops-muted);
   margin: 0 0 1rem;
 }
 
 .operator-welcome-copy {
-  font-size: 1.25rem;
+  font-size: 1rem;
   line-height: 1.45;
   color: var(--ops-text);
   margin: 0 0 1.5rem;
 }
 
 .operator-welcome-go {
-  min-height: 72px !important;
-  font-size: 1.35rem !important;
+  min-height: 48px !important;
+  font-size: 1rem !important;
 }
 
 .operator-welcome-reports {
@@ -516,126 +516,12 @@ html:not(.theme-light) .operator-outdoor main [class*="text-[#F2F0EA]/70"] {
   box-shadow: 0 0 0 1px rgba(245, 197, 24, 0.15), 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
-.operator-outdoor main {
-  font-size: 1.25rem;
-  line-height: 1.45;
-}
-
 .operator-outdoor .operator-work-panel button.font-ui,
 .operator-outdoor .operator-work-panel button.font-logo {
-  font-size: 1.15rem;
-  min-height: 60px;
+  min-height: 48px;
 }
 
 @media (max-width: 639px) {
-  .operator-clock-out {
-    width: 100%;
-    min-height: 4rem;
-    font-size: 1.2rem;
-  }
-
-  .operator-outdoor {
-    font-size: 24px;
-  }
-
-  .operator-outdoor main {
-    font-size: 1.4rem !important;
-    line-height: 1.35;
-    padding: 1.15rem !important;
-  }
-
-  .operator-work-panel {
-    padding: 1.25rem !important;
-  }
-
-  .operator-outdoor .form-section {
-    padding: 1.15rem 0 !important;
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    margin-bottom: 1.25rem;
-  }
-
-  .operator-outdoor .form-section h3,
-  .operator-outdoor .ops-sheet .form-section h3 {
-    font-size: 1.85rem !important;
-    line-height: 1.2 !important;
-  }
-
-  .operator-outdoor .form-section .font-body,
-  .operator-outdoor .ops-sheet .form-section .font-body {
-    font-size: 1.25rem !important;
-  }
-
-  .operator-group-label {
-    font-size: 1.05rem;
-  }
-
-  .operator-group-explain {
-    font-size: 1.25rem;
-  }
-
-  .operator-outdoor .text-xs,
-  .operator-outdoor .text-sm,
-  .operator-outdoor .text-\[8px\],
-  .operator-outdoor .text-\[9px\],
-  .operator-outdoor .text-\[10px\],
-  .operator-outdoor .text-\[11px\],
-  .operator-outdoor .ops-sheet .text-xs,
-  .operator-outdoor .ops-sheet .text-sm,
-  .operator-outdoor .ops-sheet .text-\[8px\],
-  .operator-outdoor .ops-sheet .text-\[9px\],
-  .operator-outdoor .ops-sheet .text-\[10px\],
-  .operator-outdoor .ops-sheet .text-\[11px\] {
-    font-size: 1.15rem !important;
-    line-height: 1.35 !important;
-  }
-
-  .operator-outdoor .text-base,
-  .operator-outdoor .ops-sheet .text-base {
-    font-size: 1.3rem !important;
-  }
-
-  .operator-outdoor .text-lg,
-  .operator-outdoor .ops-sheet .text-lg {
-    font-size: 1.5rem !important;
-  }
-
-  .operator-outdoor .text-xl,
-  .operator-outdoor .ops-sheet .text-xl {
-    font-size: 1.7rem !important;
-  }
-
-  .operator-outdoor .text-2xl,
-  .operator-outdoor .ops-sheet .text-2xl {
-    font-size: 2rem !important;
-  }
-
-  .operator-outdoor .text-3xl,
-  .operator-outdoor .ops-sheet .text-3xl {
-    font-size: 2.35rem !important;
-  }
-
-  .operator-outdoor main button:not(.rounded-full),
-  .operator-outdoor .operator-work-panel button:not(.rounded-full),
-  .operator-outdoor .ops-sheet button:not(.rounded-full) {
-    min-height: 80px !important;
-    font-size: 1.4rem !important;
-  }
-
-  .operator-pin-icons button {
-    min-height: 0 !important;
-  }
-
-  .operator-pin-tile {
-    max-height: 11rem;
-  }
-
-  .operator-pin-tile svg {
-    width: 3.6rem;
-    height: 3.6rem;
-  }
-
   .login-screen {
     font-size: 16px;
   }
@@ -662,14 +548,6 @@ html:not(.theme-light) .operator-outdoor main [class*="text-[#F2F0EA]/70"] {
     font-size: 1.05rem !important;
   }
 
-  .ops-field {
-    font-size: 20px;
-  }
-
-  .ops-field main {
-    font-size: 1.2rem;
-    line-height: 1.4;
-  }
 }
 
 html:not(.theme-light) .operator-outdoor .operator-work-panel {
@@ -755,72 +633,14 @@ html.theme-light .min-h-screen.bg-ops-black {
   background-color: var(--ops-bg);
 }
 html.theme-light header.bg-ops-black,
+html.theme-light nav.bg-ops-black,
 html.theme-light .relative.z-20.bg-ops-black {
   background-color: var(--ops-bg);
-}
-
-/* Operator field size — always on, no max-width gate (PWA may report a wide viewport) */
-html:has(.operator-outdoor) {
-  font-size: 24px;
-}
-
-.operator-outdoor {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-  font-size: 28px !important;
-}
-
-.operator-outdoor [class*="text-"],
-.operator-outdoor p,
-.operator-outdoor li,
-.operator-outdoor label,
-.operator-outdoor span {
-  font-size: 26px !important;
-  line-height: 1.3 !important;
-}
-
-.operator-outdoor .text-2xl,
-.operator-outdoor .text-3xl,
-.operator-outdoor .text-4xl,
-.operator-outdoor h2,
-.operator-outdoor h3 {
-  font-size: 40px !important;
-  line-height: 1.15 !important;
-}
-
-.operator-welcome-name {
-  font-size: 56px !important;
-  line-height: 1.05 !important;
-}
-
-.operator-outdoor header span,
-.operator-outdoor header p {
-  font-size: 22px !important;
-}
-
-.operator-outdoor button:not(.rounded-full):not(.ops-chip) {
-  min-height: 92px !important;
-  font-size: 28px !important;
-}
-
-.operator-outdoor button.ops-chip {
-  min-height: 52px !important;
-  font-size: 18px !important;
-  padding: 0.45rem 0.85rem !important;
-}
-
-.operator-pin-icons button {
-  min-height: 0 !important;
-  font-size: 22px !important;
-}
-
-.operator-pin-icons .font-logo {
-  font-size: 22px !important;
 }
 
 .operator-outdoor input,
 .operator-outdoor textarea,
 .operator-outdoor select {
-  font-size: 28px !important;
-  min-height: 88px !important;
+  font-size: 16px;
+  min-height: 48px;
 }

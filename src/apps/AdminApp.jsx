@@ -27,26 +27,15 @@ import { AdminSitesPanel } from "../components/admin/AdminSitesPanel.jsx";
 import { AdminMachinesPanel } from "../components/admin/AdminMachinesPanel.jsx";
 import { AdminChecklistsPanel } from "../components/admin/AdminChecklistsPanel.jsx";
 import { AdminActivityPanel } from "../components/admin/AdminActivityPanel.jsx";
-import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
+import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 
 
 
 const TABS = [
-
-  { id: "dashboard", label: "Dashboard", icon: "📊" },
-
-  { id: "sites", label: "Sites", icon: "🏗" },
-
-  { id: "machines", label: "Machines", icon: "🔧" },
-
-  { id: "checklists", label: "Checklists", icon: "📋" },
-
-  { id: "activity", label: "Activity", icon: "📜" },
-
-  { id: "users", label: "Users", icon: "👥" },
-
-  { id: "sync", label: "Sync", icon: "🔄" },
-
+  { id: "dashboard", label: "Home" },
+  { id: "users", label: "People" },
+  { id: "sites", label: "Sites" },
+  { id: "more", label: "More" },
 ];
 
 
@@ -72,7 +61,7 @@ export function AdminApp() {
   const [showInactive, setShowInactive] = useState(false);
 
   const [alert, setAlert] = useState({ isOpen: false });
-  const [showPulse, setShowPulse] = useState(false);
+  const [moreView, setMoreView] = useState(null);
 
   const showAlert = (title, message) => setAlert({ isOpen: true, title, message, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -231,14 +220,13 @@ export function AdminApp() {
       showSite={false}
       tabs={tabItems}
       activeTab={tab}
-      onTabChange={setTab}
+      onTabChange={(id) => { setTab(id); setMoreView(null); }}
       onSync={syncNow}
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
         {tab === "dashboard" && (
           <div className="space-y-4">
-            <PulseOpenButton onClick={() => setShowPulse(true)} />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Kpi label="Billable hours" value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${dashboard.overview.machinesRunning} running`} color="#22C55E" />
               <Kpi label="Revenue" value={formatAdminMetric(dashboard.overview.revenue, "money")} sub="Verified shifts" color="#F5C518" />
@@ -329,7 +317,41 @@ export function AdminApp() {
           />
         )}
 
-        {tab === "checklists" && (
+        {tab === "more" && !moreView && (
+          <div className="space-y-2">
+            {[
+              ["pulse", "Machine pulse"],
+              ["machines", "Machines"],
+              ["checklists", "Checklists"],
+              ["activity", "Activity"],
+              ["sync", "Sync"],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setMoreView(id)}
+                className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab === "more" && moreView && moreView !== "pulse" && (
+          <button type="button" onClick={() => setMoreView(null)} className="mb-3 font-ui text-sm text-[#F5C518]">
+            Back
+          </button>
+        )}
+
+        {tab === "more" && moreView === "pulse" && (
+          <div className="space-y-3">
+            <button type="button" onClick={() => setMoreView(null)} className="font-ui text-sm text-[#F5C518]">Back</button>
+            <ProductivityPulseScreen embedded />
+          </div>
+        )}
+
+        {tab === "more" && moreView === "checklists" && (
           <AdminChecklistsPanel
             sites={sites}
             siteSettings={siteSettings}
@@ -338,7 +360,7 @@ export function AdminApp() {
           />
         )}
 
-        {tab === "activity" && (
+        {tab === "more" && moreView === "activity" && (
           <AdminActivityPanel
             events={events}
             workSessions={workSessions}
@@ -503,7 +525,7 @@ export function AdminApp() {
 
 
 
-        {tab === "machines" && (
+        {tab === "more" && moreView === "machines" && (
           <AdminMachinesPanel
             sites={sites}
             machines={machines}
@@ -514,7 +536,7 @@ export function AdminApp() {
 
 
 
-        {tab === "sync" && (
+        {tab === "more" && moreView === "sync" && (
 
           <div className="space-y-4">
 
@@ -615,8 +637,6 @@ export function AdminApp() {
         />
 
       )}
-
-      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
 
     </AppPage>
 

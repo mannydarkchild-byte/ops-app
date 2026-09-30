@@ -212,102 +212,129 @@ export function ThemeToggle({ className = "" }) {
   );
 }
 
-export function AppHeader({ right, subtitle, leaveApp = false }) {
+export function AppHeader({ right, subtitle }) {
   const { user, signOut } = useOps();
+  const [menuOpen, setMenuOpen] = useState(false);
   const role = (user?.role || "operator").toLowerCase();
   const roleLabel = subtitle || role.charAt(0).toUpperCase() + role.slice(1);
   const colors = ROLE_COLORS[role] || ROLE_COLORS.operator;
-
   const displayName = (user?.name || user?.email?.split("@")[0] || "User").split(/\s+/)[0];
-
-  const actions = (
-    <>
-      {right}
-      <ThemeToggle />
-      <SyncButton roomy={leaveApp} />
-      <button
-        type="button"
-        onClick={signOut}
-        title="Leave the app — this is not clock out"
-        aria-label="Leave the app"
-        className={`rounded-xl border border-ops-border bg-ops-card text-ops-muted hover:text-ops-red flex items-center justify-center ${
-          leaveApp ? "h-12 px-3 min-w-[4rem]" : "w-12 h-12"
-        }`}
-      >
-        {leaveApp ? (
-          <span className="font-logo text-xs leading-tight text-center">Leave<br />app</span>
-        ) : (
-          <IconOut />
-        )}
-      </button>
-    </>
-  );
 
   return (
     <header className="sticky top-0 z-30 bg-ops-black border-b border-ops-border mobile-safe-top shadow-ops-sm">
-      <div className="px-3 sm:px-4 py-2.5 flex items-center gap-2 max-w-5xl mx-auto">
+      <div className="px-3 sm:px-4 h-14 flex items-center gap-2 max-w-5xl mx-auto">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <LogoMark size="sm" />
           <div className="min-w-0">
-            <span className="font-logo text-xl text-ops-gold">OPS</span>
-            <p className="font-body text-lg text-ops-text truncate leading-tight">
+            <span className="font-logo text-base leading-none text-ops-gold">OPS</span>
+            <p className="font-body text-sm text-ops-text truncate leading-tight">
               {displayName}
-              <span className={`ml-2 font-ui text-base capitalize ${colors.text}`}>{roleLabel}</span>
+              <span className={`ml-1.5 font-ui text-xs capitalize ${colors.text}`}>{roleLabel}</span>
             </p>
           </div>
         </div>
-        <div className={`items-center gap-1.5 shrink-0 ${leaveApp ? "hidden sm:flex" : "flex"}`}>
-          {actions}
-        </div>
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-expanded={menuOpen}
+          aria-label="Account menu"
+          className="w-10 h-10 rounded-xl border border-ops-border bg-ops-card text-ops-text flex items-center justify-center shrink-0"
+        >
+          <span className="flex flex-col gap-1" aria-hidden>
+            <span className="block w-4 h-0.5 bg-current" />
+            <span className="block w-4 h-0.5 bg-current" />
+            <span className="block w-4 h-0.5 bg-current" />
+          </span>
+        </button>
       </div>
-      {leaveApp && (
-        <div className="sm:hidden flex items-center gap-2 px-3 pb-3">
-          {actions}
+      {menuOpen && (
+        <div className="absolute right-3 top-14 z-40 w-64 rounded-xl border border-ops-border bg-ops-card shadow-ops-sm p-2 space-y-1">
+          {right}
+          <div className="px-1">
+            <SyncButton />
+          </div>
+          <ThemeToggle className="!w-full !h-11 !justify-start px-3 gap-2" />
+          <button
+            type="button"
+            onClick={signOut}
+            title="Leave the app — this is not clock out"
+            className="w-full h-11 px-3 rounded-xl border border-ops-border text-ops-muted hover:text-ops-red flex items-center gap-2 font-ui text-sm"
+          >
+            <IconOut />
+            Leave app
+          </button>
         </div>
       )}
     </header>
   );
 }
 
+function TabGlyph({ id }) {
+  const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
+  if (id === "pulse") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M3 12h4l2-6 4 12 2-6h6" /></svg>;
+  }
+  if (id === "reports" || id === "inspections") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M7 3h8l4 4v14H7z" /><path d="M15 3v4h4M10 12h6M10 16h6" /></svg>;
+  }
+  if (id === "inbox" || id === "issues") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 6h16v12H4z" /><path d="m4 8 8 6 8-6" /></svg>;
+  }
+  if (id === "more") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><circle cx="6" cy="12" r="1.2" fill="currentColor" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /><circle cx="18" cy="12" r="1.2" fill="currentColor" /></svg>;
+  }
+  if (id === "verify") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M5 12.5 9.5 17 19 7" /></svg>;
+  }
+  if (id === "users") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><circle cx="9" cy="8" r="3" /><path d="M3 19c1-3 3.2-4.5 6-4.5S14 16 15 19" /><circle cx="17" cy="9" r="2.2" /><path d="M16 14.6c2.2.3 3.8 1.6 4.5 4.4" /></svg>;
+  }
+  if (id === "sites") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 20V9l8-5 8 5v11" /><path d="M9 20v-6h6v6" /></svg>;
+  }
+  if (id === "repairs") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M14 7a4 4 0 0 0-5.7 5.5L4 17l3 3 4.5-4.3A4 4 0 0 0 17 10l-3 3-2-2 2-4z" /></svg>;
+  }
+  return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 11.5 12 4l8 7.5V20H4z" /></svg>;
+}
+
 /**
- * Scrollable tab bar — use below AppHeader in tabbed apps.
- * tabs: { id, label, icon?, badge? }
- * Sync lives in the header only (avoids crowding tabs on mobile).
+ * Fixed bottom navigation. tabs: { id, label, badge? } — keep to five.
  */
-export function AppTabBar({ tabs, activeTab, onTabChange, footer, outdoor = false }) {
+export function AppTabBar({ tabs, activeTab, onTabChange }) {
+  if (!tabs?.length) return null;
   return (
-    <div className="relative z-20 bg-ops-black border-b border-ops-border">
-      <div className={`${outdoor ? "px-4 py-3" : "px-3 sm:px-4 py-2"} max-w-5xl mx-auto`}>
-        <div className="flex gap-1 p-1 rounded-xl bg-ops-card border border-ops-border overflow-x-auto smooth-scroll">
-          {tabs.map((t) => (
+    <nav
+      className="fixed bottom-0 inset-x-0 z-40 border-t border-ops-border bg-ops-black mobile-safe-bottom"
+      aria-label="Main menu"
+    >
+      <div
+        className="max-w-5xl mx-auto grid"
+        style={{ gridTemplateColumns: `repeat(${Math.min(tabs.length, 5)}, minmax(0, 1fr))` }}
+      >
+        {tabs.slice(0, 5).map((t) => {
+          const on = activeTab === t.id;
+          return (
             <button
               key={t.id}
               type="button"
               onClick={() => onTabChange(t.id)}
-              className={`ops-chip shrink-0 rounded-lg font-ui font-medium whitespace-nowrap transition-colors ${
-                outdoor ? "px-4 py-3 text-lg min-h-[56px]" : "px-3 py-2.5 text-sm min-h-[40px]"
-              } ${
-                activeTab === t.id
-                  ? "bg-ops-black text-ops-text shadow-ops-sm ring-1 ring-ops-gold/35"
-                  : "text-ops-muted hover:text-ops-text hover:bg-ops-elevated/80"
+              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-14 py-1.5 font-ui text-[11px] leading-tight ${
+                on ? "text-ops-gold" : "text-ops-muted"
               }`}
             >
-              {t.icon ? `${t.icon} ` : ""}{t.label}
+              <TabGlyph id={t.id} />
+              <span className="truncate max-w-full px-1">{t.label}</span>
               {t.badge > 0 && (
-                <span className="ml-1.5 bg-ops-red text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5 inline-block min-w-[18px] text-center">
+                <span className="absolute top-1 right-[18%] min-w-[16px] h-4 px-1 rounded-full bg-ops-red text-white text-[10px] font-semibold flex items-center justify-center">
                   {t.badge > 99 ? "99+" : t.badge}
                 </span>
               )}
             </button>
-          ))}
-        </div>
+          );
+        })}
       </div>
-      {footer && (
-        <div className="px-3 sm:px-4 pb-2 max-w-5xl mx-auto">
-          {footer}
-        </div>
-      )}
-    </div>
+    </nav>
   );
 }
 
@@ -326,26 +353,21 @@ export function AppPage({
   alert,
   banner,
   outdoor = false,
-  leaveApp = false,
 }) {
+  const hasTabs = Boolean(tabs?.length);
   return (
-    <div className={`min-h-screen bg-ops-black text-ops-text pb-8 mobile-safe-bottom ${outdoor ? "operator-outdoor" : ""}`}>
+    <div className={`min-h-screen bg-ops-black text-ops-text ${outdoor ? "operator-outdoor" : ""} ${hasTabs ? "pb-24" : "pb-8 mobile-safe-bottom"}`}>
       {alert}
-      <AppHeader subtitle={subtitle} context={context} showSite={showSite} leaveApp={leaveApp || outdoor} />
+      <AppHeader subtitle={subtitle} context={context} showSite={showSite} />
       <OfflineBanner />
-      <SyncQueueHint hasTabBar={Boolean(tabs?.length)} />
+      <SyncQueueHint hasTabBar={hasTabs} />
       {banner}
-      {tabs?.length > 0 && (
-        <AppTabBar
-          tabs={tabs}
-          activeTab={activeTab}
-          onTabChange={onTabChange}
-          footer={tabFooter}
-          outdoor={outdoor}
-        />
-      )}
+      {tabFooter}
       <SyncErrorPanel />
-      <main className={`${outdoor ? "p-4 sm:p-5" : "p-3 sm:p-4"} ${maxWidth} mx-auto`}>{children}</main>
+      <main className={`p-3 sm:p-4 ${maxWidth} mx-auto`}>{children}</main>
+      {hasTabs && (
+        <AppTabBar tabs={tabs} activeTab={activeTab} onTabChange={onTabChange} />
+      )}
     </div>
   );
 }

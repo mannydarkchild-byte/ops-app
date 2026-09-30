@@ -24,7 +24,7 @@ import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
-import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
+import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 
 import * as wf from "../services/workflows.js";
 
@@ -39,15 +39,11 @@ import { ShiftPhotoFix } from "../components/ShiftPhotoFix.jsx";
 
 
 const TABS = [
-
-  { id: "live", label: "Live", icon: "📡" },
-
-  { id: "verify", label: "Sign Off", icon: "✅" },
-
-  { id: "reports", label: "Signed Off", icon: "📋" },
-
-  { id: "issues", label: "Problems", icon: "💬" },
-
+  { id: "live", label: "Live" },
+  { id: "verify", label: "Sign off" },
+  { id: "issues", label: "Problems" },
+  { id: "reports", label: "Reports" },
+  { id: "more", label: "More" },
 ];
 
 
@@ -761,7 +757,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
         {tab === "live" && (
           <div className="space-y-3 mb-4">
-            <PulseOpenButton onClick={() => setShowPulse(true)} />
             <div className="grid grid-cols-2 gap-3">
             <Kpi
               label="On site now"
@@ -1078,10 +1073,18 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
 
-        {tab === "reports" && (
-
+        {tab === "more" && showPulse && (
           <div className="space-y-3">
+            <button type="button" onClick={() => setShowPulse(false)} className="font-ui text-sm text-[#F5C518]">Back</button>
+            <ProductivityPulseScreen embedded />
+          </div>
+        )}
 
+        {tab === "more" && !showPulse && (
+          <div className="space-y-3">
+            <button type="button" onClick={() => setShowPulse(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4">
+              Machine pulse
+            </button>
             <TimesheetPanel
               rows={timesheetRows}
               periodLabel={timesheetPeriod?.label || "All time"}
@@ -1097,7 +1100,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
                 }
               }}
             />
+          </div>
+        )}
 
+        {tab === "reports" && (
+          <div className="space-y-3">
             {signedReports.length === 0 ? (
 
               <p className="text-sm text-[#F2F0EA]/40 text-center py-8">No signed reports for this period.</p>
@@ -1445,8 +1452,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
           onClose={() => setReportPreview(null)}
         />
       )}
-
-      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
 
     </AppPage>
 

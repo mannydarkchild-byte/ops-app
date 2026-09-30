@@ -53,6 +53,7 @@ export function OperatorReportsModal({
   site,
   cycleStartDay = 26,
   siteSettings,
+  embedded = false,
 }) {
   const [filter, setFilter] = useState("all");
   const [preview, setPreview] = useState(null);
@@ -140,10 +141,9 @@ export function OperatorReportsModal({
     }
   };
 
-  return (
+  const content = (
     <>
-      <Modal title="MY REPORTS" color="yellow" onClose={onClose}>
-        <p className="font-body text-base text-ops-muted mb-4">
+        <p className="font-body text-sm text-ops-muted mb-4">
           Same daily report your supervisor signs. This cycle: {period.label}.
         </p>
 
@@ -228,16 +228,33 @@ export function OperatorReportsModal({
             })}
           </div>
         )}
-      </Modal>
+    </>
+  );
 
-      {preview && (
-        <ReportPreviewModal
-          html={preview.html}
-          title={preview.title}
-          sheets={preview.sheets}
-          onClose={() => setPreview(null)}
-        />
-      )}
+  const previewModal = preview && (
+    <ReportPreviewModal
+      html={preview.html}
+      title={preview.title}
+      sheets={preview.sheets}
+      onClose={() => setPreview(null)}
+    />
+  );
+
+  if (embedded) {
+    return (
+      <>
+        {content}
+        {previewModal}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Modal title="MY REPORTS" color="yellow" onClose={onClose}>
+        {content}
+      </Modal>
+      {previewModal}
     </>
   );
 }

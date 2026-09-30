@@ -6,7 +6,7 @@ import { prestartDraftKey } from "../lib/inspectionDraft.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { PreStartInspectionChecklist } from "../components/PreStartInspectionChecklist.jsx";
 import { OperatorFlowGuide } from "../components/OperatorFlowGuide.jsx";
-import { IconAlert, IconClock, IconFuel, IconInbox, IconLeave, IconPlay, IconReports, IconStop } from "../components/FieldIcons.jsx";
+import { IconClock, IconLeave, IconPlay, IconStop } from "../components/FieldIcons.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
@@ -14,7 +14,7 @@ import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
 import { ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS, EARLY_CLOCK_OUT_GUIDE, STOP_REASON_GUIDE } from "../lib/constants.js";
 import { stopReasonGroups, ownerForStopReason } from "../lib/stopReasons.js";
-import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
+import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
@@ -53,14 +53,12 @@ export function OperatorApp() {
   const [showEndDay, setShowEndDay] = useState(false);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showFuel, setShowFuel] = useState(false);
-  const [showInbox, setShowInbox] = useState(false);
-  const [showMyReports, setShowMyReports] = useState(false);
   const [showEarlyClockOut, setShowEarlyClockOut] = useState(false);
   const [earlyClockOutReason, setEarlyClockOutReason] = useState("");
   const [earlyClockOutNote, setEarlyClockOutNote] = useState("");
   const [suggestReport, setSuggestReport] = useState(null);
   const [reportPrefill, setReportPrefill] = useState(null);
-  const [showPulse, setShowPulse] = useState(false);
+  const [opTab, setOpTab] = useState("today");
 
   const stopGroups = useMemo(() => stopReasonGroups(siteConfig), [siteConfig]);
 
@@ -141,6 +139,14 @@ export function OperatorApp() {
     ).length,
     [shifts, user?.id]
   );
+
+  const operatorTabs = useMemo(() => [
+    { id: "today", label: "Today" },
+    { id: "pulse", label: "Pulse" },
+    { id: "reports", label: "Reports", badge: reportsAttention },
+    { id: "inbox", label: "Inbox", badge: inboxCount },
+    { id: "more", label: "More" },
+  ], [reportsAttention, inboxCount]);
 
   const leftoverOpen = useMemo(
     () => (shifts || []).filter((s) =>
@@ -392,6 +398,9 @@ export function OperatorApp() {
       showSite={false}
       maxWidth="max-w-2xl"
       outdoor
+      tabs={operatorTabs}
+      activeTab={opTab}
+      onTabChange={setOpTab}
       alert={<AlertModal {...alert} confirmText="OK" />}
       banner={
         correctionShift && !submittedShift ? (
@@ -409,79 +418,36 @@ export function OperatorApp() {
         ) : null
       }
     >
-        {workSession && (
-          <div className="operator-pin-icons mb-4">
-            <div className="operator-time-bar">
-              <div className="min-w-0">
-                <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">YOUR TIME</p>
-                <p className="font-body text-sm text-ops-text truncate">
-                  On site since {new Date(workSession.clock_in).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
-                </p>
-              </div>
-              <button type="button" onClick={handleClockOutTap} className="operator-clock-out font-logo">
-                <IconLeave /> Clock out
-              </button>
+        {opTab === "today" && workSession && (
+          <div className="operator-time-bar mb-4">
+            <div className="min-w-0">
+              <p className="font-ui text-xs tracking-wider text-[#F5C518]">YOUR TIME</p>
+              <p className="font-body text-sm text-ops-text truncate">
+                On site since {new Date(workSession.clock_in).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
+              </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <button type="button" onClick={() => setShowMyReports(true)} className="relative flex flex-col items-center gap-1.5 py-2">
-                <span className="operator-pin-tile bg-[#141414] border border-[#F5C518]/60 text-[#F5C518] flex items-center justify-center"><IconReports /></span>
-                <span className="font-logo text-base text-ops-text">My reports</span>
-                {reportsAttention > 0 && (
-                  <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#F5C518] text-black text-[10px] font-bold flex items-center justify-center">{reportsAttention}</span>
-                )}
-              </button>
-              <button type="button" onClick={() => setShowReportIssue(true)} className="flex flex-col items-center gap-1.5 py-2">
-                <span className="operator-pin-tile bg-[#1a1212] border border-[#EF4444]/40 text-[#EF4444] flex items-center justify-center"><IconAlert /></span>
-                <span className="font-logo text-base text-ops-text">Report</span>
-              </button>
-              <button type="button" onClick={() => setShowFuel(true)} className="flex flex-col items-center gap-1.5 py-2">
-                <span className="operator-pin-tile bg-[#141414] border border-[#F5C518]/50 text-[#F5C518] flex items-center justify-center"><IconFuel /></span>
-                <span className="font-logo text-base text-ops-text">Diesel</span>
-              </button>
-              <button type="button" onClick={() => setShowInbox(true)} className="relative flex flex-col items-center gap-1.5 py-2">
-                <span className="operator-pin-tile bg-[#141414] border border-[#00A4A6]/50 text-[#00A4A6] flex items-center justify-center"><IconInbox /></span>
-                <span className="font-logo text-base text-ops-text">Inbox</span>
-                {inboxCount > 0 && (
-                  <span className="absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">{inboxCount}</span>
-                )}
-              </button>
-            </div>
+            <button type="button" onClick={handleClockOutTap} className="operator-clock-out font-ui text-sm">
+              <IconLeave /> Clock out
+            </button>
           </div>
         )}
 
-        {showWelcome && (
+        {opTab === "today" && showWelcome && (
           <OperatorWelcome
             name={user?.name}
             machineName={activeMachine?.name}
             siteName={activeSite?.name}
             reportsAttention={reportsAttention}
             onReady={startDay}
-            onMyReports={() => setShowMyReports(true)}
+            onMyReports={() => setOpTab("reports")}
           />
         )}
 
-        {!showWelcome && (
-          <PulseOpenButton onClick={() => setShowPulse(true)} className="mb-4" />
-        )}
-
-        {!workSession && !submittedShift && !showWelcome && (
-          <button
-            type="button"
-            onClick={() => setShowMyReports(true)}
-            className="relative w-full mb-4 min-h-[64px] rounded-2xl border-2 border-[#F5C518] text-[#F5C518] font-logo text-lg flex items-center justify-center gap-2"
-          >
-            <IconReports /> My reports
-            {reportsAttention > 0 && (
-              <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#F5C518] text-black text-xs font-bold flex items-center justify-center">{reportsAttention}</span>
-            )}
-          </button>
-        )}
-
-        {!submittedShift && !showWelcome && (
+        {opTab === "today" && !submittedShift && !showWelcome && (
           <OperatorFlowGuide currentStep={currentStep} />
         )}
 
-        {correctionShift && !submittedShift && (
+        {opTab === "today" && correctionShift && !submittedShift && (
           <ShiftCorrectionPanel
             shift={correctionShift}
             machine={correctionMachine}
@@ -492,7 +458,7 @@ export function OperatorApp() {
           />
         )}
 
-        {leftoverOpen.length > 0 && !submittedShift && (
+        {opTab === "today" && leftoverOpen.length > 0 && !submittedShift && (
           <div className="mb-4 bg-[#1a1212] border border-[#EF4444]/40 rounded-2xl p-4">
             <p className="font-logo text-[#EF4444] mb-2">Open shift still on this machine</p>
             <p className="font-body text-[#F2F0EA]/75 mb-3">
@@ -516,7 +482,7 @@ export function OperatorApp() {
 
 
         {/* Day complete — WhatsApp supervisor */}
-        {submittedShift && (
+        {opTab === "today" && submittedShift && (
           <div className={`bg-[#141414] border-2 rounded-2xl p-6 text-center ${
             getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "border-[#F97316]" : "border-[#22C55E]"
           }`}>
@@ -556,8 +522,8 @@ export function OperatorApp() {
               user={user}
               onDone={(updated) => { setSubmittedShift(updated); refreshLocal(); }}
             />
-            <button type="button" onClick={() => setShowMyReports(true)} className="w-full mb-3 bg-[#F5C518] text-black py-4 rounded-xl font-logo text-base font-bold">
-              VIEW MY REPORTS
+            <button type="button" onClick={() => setOpTab("reports")} className="w-full h-12 mb-3 bg-[#F5C518] text-black rounded-xl font-ui text-sm font-semibold">
+              View my reports
             </button>
             <button type="button" onClick={dismissSubmitted} className="w-full border border-[#2A2A2A] text-[#F2F0EA]/50 py-3 rounded-xl font-logo text-xs">
               DONE
@@ -565,7 +531,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {!submittedShift && !showWelcome && (
+        {opTab === "today" && !submittedShift && !showWelcome && (
           <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
@@ -686,6 +652,52 @@ export function OperatorApp() {
           </div>
         )}
 
+      {opTab === "pulse" && <ProductivityPulseScreen embedded />}
+
+      {opTab === "reports" && (
+        <OperatorReportsModal
+          embedded
+          onClose={() => setOpTab("today")}
+          user={user}
+          shifts={shifts}
+          workSessions={workSessions}
+          machines={machines}
+          events={events}
+          inspections={inspections}
+          fuelLogs={fuelLogs}
+          hourReadings={hourReadings}
+          profiles={profiles}
+          site={activeSite}
+          cycleStartDay={siteConfig.billing_cycle_start_day}
+          siteSettings={siteConfig}
+          onChanged={refreshLocal}
+        />
+      )}
+
+      {opTab === "inbox" && (
+        <IssueInboxModal
+          variant="inline"
+          onClose={() => setOpTab("today")}
+          user={user}
+          issues={issues}
+          issueMessages={issueMessages}
+          onDone={refreshLocal}
+          scope="mine"
+          machines={activeMachine ? [activeMachine] : []}
+        />
+      )}
+
+      {opTab === "more" && (
+        <div className="space-y-2">
+          <button type="button" onClick={() => setShowReportIssue(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-ui text-sm text-left px-4">
+            Report a problem
+          </button>
+          <button type="button" onClick={() => setShowFuel(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-ui text-sm text-left px-4">
+            Log diesel
+          </button>
+        </div>
+      )}
+
       {showReportIssue && (
         <ReportIssueModal onClose={() => { setShowReportIssue(false); setReportPrefill(null); }} user={user} machine={activeMachine} site={activeSite} profiles={profiles} onDone={refreshLocal}
           initialArea={reportPrefill?.area || ""} initialDescription={reportPrefill?.description || ""} initialPriority={reportPrefill?.priority || "Medium"} />
@@ -706,27 +718,6 @@ export function OperatorApp() {
       )}
       {showFuel && (
         <FuelModal onClose={() => setShowFuel(false)} currentMeter={fuelMeterHint} user={user} machine={activeMachine} site={activeSite} shiftId={sessionShift?.id} onDone={refreshLocal} />
-      )}
-      {showInbox && (
-        <IssueInboxModal onClose={() => setShowInbox(false)} user={user} issues={issues} issueMessages={issueMessages} onDone={refreshLocal} scope="mine" machines={activeMachine ? [activeMachine] : []} />
-      )}
-      {showMyReports && (
-        <OperatorReportsModal
-          onClose={() => setShowMyReports(false)}
-          user={user}
-          shifts={shifts}
-          workSessions={workSessions}
-          machines={machines}
-          events={events}
-          inspections={inspections}
-          fuelLogs={fuelLogs}
-          hourReadings={hourReadings}
-          profiles={profiles}
-          site={activeSite}
-          cycleStartDay={siteConfig.billing_cycle_start_day}
-          siteSettings={siteConfig}
-          onChanged={refreshLocal}
-        />
       )}
       {showEarlyClockOut && (
         <Modal title="CLOCK OUT — YOUR TIME" color="yellow" onClose={() => { setShowEarlyClockOut(false); setEarlyClockOutReason(""); setEarlyClockOutNote(""); }}>
@@ -809,7 +800,6 @@ export function OperatorApp() {
           </button>
         </Modal>
       )}
-      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
     </AppPage>
   );
 }

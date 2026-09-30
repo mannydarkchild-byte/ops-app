@@ -15,12 +15,13 @@ import { saveLocal } from "../lib/db.js";
 import { scheduleSync } from "../lib/sync/engine.js";
 import { openMechanicInspectionReport } from "../services/reports.js";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
-import { ProductivityPulseScreen, PulseOpenButton } from "../components/ProductivityPulseScreen.jsx";
+import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
-  { id: "repairs", label: "Repairs", icon: "🔧" },
-  { id: "inspections", label: "Inspections", icon: "🔍" },
+  { id: "repairs", label: "Repairs" },
+  { id: "inspections", label: "Inspections" },
+  { id: "pulse", label: "Pulse" },
 ];
 
 export function MechanicApp() {
@@ -44,7 +45,6 @@ export function MechanicApp() {
   const [busy, setBusy] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
-  const [showPulse, setShowPulse] = useState(false);
 
   const [inspectionFlow, setInspectionFlow] = useState(null);
   const [inspectionMachineId, setInspectionMachineId] = useState("");
@@ -257,7 +257,7 @@ export function MechanicApp() {
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
       <div className="space-y-4">
-        <PulseOpenButton onClick={() => setShowPulse(true)} />
+        {tab === "pulse" && <ProductivityPulseScreen embedded />}
         {tab === "repairs" && (
           <section>
             <h2 className="font-logo text-[#F5C518] text-lg tracking-wider mb-3">My repairs ({myJobs.length})</h2>
@@ -437,7 +437,6 @@ export function MechanicApp() {
           onClose={() => setReportPreview(null)}
         />
       )}
-      {showPulse && <ProductivityPulseScreen onClose={() => setShowPulse(false)} />}
     </AppPage>
   );
 }
