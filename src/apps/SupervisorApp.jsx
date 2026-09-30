@@ -25,6 +25,7 @@ import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { MoreMenu } from "../components/MoreMenu.jsx";
 
 import * as wf from "../services/workflows.js";
 
@@ -1081,10 +1082,10 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
         )}
 
         {tab === "more" && !showPulse && (
-          <div className="space-y-3">
-            <button type="button" onClick={() => setShowPulse(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4">
-              Machine pulse
-            </button>
+          <div className="space-y-4">
+            <MoreMenu
+              items={[{ label: "Machine pulse", onClick: () => setShowPulse(true) }]}
+            />
             <TimesheetPanel
               rows={timesheetRows}
               periodLabel={timesheetPeriod?.label || "All time"}

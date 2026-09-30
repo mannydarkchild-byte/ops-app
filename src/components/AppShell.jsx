@@ -226,7 +226,7 @@ export function AppHeader({ right, subtitle }) {
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <LogoMark size="sm" />
           <div className="min-w-0">
-            <span className="font-logo text-base leading-none text-ops-gold">OPS</span>
+            <span className="font-logo ops-brand text-base leading-none text-ops-gold">OPS</span>
             <p className="font-body text-sm text-ops-text truncate leading-tight">
               {displayName}
               <span className={`ml-1.5 font-ui text-xs capitalize ${colors.text}`}>{roleLabel}</span>
@@ -304,10 +304,7 @@ function TabGlyph({ id }) {
 export function AppTabBar({ tabs, activeTab, onTabChange }) {
   if (!tabs?.length) return null;
   return (
-    <nav
-      className="fixed bottom-0 inset-x-0 z-40 border-t border-ops-border bg-ops-black mobile-safe-bottom"
-      aria-label="Main menu"
-    >
+    <nav className="ops-tabbar fixed bottom-0 inset-x-0 z-40 mobile-safe-bottom" aria-label="Main menu">
       <div
         className="max-w-5xl mx-auto grid"
         style={{ gridTemplateColumns: `repeat(${Math.min(tabs.length, 5)}, minmax(0, 1fr))` }}
@@ -319,17 +316,16 @@ export function AppTabBar({ tabs, activeTab, onTabChange }) {
               key={t.id}
               type="button"
               onClick={() => onTabChange(t.id)}
-              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-14 py-1.5 font-ui text-[11px] leading-tight ${
-                on ? "text-ops-gold" : "text-ops-muted"
-              }`}
+              className={`ops-tab ${on ? "ops-tab-on" : ""}`}
+              aria-current={on ? "page" : undefined}
             >
-              <TabGlyph id={t.id} />
-              <span className="truncate max-w-full px-1">{t.label}</span>
-              {t.badge > 0 && (
-                <span className="absolute top-1 right-[18%] min-w-[16px] h-4 px-1 rounded-full bg-ops-red text-white text-[10px] font-semibold flex items-center justify-center">
-                  {t.badge > 99 ? "99+" : t.badge}
-                </span>
-              )}
+              <span className="ops-tab-icon">
+                <TabGlyph id={t.id} />
+                {t.badge > 0 && (
+                  <span className="ops-tab-badge">{t.badge > 99 ? "99+" : t.badge}</span>
+                )}
+              </span>
+              <span className="ops-tab-label">{t.label}</span>
             </button>
           );
         })}

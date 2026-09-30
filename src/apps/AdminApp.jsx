@@ -28,6 +28,7 @@ import { AdminMachinesPanel } from "../components/admin/AdminMachinesPanel.jsx";
 import { AdminChecklistsPanel } from "../components/admin/AdminChecklistsPanel.jsx";
 import { AdminActivityPanel } from "../components/admin/AdminActivityPanel.jsx";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { MoreMenu } from "../components/MoreMenu.jsx";
 
 
 
@@ -318,24 +319,15 @@ export function AdminApp() {
         )}
 
         {tab === "more" && !moreView && (
-          <div className="space-y-2">
-            {[
-              ["pulse", "Machine pulse"],
-              ["machines", "Machines"],
-              ["checklists", "Checklists"],
-              ["activity", "Activity"],
-              ["sync", "Sync"],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setMoreView(id)}
-                className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <MoreMenu
+            items={[
+              { label: "Machine pulse", onClick: () => setMoreView("pulse") },
+              { label: "Machines", onClick: () => setMoreView("machines") },
+              { label: "Checklists", onClick: () => setMoreView("checklists") },
+              { label: "Activity", onClick: () => setMoreView("activity") },
+              { label: "Sync", onClick: () => setMoreView("sync") },
+            ]}
+          />
         )}
 
         {tab === "more" && moreView && moreView !== "pulse" && (

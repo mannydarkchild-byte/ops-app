@@ -22,6 +22,7 @@ import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { MoreMenu } from "../components/MoreMenu.jsx";
 import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
 import * as wf from "../services/workflows.js";
@@ -499,27 +500,14 @@ export function ManagerApp() {
         {tab === "pulse" && <ProductivityPulseScreen embedded />}
 
         {tab === "more" && !moreView && (
-          <div className="space-y-2">
-            {[
-              ["parts", "Parts"],
-              ["expenses", "Expenses"],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setMoreView(id)}
-                className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4"
-              >
-                {label}
-              </button>
-            ))}
-            <button type="button" onClick={() => setShowStopOwners(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4">
-              Stop reasons and owners
-            </button>
-            <button type="button" onClick={() => setShowBackdate(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] bg-[#141414] text-[#F2F0EA] font-ui text-sm text-left px-4">
-              Backdate hour reading
-            </button>
-          </div>
+          <MoreMenu
+            items={[
+              { label: "Parts", onClick: () => setMoreView("parts") },
+              { label: "Expenses", onClick: () => setMoreView("expenses") },
+              { label: "Stop reasons and owners", onClick: () => setShowStopOwners(true) },
+              { label: "Backdate hour reading", onClick: () => setShowBackdate(true) },
+            ]}
+          />
         )}
 
         {tab === "more" && moreView && (

@@ -53,11 +53,20 @@ body {
 /* ═══════════════════════════════════════════════════════════════
    TYPOGRAPHY
    ═══════════════════════════════════════════════════════════════ */
-/* Brand mark only — not general UI */
+/* Brand mark only. Other .font-logo labels stay Inter so pages share one voice. */
 .font-logo {
+  font-family: Inter, system-ui, sans-serif !important;
+  letter-spacing: -0.011em;
+  text-transform: none;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.font-logo.ops-brand {
   font-family: "Russo One", system-ui, sans-serif !important;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  font-weight: 400;
   line-height: 1.15;
 }
 
@@ -76,21 +85,13 @@ body {
 /* Prevent iOS Safari auto-zoom on input focus (needs 16px minimum) */
 @media screen and (max-width: 640px) {
   html {
-    font-size: 20px;
+    font-size: 16px;
   }
 
   input,
   textarea,
   select {
-    font-size: 20px !important;
-  }
-
-  .operator-outdoor input,
-  .operator-outdoor textarea,
-  .operator-outdoor select {
-    font-size: 1.4rem !important;
-    min-height: 72px;
-    padding: 0.95rem 1rem;
+    font-size: 16px !important;
   }
 }
 
@@ -173,11 +174,12 @@ body {
 .login-ok { color: #22C55E; text-align: left; }
 
 .choice-hint {
-  font-size: 1.2rem;
-  padding: 0.9rem 1rem;
-  border-radius: 0.85rem;
-  background: rgba(245, 197, 24, 0.1);
-  border: 1px solid rgba(245, 197, 24, 0.35);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.75rem;
+  background: rgba(245, 197, 24, 0.08);
+  border: 1px solid rgba(245, 197, 24, 0.28);
 }
 
 .operator-pin-tile {
@@ -464,27 +466,29 @@ button,
 
 .operator-clock-out {
   flex-shrink: 0;
-  min-height: 3.15rem;
-  padding: 0 1rem;
+  min-height: 2.25rem;
+  padding: 0 0.25rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  border-radius: 0.85rem;
-  border: 2px solid #F5C518;
+  gap: 0.35rem;
+  border: 0;
   background: transparent;
-  color: #F5C518;
-  font-size: 0.95rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  color: var(--ops-muted);
+  font-size: 0.875rem;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .operator-group-label {
-  font-family: inherit;
-  font-size: 0.85rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #F5C518;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--ops-muted);
   margin: 0 0 0.35rem;
 }
 
@@ -496,8 +500,7 @@ button,
 }
 
 html.theme-light .operator-clock-out {
-  color: #8A5A00;
-  border-color: #8A5A00;
+  color: rgba(20, 18, 14, 0.7);
 }
 
 html:not(.theme-light) .operator-outdoor .bg-\[\#141414\] {
@@ -636,6 +639,123 @@ html.theme-light header.bg-ops-black,
 html.theme-light nav.bg-ops-black,
 html.theme-light .relative.z-20.bg-ops-black {
   background-color: var(--ops-bg);
+}
+
+.ops-tabbar {
+  background: var(--ops-card);
+  border-top: 1px solid var(--ops-border);
+}
+
+.ops-tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 58px;
+  padding: 6px 2px 8px;
+  color: var(--ops-muted);
+  background: transparent;
+  border: 0;
+}
+
+.ops-tab-icon {
+  position: relative;
+  width: 40px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.ops-tab-on {
+  color: #F5C518;
+}
+
+.ops-tab-on .ops-tab-icon {
+  background: rgba(245, 197, 24, 0.16);
+}
+
+.ops-tab-label {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.1;
+  max-width: 100%;
+  padding: 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-tab-on .ops-tab-label {
+  font-weight: 600;
+}
+
+.ops-tab-badge {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #EF4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ops-menu {
+  background: var(--ops-card);
+  border: 1px solid var(--ops-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.ops-menu-row {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ops-border);
+  color: var(--ops-text);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.ops-menu-row:last-child {
+  border-bottom: 0;
+}
+
+.ops-menu-chevron {
+  color: #F5C518;
+  font-size: 20px;
+  line-height: 1;
+}
+
+html.theme-light .ops-tab-on {
+  color: #8A5A00;
+}
+
+html.theme-light .ops-tab-on .ops-tab-icon {
+  background: rgba(138, 90, 0, 0.12);
+}
+
+html.theme-light .ops-menu-chevron {
+  color: #8A5A00;
 }
 
 .operator-outdoor input,

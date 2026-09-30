@@ -15,6 +15,7 @@ import { VoiceInput } from "../components/ui/VoiceInput.jsx";
 import { ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS, EARLY_CLOCK_OUT_GUIDE, STOP_REASON_GUIDE } from "../lib/constants.js";
 import { stopReasonGroups, ownerForStopReason } from "../lib/stopReasons.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { MoreMenu } from "../components/MoreMenu.jsx";
 import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
@@ -522,11 +523,8 @@ export function OperatorApp() {
               user={user}
               onDone={(updated) => { setSubmittedShift(updated); refreshLocal(); }}
             />
-            <button type="button" onClick={() => setOpTab("reports")} className="w-full h-12 mb-3 bg-[#F5C518] text-black rounded-xl font-ui text-sm font-semibold">
-              View my reports
-            </button>
-            <button type="button" onClick={dismissSubmitted} className="w-full border border-[#2A2A2A] text-[#F2F0EA]/50 py-3 rounded-xl font-logo text-xs">
-              DONE
+            <button type="button" onClick={dismissSubmitted} className="w-full py-2 font-ui text-sm text-ops-muted">
+              Done
             </button>
           </div>
         )}
@@ -688,14 +686,12 @@ export function OperatorApp() {
       )}
 
       {opTab === "more" && (
-        <div className="space-y-2">
-          <button type="button" onClick={() => setShowReportIssue(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-ui text-sm text-left px-4">
-            Report a problem
-          </button>
-          <button type="button" onClick={() => setShowFuel(true)} className="w-full h-12 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-ui text-sm text-left px-4">
-            Log diesel
-          </button>
-        </div>
+        <MoreMenu
+          items={[
+            { label: "Report a problem", onClick: () => setShowReportIssue(true) },
+            { label: "Log diesel", onClick: () => setShowFuel(true) },
+          ]}
+        />
       )}
 
       {showReportIssue && (
@@ -767,7 +763,7 @@ export function OperatorApp() {
           <FormSection step={2} title="Details" description="What happened? What was done?" accent="#EF4444">
             <VoiceInput value={stopNote} onChange={setStopNote} placeholder="Details…" rows={2} />
           </FormSection>
-          <button type="button" onClick={handleStop} disabled={!stopReason} className="w-full bg-[#EF4444] text-white py-4 rounded-xl font-logo font-bold disabled:opacity-40">CONFIRM STOP</button>
+          <button type="button" onClick={handleStop} disabled={!stopReason} className="w-full min-h-12 bg-[#EF4444] text-white rounded-xl font-ui font-semibold disabled:opacity-40">Confirm stop</button>
         </Modal>
       )}
       {showRestart && (
@@ -775,7 +771,7 @@ export function OperatorApp() {
           <FormSection step={1} title="Action taken" description="What was done to fix or resume work?" accent="#22C55E">
             <VoiceInput value={restartNote} onChange={setRestartNote} placeholder="Action taken…" rows={3} />
           </FormSection>
-          <button type="button" onClick={handleRestart} className="w-full bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold">RESTART MACHINE</button>
+          <button type="button" onClick={handleRestart} className="w-full min-h-12 bg-[#22C55E] text-black rounded-xl font-ui font-semibold">Restart machine</button>
         </Modal>
       )}
       {showEndDay && (
@@ -795,8 +791,8 @@ export function OperatorApp() {
             />
           </FormSection>
           <button type="button" onClick={handleEndDay} disabled={!shiftSupervisor?.id || !endHour || !endPhotoRef}
-            className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold text-base disabled:opacity-40">
-            SEND SHIFT & CLOCK OUT
+            className="w-full min-h-12 bg-[#F5C518] text-black rounded-xl font-ui font-semibold disabled:opacity-40">
+            Send shift and clock out
           </button>
         </Modal>
       )}
