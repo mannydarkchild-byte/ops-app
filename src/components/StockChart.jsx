@@ -16,8 +16,8 @@ function chartAxes(t0, t1) {
   return {
     multiDay,
     span,
-    yTitle: "Net time",
-    xTitle: multiDay ? "Date" : "Time of day",
+    yTitle: "Running − stopped",
+    xTitle: multiDay ? "Date" : "Clock time",
   };
 }
 
@@ -84,7 +84,7 @@ export function StockChartSvg({ points, width = 760, height = 280, className = "
   const yTitleY = padT + innerH / 2;
 
   return (
-    <svg className={className} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Net time versus ${axes.xTitle}. The line rises while the machine runs and falls while it is stopped.`}>
+    <svg className={className} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Running time minus stop time">
       <text x="14" y={yTitleY} fill="#8A877C" fontSize="11" textAnchor="middle" transform={`rotate(-90 14 ${yTitleY})`}>
         {axes.yTitle}
       </text>
@@ -156,7 +156,7 @@ export function stockChartSvgHtml(points, { esc, formatDurationMinutes: fmt }) {
   const yTitleY = (padT + innerH / 2).toFixed(1);
   const endScore = series[series.length - 1].score;
   const endLabel = formatNetMinutes(endScore);
-  return `<svg class="trend-svg stock-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="Net time versus time of day">
+  return `<svg class="trend-svg stock-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="Running time minus stop time">
     <text x="14" y="${yTitleY}" class="trend-tick" text-anchor="middle" transform="rotate(-90 14 ${yTitleY})">${esc(axes.yTitle)}</text>
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + innerH}" stroke="#D9D7D0"/>
     <line x1="${padL}" y1="${padT + innerH}" x2="${w - padR}" y2="${padT + innerH}" stroke="#D9D7D0"/>
@@ -169,9 +169,8 @@ export function stockChartSvgHtml(points, { esc, formatDurationMinutes: fmt }) {
     <text x="${(padL + innerW / 2).toFixed(1)}" y="${h - 6}" text-anchor="middle" class="trend-tick">${esc(axes.xTitle)}</text>
   </svg>
   <div class="chart-legend">
-    <span class="leg-bill">End ${esc(endLabel)} net time</span>
-    <span class="leg-run">Up = running</span>
-    <span class="leg-down">Down = stopped</span>
-  </div>
-  <p class="note">Vertical axis is net time (each running minute adds, each stopped minute subtracts). Horizontal axis is ${esc(axes.xTitle.toLowerCase())}.</p>`;
+    <span class="leg-bill">Now ${esc(endLabel)}</span>
+    <span class="leg-run">Up: machine running</span>
+    <span class="leg-down">Down: machine stopped</span>
+  </div>`;
 }

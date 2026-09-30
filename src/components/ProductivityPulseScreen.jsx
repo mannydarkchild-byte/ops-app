@@ -153,15 +153,14 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
       )}
 
       <div className="grid grid-cols-3 gap-2">
-        <ScoreTile label="Net score" value={netLabel} color="#F5C518" />
-        <ScoreTile label="Runtime" value={formatDurationMinutes(pulse?.runtimeMin || 0)} color="#22C55E" />
-        <ScoreTile label="Downtime" value={formatDurationMinutes(pulse?.downtimeMin || 0)} color="#EF4444" />
+        <ScoreTile label="Running − stopped" value={netLabel} color="#F5C518" />
+        <ScoreTile label="Time running" value={formatDurationMinutes(pulse?.runtimeMin || 0)} color="#22C55E" />
+        <ScoreTile label="Time stopped" value={formatDurationMinutes(pulse?.downtimeMin || 0)} color="#EF4444" />
       </div>
 
       <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3">
-        <p className="font-body text-xs text-[#F2F0EA]/50 mb-2 px-1">
-          Vertical axis is net time: each running minute adds, each stopped minute subtracts. Zero is the start of this window. Horizontal axis is clock time (or the date, on Cycle). Gold tip is where it stands now.
-        </p>
+        <p className="font-logo text-sm text-[#F2F0EA] px-1 mb-1">Running time minus stop time</p>
+        <p className="font-body text-xs text-[#F2F0EA]/55 px-1 mb-2">Up: machine running. Down: machine stopped.</p>
         <StockChartSvg points={pulse?.points || []} />
       </div>
 
