@@ -212,7 +212,7 @@ export function ThemeToggle({ className = "" }) {
   );
 }
 
-export function AppHeader({ right, subtitle }) {
+export function AppHeader({ right, subtitle, menuItems = [] }) {
   const { user, signOut } = useOps();
   const [menuOpen, setMenuOpen] = useState(false);
   const role = (user?.role || "operator").toLowerCase();
@@ -249,6 +249,25 @@ export function AppHeader({ right, subtitle }) {
       </div>
       {menuOpen && (
         <div className="absolute right-3 top-14 z-40 w-64 rounded-xl border border-ops-border bg-ops-card shadow-ops-sm p-2 space-y-1">
+          {menuItems.length > 0 && (
+            <div className="pb-1 mb-1 border-b border-ops-border">
+              {menuItems.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => { setMenuOpen(false); item.onClick(); }}
+                  className="w-full min-h-11 px-3 rounded-lg text-left font-ui text-sm text-ops-text hover:bg-ops-elevated flex items-center justify-between"
+                >
+                  <span>{item.label}</span>
+                  {item.badge > 0 && (
+                    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-ops-red text-white text-[10px] font-semibold flex items-center justify-center">
+                      {item.badge > 9 ? "9+" : item.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
           {right}
           <div className="px-1">
             <SyncButton />
@@ -349,12 +368,13 @@ export function AppPage({
   alert,
   banner,
   outdoor = false,
+  menuItems = [],
 }) {
   const hasTabs = Boolean(tabs?.length);
   return (
     <div className={`min-h-screen bg-ops-black text-ops-text ${outdoor ? "operator-outdoor" : ""} ${hasTabs ? "pb-24" : "pb-8 mobile-safe-bottom"}`}>
       {alert}
-      <AppHeader subtitle={subtitle} context={context} showSite={showSite} />
+      <AppHeader subtitle={subtitle} context={context} showSite={showSite} menuItems={menuItems} />
       <OfflineBanner />
       <SyncQueueHint hasTabBar={hasTabs} />
       {banner}

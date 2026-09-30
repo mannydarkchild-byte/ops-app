@@ -818,7 +818,7 @@ function WarriorStatusCard({ fleet }) {
 
 function Kpi({ label, value, sub, color }) {
   return (
-    <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3 sm:p-4">
+    <div className="rounded-xl p-3 sm:p-4 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
       <p className="font-logo text-[10px] text-[#F2F0EA]/50">{label}</p>
       <p className="font-logo text-xl sm:text-2xl" style={{ color }}>{value}</p>
       <p className="font-body text-[10px] text-[#F2F0EA]/40 mt-1">{sub}</p>

@@ -831,7 +831,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
                       <button
                         type="button"
                         onClick={() => beginCloseShift(shift)}
-                        className="w-full mt-3 min-h-[72px] bg-[#F5C518] text-black py-4 rounded-xl font-logo text-xl"
+                        className="w-full mt-3 min-h-12 bg-[#F5C518] text-black rounded-xl font-ui text-sm font-semibold"
                       >
                         Close this shift
                       </button>
@@ -1550,11 +1550,11 @@ function Kpi({ label, value, sub, color }) {
 
   return (
 
-    <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
+    <div className="rounded-2xl p-4 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
 
       <p className="font-logo text-[#F2F0EA]/60">{label}</p>
 
-      <p className="font-logo text-3xl mt-1" style={{ color }}>{value}</p>
+      <p className="font-logo text-xl mt-1" style={{ color }}>{value}</p>
 
       <p className="font-body text-[#F2F0EA]/50 mt-1">{sub}</p>
 

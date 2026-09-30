@@ -1,7 +1,12 @@
 import { useMemo } from "react";
 import { buildActivityFeed } from "../lib/activityFeed.js";
-import { fmtDate } from "../lib/utils.js";
 
+function shortTime(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** One line per event. Detail stays in the row, not a second paragraph. */
 export function ActivityFeed({ events, fuelLogs, issues, machines, siteId, limit = 40 }) {
   const items = useMemo(
     () => buildActivityFeed({ events, fuelLogs, issues, machines, siteId }, { limit }),
@@ -9,28 +14,20 @@ export function ActivityFeed({ events, fuelLogs, issues, machines, siteId, limit
   );
 
   if (!items.length) {
-    return <p className="text-sm text-[#F2F0EA]/40 text-center py-6">No operator activity yet today.</p>;
+    return <p className="text-sm text-ops-muted text-center py-6">No activity yet today.</p>;
   }
 
   return (
-    <div className="space-y-0 max-h-[50vh] overflow-y-auto">
-      {items.map((item) => (
-        <div key={item.id} className="flex gap-3 py-3 border-b border-[#2A2A2A] last:border-0">
-          <span className="text-lg shrink-0 w-6 text-center">{item.icon}</span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap justify-between gap-x-2 gap-y-0.5">
-              <p className="font-logo text-[#F2F0EA]">{item.label}</p>
-              <p className="text-[#F2F0EA]/45 shrink-0">{fmtDate(item.at)}</p>
-            </div>
-            <p className="text-[#F5C518]/80 mt-0.5">
-              {item.operator || "—"}{item.machine ? ` · ${item.machine}` : ""}
-            </p>
-            {item.detail && (
-              <p className="text-[#F2F0EA]/60 mt-1">{item.detail}</p>
-            )}
+    <div className="max-h-[50vh] overflow-y-auto">
+      {items.map((item) => {
+        const summary = [item.label, item.operator, item.detail].filter(Boolean).join(" · ");
+        return (
+          <div key={item.id} className="flex items-baseline gap-3 py-2.5 border-b border-ops-border last:border-0">
+            <span className="font-ui text-xs text-ops-muted w-12 shrink-0">{shortTime(item.at)}</span>
+            <p className="font-ui text-sm text-ops-text min-w-0 truncate">{summary}</p>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

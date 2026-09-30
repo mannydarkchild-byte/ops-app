@@ -3,25 +3,31 @@
 @tailwind utilities;
 
 :root {
-  --ops-bg: #0A0A0A;
-  --ops-card: #141414;
-  --ops-elevated: #1A1A1A;
-  --ops-border: #2A2A2A;
+  --ops-bg: #0B0B0B;
+  --ops-card: #16140F;
+  --ops-elevated: #1C1A14;
+  --ops-border: #5C5340;
   --ops-text: #F2F0EA;
-  --ops-muted: rgba(242, 240, 234, 0.78);
-  --ops-ink: #0A0A0A;
-  --ops-inset: #0A0A0A;
+  --ops-muted: rgba(242, 240, 234, 0.72);
+  --ops-ink: #0B0B0B;
+  --ops-inset: #0B0B0B;
+  --ops-gold: #F5C518;
+  --ops-gold-line: #C4A15A;
+  --ops-gold-wash: rgba(245, 197, 24, 0.1);
 }
 
 html.theme-light {
-  --ops-bg: #F6F1DE;
+  --ops-bg: #F7F4EC;
   --ops-card: #FFFFFF;
-  --ops-elevated: #FFF8E8;
-  --ops-border: #6F6A5C;
+  --ops-elevated: #FFFBF2;
+  --ops-border: #E4D7B4;
   --ops-text: #14120E;
-  --ops-muted: rgba(20, 18, 14, 0.78);
+  --ops-muted: rgba(20, 18, 14, 0.68);
   --ops-ink: #14120E;
-  --ops-inset: #E8E0C8;
+  --ops-inset: #F3EDE0;
+  --ops-gold: #A67C00;
+  --ops-gold-line: #C4A15A;
+  --ops-gold-wash: rgba(166, 124, 0, 0.08);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -501,6 +507,18 @@ button,
 
 html.theme-light .operator-clock-out {
   color: rgba(20, 18, 14, 0.7);
+}
+
+/* Hardcoded card borders follow the same warm edge in both themes */
+html:not(.theme-light) [class*="border-[#2A2A2A]"],
+html:not(.theme-light) [class*="border-[#2a2a2a]"] {
+  border-color: var(--ops-border);
+}
+
+html.theme-light .border-\[\#2A2A2A\],
+html.theme-light .border-\[\#2a2a2a\],
+html.theme-light .border-\[\#333\] {
+  border-color: var(--ops-border);
 }
 
 html:not(.theme-light) .operator-outdoor .bg-\[\#141414\] {

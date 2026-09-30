@@ -638,7 +638,7 @@ export function AdminApp() {
 
 function Kpi({ label, value, sub, color = "#F2F0EA" }) {
   return (
-    <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3">
+    <div className="rounded-xl p-3 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
       <p className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider">{label}</p>
       <p className="font-logo text-xl mt-1" style={{ color }}>{value}</p>
       {sub && <p className="text-[10px] text-[#F2F0EA]/40 mt-1">{sub}</p>}

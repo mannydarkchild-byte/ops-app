@@ -15,7 +15,6 @@ import { VoiceInput } from "../components/ui/VoiceInput.jsx";
 import { ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS, EARLY_CLOCK_OUT_GUIDE, STOP_REASON_GUIDE } from "../lib/constants.js";
 import { stopReasonGroups, ownerForStopReason } from "../lib/stopReasons.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
-import { MoreMenu } from "../components/MoreMenu.jsx";
 import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
@@ -59,7 +58,7 @@ export function OperatorApp() {
   const [earlyClockOutNote, setEarlyClockOutNote] = useState("");
   const [suggestReport, setSuggestReport] = useState(null);
   const [reportPrefill, setReportPrefill] = useState(null);
-  const [opTab, setOpTab] = useState("today");
+  const [sheet, setSheet] = useState(null);
 
   const stopGroups = useMemo(() => stopReasonGroups(siteConfig), [siteConfig]);
 
@@ -141,12 +140,12 @@ export function OperatorApp() {
     [shifts, user?.id]
   );
 
-  const operatorTabs = useMemo(() => [
-    { id: "today", label: "Today" },
-    { id: "pulse", label: "Pulse" },
-    { id: "reports", label: "Reports", badge: reportsAttention },
-    { id: "inbox", label: "Inbox", badge: inboxCount },
-    { id: "more", label: "More" },
+  const operatorMenu = useMemo(() => [
+    { label: "Pulse", onClick: () => setSheet("pulse") },
+    { label: "Reports", onClick: () => setSheet("reports"), badge: reportsAttention },
+    { label: "Inbox", onClick: () => setSheet("inbox"), badge: inboxCount },
+    { label: "Log diesel", onClick: () => setShowFuel(true) },
+    { label: "Report a problem", onClick: () => setShowReportIssue(true) },
   ], [reportsAttention, inboxCount]);
 
   const leftoverOpen = useMemo(
@@ -399,9 +398,7 @@ export function OperatorApp() {
       showSite={false}
       maxWidth="max-w-2xl"
       outdoor
-      tabs={operatorTabs}
-      activeTab={opTab}
-      onTabChange={setOpTab}
+      menuItems={operatorMenu}
       alert={<AlertModal {...alert} confirmText="OK" />}
       banner={
         correctionShift && !submittedShift ? (
@@ -419,7 +416,7 @@ export function OperatorApp() {
         ) : null
       }
     >
-        {opTab === "today" && workSession && (
+        {workSession && (
           <div className="operator-time-bar mb-4">
             <div className="min-w-0">
               <p className="font-ui text-xs tracking-wider text-[#F5C518]">YOUR TIME</p>
@@ -433,22 +430,22 @@ export function OperatorApp() {
           </div>
         )}
 
-        {opTab === "today" && showWelcome && (
+        {showWelcome && (
           <OperatorWelcome
             name={user?.name}
             machineName={activeMachine?.name}
             siteName={activeSite?.name}
             reportsAttention={reportsAttention}
             onReady={startDay}
-            onMyReports={() => setOpTab("reports")}
+            onMyReports={() => setSheet("reports")}
           />
         )}
 
-        {opTab === "today" && !submittedShift && !showWelcome && (
+        {!submittedShift && !showWelcome && (
           <OperatorFlowGuide currentStep={currentStep} />
         )}
 
-        {opTab === "today" && correctionShift && !submittedShift && (
+        {correctionShift && !submittedShift && (
           <ShiftCorrectionPanel
             shift={correctionShift}
             machine={correctionMachine}
@@ -459,7 +456,7 @@ export function OperatorApp() {
           />
         )}
 
-        {opTab === "today" && leftoverOpen.length > 0 && !submittedShift && (
+        {leftoverOpen.length > 0 && !submittedShift && (
           <div className="mb-4 bg-[#1a1212] border border-[#EF4444]/40 rounded-2xl p-4">
             <p className="font-logo text-[#EF4444] mb-2">Open shift still on this machine</p>
             <p className="font-body text-[#F2F0EA]/75 mb-3">
@@ -483,7 +480,7 @@ export function OperatorApp() {
 
 
         {/* Day complete — WhatsApp supervisor */}
-        {opTab === "today" && submittedShift && (
+        {submittedShift && (
           <div className={`bg-[#141414] border-2 rounded-2xl p-6 text-center ${
             getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "border-[#F97316]" : "border-[#22C55E]"
           }`}>
@@ -529,7 +526,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {opTab === "today" && !submittedShift && !showWelcome && (
+        {!submittedShift && !showWelcome && (
           <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
@@ -650,12 +647,11 @@ export function OperatorApp() {
           </div>
         )}
 
-      {opTab === "pulse" && <ProductivityPulseScreen embedded />}
+      {sheet === "pulse" && <ProductivityPulseScreen onClose={() => setSheet(null)} />}
 
-      {opTab === "reports" && (
+      {sheet === "reports" && (
         <OperatorReportsModal
-          embedded
-          onClose={() => setOpTab("today")}
+          onClose={() => setSheet(null)}
           user={user}
           shifts={shifts}
           workSessions={workSessions}
@@ -672,25 +668,15 @@ export function OperatorApp() {
         />
       )}
 
-      {opTab === "inbox" && (
+      {sheet === "inbox" && (
         <IssueInboxModal
-          variant="inline"
-          onClose={() => setOpTab("today")}
+          onClose={() => setSheet(null)}
           user={user}
           issues={issues}
           issueMessages={issueMessages}
           onDone={refreshLocal}
           scope="mine"
           machines={activeMachine ? [activeMachine] : []}
-        />
-      )}
-
-      {opTab === "more" && (
-        <MoreMenu
-          items={[
-            { label: "Report a problem", onClick: () => setShowReportIssue(true) },
-            { label: "Log diesel", onClick: () => setShowFuel(true) },
-          ]}
         />
       )}
 
