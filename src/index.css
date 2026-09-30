@@ -114,12 +114,6 @@ body {
   padding-bottom: 1rem;
 }
 
-.login-title {
-  font-size: 2.25rem;
-  line-height: 1;
-  margin: 0.75rem 0 0.4rem;
-}
-
 .login-copy {
   font-size: 1rem;
   line-height: 1.4;
@@ -580,10 +574,6 @@ html:not(.theme-light) .operator-outdoor main [class*="text-[#F2F0EA]/70"] {
 @media (max-width: 639px) {
   .login-screen {
     font-size: 16px;
-  }
-
-  .login-title {
-    font-size: 2.25rem !important;
   }
 
   .login-copy {

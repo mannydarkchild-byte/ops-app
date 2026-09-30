@@ -47,20 +47,20 @@ export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPa
 
   return (
     <div className="login-screen min-h-[100dvh] bg-ops-black">
-      <header className="flex items-center justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-2">
+      <header className="flex items-center justify-end px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-2">
         {onBack && mode !== "newpass" ? (
-          <button type="button" onClick={onBack} className="font-ui text-sm text-ops-muted">Back</button>
-        ) : (
-          <p className="font-logo ops-brand text-2xl text-ops-gold">OPS</p>
-        )}
+          <button type="button" onClick={onBack} className="mr-auto font-ui text-sm text-ops-muted">Back</button>
+        ) : null}
         <ThemeToggle />
       </header>
 
       <div className="login-wrap px-5 pb-[max(2rem,env(safe-area-inset-bottom))] w-full mx-auto">
         <div className="login-brand">
-          <LogoMark size="lg" />
-          <h1 className="font-logo text-ops-gold login-title">OPS</h1>
-          <p className="font-body text-ops-text login-copy">
+          <div className="flex items-center gap-3">
+            <LogoMark size="lg" />
+            <h1 className="font-logo ops-brand text-2xl text-ops-gold leading-none">OPS</h1>
+          </div>
+          <p className="font-body text-ops-text login-copy mt-4">
             {mode === "newpass"
               ? "Choose a new password for this phone."
               : mode === "login"
@@ -104,7 +104,7 @@ export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPa
             <Button
               variant="primary"
               size="md"
-              className="login-go font-logo"
+              className="login-go font-ui"
               onClick={submitLogin}
               disabled={busy || loading || !email || !password}
             >
@@ -150,7 +150,7 @@ export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPa
             <Button
               variant="primary"
               size="md"
-              className="login-go font-logo"
+              className="login-go font-ui"
               onClick={submitNewPassword}
               disabled={busy || !password || !password2}
             >
