@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase.js";
 import { LogoMark, ThemeToggle } from "./AppShell.jsx";
 import { Button } from "./ui/Button.jsx";
 
-export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPassword }) {
+export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPassword, onBack }) {
   const [mode, setMode] = useState(forcedMode || "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,7 +48,11 @@ export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPa
   return (
     <div className="login-screen min-h-[100dvh] bg-ops-black">
       <header className="flex items-center justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-2">
-        <p className="font-logo text-2xl text-ops-gold">OPS</p>
+        {onBack && mode !== "newpass" ? (
+          <button type="button" onClick={onBack} className="font-ui text-sm text-ops-muted">Back</button>
+        ) : (
+          <p className="font-logo ops-brand text-2xl text-ops-gold">OPS</p>
+        )}
         <ThemeToggle />
       </header>
 

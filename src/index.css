@@ -817,3 +817,225 @@ html.theme-light .ops-menu-chevron {
   font-size: 16px;
   min-height: 48px;
 }
+
+/* Public site — not the field app */
+.ops-site {
+  min-height: 100dvh;
+  background:
+    radial-gradient(900px 420px at 80% -10%, rgba(245, 197, 24, 0.16), transparent 60%),
+    #0b0b0b;
+  color: #f2f0ea;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.ops-site .ops-brand {
+  font-family: "Russo One", system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 400;
+}
+
+.ops-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  background: rgba(11, 11, 11, 0.9);
+  border-bottom: 1px solid rgba(245, 197, 24, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.ops-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #f5c518;
+  text-decoration: none;
+  font-size: 1.15rem;
+}
+
+.ops-nav nav {
+  display: flex;
+  gap: 1.1rem;
+  margin-left: auto;
+}
+
+.ops-nav nav a {
+  color: rgba(242, 240, 234, 0.78);
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+
+.ops-nav nav a:hover { color: #f5c518; }
+
+.ops-nav-actions { display: flex; align-items: center; gap: 0.5rem; }
+.ops-nav-menu { display: none; }
+
+.ops-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  font: 600 0.95rem/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.ops-btn-gold { background: #f5c518; color: #14120e; }
+.ops-btn-ghost { background: transparent; color: #f2f0ea; border-color: rgba(242, 240, 234, 0.28); }
+
+.ops-hero, .ops-section, .ops-foot {
+  width: min(1120px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.ops-hero {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 3rem;
+  align-items: center;
+  padding: 4.5rem 0 3rem;
+}
+
+.ops-kicker {
+  color: #f5c518;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 650;
+  margin-bottom: 0.75rem;
+}
+
+.ops-site h1, .ops-site h2, .ops-site h3 { font-weight: 650; letter-spacing: -0.03em; }
+.ops-site h1 { font-size: clamp(2.4rem, 5vw, 4.4rem); line-height: 1.02; max-width: 12ch; }
+.ops-site h2 { font-size: clamp(1.8rem, 3vw, 2.7rem); line-height: 1.12; max-width: 18ch; }
+.ops-lede, .ops-section-lead { color: rgba(242, 240, 234, 0.78); font-size: 1.12rem; line-height: 1.55; max-width: 38rem; margin-top: 1rem; }
+.ops-hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; }
+
+.ops-section { padding: 4.5rem 0 1rem; }
+.ops-section h2 { margin-bottom: 0.5rem; }
+
+.ops-flow { list-style: none; display: grid; gap: 0; margin-top: 2rem; padding: 0; }
+.ops-flow li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  padding: 1.25rem 0;
+  border-top: 1px solid rgba(242, 240, 234, 0.12);
+}
+.ops-flow li span {
+  width: 2rem; height: 2rem; border-radius: 999px;
+  display: grid; place-items: center;
+  background: #f5c518; color: #14120e; font-weight: 700;
+}
+.ops-flow strong { display: block; font-size: 1.15rem; }
+.ops-flow p { color: rgba(242, 240, 234, 0.72); margin-top: 0.25rem; }
+
+.ops-roles, .ops-questions, .ops-features, .ops-demo {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.75rem;
+}
+.ops-roles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ops-roles article, .ops-questions article, .ops-features article, .ops-form {
+  background: #16140f;
+  border: 1px solid rgba(196, 161, 90, 0.28);
+  border-radius: 1.25rem;
+  padding: 1.35rem 1.4rem 1.5rem;
+}
+.ops-roles h3, .ops-questions h3, .ops-features h3 { font-size: 1.2rem; margin-bottom: 0.4rem; }
+.ops-roles p, .ops-questions p, .ops-features p { color: rgba(242, 240, 234, 0.72); line-height: 1.5; }
+.ops-roles ul { margin: 0.9rem 0 0; padding-left: 1.1rem; color: #f2f0ea; }
+.ops-roles li + li { margin-top: 0.35rem; }
+.ops-questions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ops-features { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.ops-demo { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+
+.ops-phone figcaption { margin-bottom: 0.7rem; }
+.ops-phone figcaption span { display: block; color: #f5c518; font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.ops-phone figcaption strong { font-size: 1.05rem; }
+.ops-phone-screen {
+  background: #0b0b0b;
+  border: 1px solid rgba(245, 197, 24, 0.35);
+  border-radius: 1.6rem;
+  padding: 0.7rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+.ops-ui { background: #16140f; border-radius: 1.1rem; padding: 1rem; min-height: 280px; }
+.ops-ui-step { color: #f5c518; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.ops-ui-title { font-size: 1.35rem; font-weight: 680; margin: 0.35rem 0 0.6rem; }
+.ops-ui-muted { color: rgba(242, 240, 234, 0.65); font-size: 0.92rem; }
+.ops-ui-status { display: inline-block; border-radius: 999px; padding: 0.25rem 0.7rem; font-weight: 650; font-size: 0.85rem; }
+.ops-ui-ok { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+.ops-ui-wait { background: rgba(245, 197, 24, 0.14); color: #f5c518; }
+.ops-ui-meters { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.9rem 0; }
+.ops-ui-meters div { background: #0b0b0b; border-radius: 0.8rem; padding: 0.7rem; }
+.ops-ui-meters span { display: block; color: rgba(242, 240, 234, 0.55); font-size: 0.75rem; }
+.ops-ui-meters strong { font-size: 1.15rem; }
+.ops-ui-line { color: rgba(242, 240, 234, 0.65); font-size: 0.85rem; margin-bottom: 0.6rem; }
+.ops-ui-chart { height: 72px; border-radius: 0.7rem; background: linear-gradient(#0b0b0b, #0b0b0b); position: relative; overflow: hidden; }
+.ops-ui-chart span {
+  position: absolute; left: 8%; right: 8%; top: 46%; height: 3px; background: #f5c518; border-radius: 99px;
+  transform: rotate(-8deg); transform-origin: left center;
+}
+.ops-ui-photo { margin-top: 0.8rem; height: 92px; border-radius: 0.8rem; border: 1px dashed rgba(245, 197, 24, 0.45); display: grid; place-items: center; color: rgba(242, 240, 234, 0.55); }
+.ops-ui-fab { margin-top: 0.9rem; background: #f5c518; color: #14120e; text-align: center; border-radius: 999px; padding: 0.7rem; font-weight: 700; }
+.ops-ui-fab-green { background: #22c55e; }
+
+.ops-cta { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 2rem; align-items: start; padding-bottom: 4rem; }
+.ops-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.ops-form label { display: grid; gap: 0.35rem; font-size: 0.85rem; color: rgba(242, 240, 234, 0.75); }
+.ops-form input, .ops-form textarea {
+  width: 100%; background: #0b0b0b; color: #f2f0ea; border: 1px solid rgba(242, 240, 234, 0.16);
+  border-radius: 0.8rem; padding: 0.75rem 0.8rem; font: inherit;
+}
+.ops-form-wide { grid-column: 1 / -1; }
+.ops-form-sent h3 { font-size: 1.35rem; margin-bottom: 0.5rem; }
+
+.ops-foot {
+  display: flex; justify-content: space-between; gap: 1rem; align-items: center;
+  padding: 1.5rem 0 2.5rem; border-top: 1px solid rgba(242, 240, 234, 0.1); color: rgba(242, 240, 234, 0.65);
+}
+.ops-foot .ops-brand { color: #f5c518; }
+.ops-foot button { background: none; border: 0; color: #f5c518; cursor: pointer; font: inherit; }
+
+@media (max-width: 900px) {
+  .ops-form { grid-template-columns: 1fr; }
+  .ops-nav nav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    flex-direction: column;
+    gap: 0;
+    padding: 0.5rem 1rem 1rem;
+    background: #0b0b0b;
+    border-bottom: 1px solid rgba(245, 197, 24, 0.18);
+  }
+  .ops-nav nav.is-open { display: flex; }
+  .ops-nav nav a { padding: 0.8rem 0; border-bottom: 1px solid rgba(242, 240, 234, 0.08); }
+  .ops-nav-menu { display: inline-flex; background: none; border: 0; color: #f2f0ea; font: 600 0.95rem Inter, system-ui, sans-serif; }
+  .ops-hero, .ops-cta, .ops-roles, .ops-questions, .ops-features, .ops-demo { grid-template-columns: 1fr; }
+  .ops-hero { padding-top: 2.5rem; }
+  .ops-foot { flex-direction: column; align-items: flex-start; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ops-hero-copy, .ops-phone, .ops-roles article, .ops-questions article {
+    animation: ops-rise 0.7s ease both;
+  }
+  .ops-phone:nth-child(2) { animation-delay: 0.08s; }
+  .ops-phone:nth-child(3) { animation-delay: 0.16s; }
+}
+
+@keyframes ops-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}

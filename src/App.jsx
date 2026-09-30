@@ -6,6 +6,7 @@ import { MechanicApp } from "./apps/MechanicApp.jsx";
 import { SupervisorApp } from "./apps/SupervisorApp.jsx";
 import { ManagerApp } from "./apps/ManagerApp.jsx";
 import { AdminApp } from "./apps/AdminApp.jsx";
+import { LandingPage } from "./components/LandingPage.jsx";
 import { ROLES } from "./lib/constants.js";
 
 const VERIFY_ONCE_KEY = "ops_verify_once";
@@ -44,9 +45,19 @@ function forgetVerifyParams() {
   stripVerifyFromUrl();
 }
 
+function shouldOpenLoginFirst() {
+  const params = new URLSearchParams(window.location.search);
+  const hash = window.location.hash || "";
+  if (params.has("verify") || params.has("token")) return true;
+  if (/type=recovery|access_token|error_description/i.test(hash)) return true;
+  if (hash === "#login") return true;
+  return false;
+}
+
 function RoleRouter() {
   const { user, loading, authError, signIn, passwordRecovery, setPassword } = useOps();
   const [verifyParams, setVerifyParams] = useState(consumeVerifyParams);
+  const [gate, setGate] = useState(() => (shouldOpenLoginFirst() ? "login" : "site"));
 
   const clearVerifyLink = () => {
     forgetVerifyParams();
@@ -65,16 +76,32 @@ function RoleRouter() {
 }
 
   if (passwordRecovery) {
-    return <LoginScreen mode="newpass" onSetPassword={setPassword} loading={loading} />;
+    return (
+      <div className="ops-field min-h-screen">
+        <LoginScreen mode="newpass" onSetPassword={setPassword} loading={loading} />
+      </div>
+    );
   }
 
   if (!user) {
-    return <LoginScreen onLogin={signIn} error={authError} loading={loading} />;
+    if (!passwordRecovery && gate === "site") {
+      return <LandingPage onLogin={() => setGate("login")} />;
+    }
+    return (
+      <div className="ops-field min-h-screen">
+        <LoginScreen
+          onLogin={signIn}
+          error={authError}
+          loading={loading}
+          onBack={passwordRecovery ? undefined : () => setGate("site")}
+        />
+      </div>
+    );
   }
 
   const role = user.role || ROLES.OPERATOR;
 
-  switch (role) {
+  const app = (() => { switch (role) {
     case ROLES.MECHANIC:
       return <MechanicApp />;
     case ROLES.SUPERVISOR:
@@ -92,7 +119,9 @@ function RoleRouter() {
     case ROLES.OPERATOR:
     default:
       return <OperatorApp />;
-  }
+  } })();
+
+  return <div className="ops-field min-h-screen">{app}</div>;
 }
 
 class ErrorBoundary extends React.Component {
@@ -125,9 +154,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <OpsProvider>
-        <div className="ops-field min-h-screen">
-          <RoleRouter />
-        </div>
+        <RoleRouter />
       </OpsProvider>
     </ErrorBoundary>
   );
