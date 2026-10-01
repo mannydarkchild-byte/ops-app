@@ -30,20 +30,24 @@ function LogoFallback() {
   );
 }
 
-export function LogoMark({ size = "md" }) {
+export function LogoMark({ size = "bar" }) {
   const [imgFailed, setImgFailed] = useState(false);
-  const dim = size === "sm" ? "w-9 h-9" : size === "xxl" ? "w-32 h-32" : size === "xl" ? "w-24 h-24" : size === "lg" ? "w-20 h-20" : "w-10 h-10";
+  const dim = {
+    sm: "w-16 h-16",
+    bar: "w-24 h-24",
+    md: "w-24 h-24",
+    lg: "w-36 h-36",
+    xl: "w-[min(16rem,72vw)] h-[min(16rem,72vw)]",
+    xxl: "w-52 h-52",
+  }[size] || "w-24 h-24";
 
   return (
-    <div
-      className={`${dim} rounded-xl border border-ops-gold/70 bg-ops-card flex items-center justify-center shrink-0 overflow-hidden p-1.5 shadow-ops-sm`}
-      aria-hidden
-    >
+    <div className={`${dim} shrink-0`} aria-hidden>
       {!imgFailed ? (
         <img
           src="/logo.png"
           alt=""
-          className="max-w-full max-h-full w-auto h-auto object-contain"
+          className="block w-full h-full object-contain"
           onError={() => setImgFailed(true)}
         />
       ) : (
@@ -222,9 +226,9 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
 
   return (
     <header className="sticky top-0 z-30 bg-ops-black border-b border-ops-border mobile-safe-top shadow-ops-sm">
-      <div className="px-3 sm:px-4 h-14 flex items-center gap-2 max-w-5xl mx-auto">
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <LogoMark size="sm" />
+      <div className="px-3 sm:px-4 py-2 min-h-[7.25rem] flex items-center gap-3 max-w-5xl mx-auto">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <LogoMark size="bar" />
           <div className="min-w-0">
             <span className="font-logo ops-brand text-base leading-none text-ops-gold">OPS</span>
             <p className="font-body text-sm text-ops-text truncate leading-tight">
@@ -248,7 +252,7 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
         </button>
       </div>
       {menuOpen && (
-        <div className="absolute right-3 top-14 z-40 w-64 rounded-xl border border-ops-border bg-ops-card shadow-ops-sm p-2 space-y-1">
+        <div className="absolute right-3 top-full z-40 w-64 rounded-xl border border-ops-border bg-ops-card shadow-ops-sm p-2 space-y-1">
           {menuItems.length > 0 && (
             <div className="pb-1 mb-1 border-b border-ops-border">
               {menuItems.map((item) => (

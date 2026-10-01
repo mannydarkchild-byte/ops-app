@@ -137,7 +137,7 @@ export function LandingPage({ onLogin }) {
     <div className="ops-site">
       <header className="ops-nav">
         <a className="ops-nav-brand" href="#top">
-          <LogoMark size="sm" />
+          <LogoMark size="bar" />
           <span className="ops-brand">OPS</span>
         </a>
         <nav className={menuOpen ? "is-open" : ""} aria-label="Page">
@@ -146,8 +146,14 @@ export function LandingPage({ onLogin }) {
           ))}
         </nav>
         <div className="ops-nav-actions">
-          <button type="button" className="ops-nav-menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
-            {menuOpen ? "Close" : "Menu"}
+          <button
+            type="button"
+            className="ops-nav-menu"
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            <span className={menuOpen ? "ops-nav-menu-icon is-open" : "ops-nav-menu-icon"} />
           </button>
           <button type="button" className="ops-btn ops-btn-gold" onClick={onLogin}>Log in</button>
         </div>

@@ -845,6 +845,7 @@ html.theme-light .ops-menu-chevron {
   color: #f5c518;
   text-decoration: none;
   font-size: 1.15rem;
+  flex-shrink: 0;
 }
 
 .ops-nav nav {
@@ -861,8 +862,35 @@ html.theme-light .ops-menu-chevron {
 
 .ops-nav nav a:hover { color: #f5c518; }
 
-.ops-nav-actions { display: flex; align-items: center; gap: 0.5rem; }
+.ops-nav-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: 0.5rem; flex-shrink: 0; }
 .ops-nav-menu { display: none; }
+.ops-nav-menu-icon {
+  width: 1.15rem;
+  height: 2px;
+  background: currentColor;
+  border-radius: 99px;
+  box-shadow: 0 -6px 0 currentColor, 0 6px 0 currentColor;
+  display: block;
+}
+.ops-nav-menu-icon.is-open {
+  background: transparent;
+  box-shadow: none;
+  height: 0;
+  position: relative;
+}
+.ops-nav-menu-icon.is-open::before,
+.ops-nav-menu-icon.is-open::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.15rem;
+  height: 2px;
+  background: currentColor;
+  border-radius: 99px;
+}
+.ops-nav-menu-icon.is-open::before { transform: rotate(45deg); }
+.ops-nav-menu-icon.is-open::after { transform: rotate(-45deg); }
 
 .ops-btn {
   display: inline-flex;
@@ -998,6 +1026,17 @@ html.theme-light .ops-menu-chevron {
 
 @media (max-width: 900px) {
   .ops-form { grid-template-columns: 1fr; }
+  .ops-nav {
+    gap: 0.5rem;
+    padding: 0.45rem 0.7rem;
+    padding-top: max(0.45rem, env(safe-area-inset-top));
+  }
+  .ops-nav-brand { gap: 0.4rem; min-width: 0; flex-shrink: 0; }
+  .ops-nav-actions { gap: 0.35rem; margin-left: auto; }
+  .ops-nav-actions .ops-btn {
+    min-height: 2.5rem;
+    padding: 0.4rem 0.9rem;
+  }
   .ops-nav nav {
     display: none;
     position: absolute;
@@ -1011,7 +1050,18 @@ html.theme-light .ops-menu-chevron {
   }
   .ops-nav nav.is-open { display: flex; }
   .ops-nav nav a { padding: 0.8rem 0; border-bottom: 1px solid rgba(242, 240, 234, 0.08); }
-  .ops-nav-menu { display: inline-flex; background: none; border: 0; color: #f2f0ea; font: 600 0.95rem Inter, system-ui, sans-serif; }
+  .ops-nav-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(242, 240, 234, 0.2);
+    background: transparent;
+    color: #f2f0ea;
+  }
   .ops-hero, .ops-cta, .ops-roles, .ops-questions, .ops-features, .ops-demo { grid-template-columns: 1fr; }
   .ops-hero { padding-top: 2.5rem; }
   .ops-foot { flex-direction: column; align-items: flex-start; }
