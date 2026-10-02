@@ -6,7 +6,7 @@ import { SHIFT, ISSUE, ROLES, BREAKDOWN_STATUS, MAINTENANCE_STATUS, issueAreaReq
 import { canCloseIssue, getShiftStatus } from "../lib/utils.js";
 import { makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
-import { getPrestartConfigForSite, getInspectionConfigForSite } from "../lib/siteConfig.js";
+import { getInspectionConfigForSite, ensureSiteSettings, prestartItemsForMachine } from "../lib/siteConfig.js";
 import { reconcileMachineOpenState, fetchServerOpenShift } from "../lib/machineStatus.js";
 import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
 
@@ -195,7 +195,8 @@ async function saveInspectionBatch(user, machine, site, { items, results, remark
 }
 
 export async function completeInspection(user, machine, site, { results, remarks, photos }) {
-  const { items: prestartItems } = await getPrestartConfigForSite(site?.id);
+  const settings = await ensureSiteSettings(site?.id);
+  const prestartItems = prestartItemsForMachine(settings, machine);
   const items = prestartItems.map((item_name) => ({ item_name, category: "Pre-Start" }));
   return saveInspectionBatch(user, machine, site, {
     items,

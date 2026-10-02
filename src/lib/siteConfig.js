@@ -1,6 +1,7 @@
 import { readTable, saveLocal } from "./db.js";
 import {
   PRESTART_INSPECTION_ITEMS,
+  EARTHMOVING_PRESTART_ITEMS,
   PRESTART_STATUS_OPTIONS,
   INSPECTION_GROUPS,
   PRIMARY_MACHINE_CODE,
@@ -21,6 +22,7 @@ export function defaultSiteSettings(siteId) {
     billing_cycle_start_day: DEFAULT_BILLING_CYCLE_START_DAY,
     primary_machine_id: null,
     prestart_items: [...PRESTART_INSPECTION_ITEMS],
+    earthmoving_prestart_items: [...EARTHMOVING_PRESTART_ITEMS],
     prestart_status_options: [...PRESTART_STATUS_OPTIONS],
     inspection_groups: JSON.parse(JSON.stringify(INSPECTION_GROUPS)),
     stop_reasons: DEFAULT_STOP_REASONS.map((r) => ({ ...r })),
@@ -35,11 +37,30 @@ export function resolveSiteSettings(row) {
     ...defaults,
     ...row,
     prestart_items: row?.prestart_items?.length ? row.prestart_items : defaults.prestart_items,
+    earthmoving_prestart_items: row?.earthmoving_prestart_items?.length ? row.earthmoving_prestart_items : defaults.earthmoving_prestart_items,
     prestart_status_options: row?.prestart_status_options?.length ? row.prestart_status_options : defaults.prestart_status_options,
     inspection_groups: row?.inspection_groups?.length ? row.inspection_groups : defaults.inspection_groups,
     stop_reasons: normalizeStopReasons(row?.stop_reasons),
     billing_cycle_start_day: clampCycleDay(row?.billing_cycle_start_day),
   };
+}
+
+/** Excavator and front end loader share one list. The screen keeps the site pre-start. */
+export function machineUsesEarthmovingPrestart(machine) {
+  const text = `${machine?.name || ""} ${machine?.code || ""} ${machine?.type || ""}`.toLowerCase();
+  return /\bexcavator\b/.test(text)
+    || /\bfel\b/.test(text)
+    || /front[\s-]*end/.test(text)
+    || /\bloader\b/.test(text);
+}
+
+export function prestartItemsForMachine(settings, machine) {
+  if (machineUsesEarthmovingPrestart(machine)) {
+    return settings?.earthmoving_prestart_items?.length
+      ? settings.earthmoving_prestart_items
+      : [...EARTHMOVING_PRESTART_ITEMS];
+  }
+  return settings?.prestart_items?.length ? settings.prestart_items : [...PRESTART_INSPECTION_ITEMS];
 }
 
 export function clampCycleDay(day) {

@@ -19,11 +19,13 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
   );
 
   const [prestartText, setPrestartText] = useState("");
+  const [earthmovingText, setEarthmovingText] = useState("");
   const [statusText, setStatusText] = useState("");
   const [groupsText, setGroupsText] = useState("");
 
   const loadEditor = () => {
     setPrestartText((settings.prestart_items || []).join("\n"));
+    setEarthmovingText((settings.earthmoving_prestart_items || []).join("\n"));
     setStatusText((settings.prestart_status_options || []).join(", "));
     setGroupsText(serializeGroups(settings.inspection_groups || []));
   };
@@ -36,14 +38,17 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
     setBusy(true);
     try {
       const prestart_items = prestartText.split("\n").map((l) => l.trim()).filter(Boolean);
+      const earthmoving_prestart_items = earthmovingText.split("\n").map((l) => l.trim()).filter(Boolean);
       const prestart_status_options = statusText.split(",").map((l) => l.trim()).filter(Boolean);
       const inspection_groups = parseGroups(groupsText);
-      if (!prestart_items.length) throw new Error("Pre-start checklist needs at least one item");
+      if (!prestart_items.length) throw new Error("Screen pre-start needs at least one item");
+      if (!earthmoving_prestart_items.length) throw new Error("Excavator and loader pre-start needs at least one item");
       if (!prestart_status_options.length) throw new Error("Status options cannot be empty");
       if (!inspection_groups.length) throw new Error("Mechanic inspection needs at least one group");
 
       await updateSiteSettings(siteId, {
         prestart_items,
+        earthmoving_prestart_items,
         prestart_status_options,
         inspection_groups,
       });
@@ -87,11 +92,18 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
 
       {tab === "prestart" && (
         <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 space-y-3">
-          <p className="text-[10px] text-[#F2F0EA]/50">One checklist item per line. Operators see these during pre-start.</p>
+          <p className="text-[10px] text-[#F2F0EA]/50">Screen pre-start. One item per line. Used on the screen.</p>
           <textarea
             value={prestartText}
             onChange={(e) => setPrestartText(e.target.value)}
-            rows={12}
+            rows={10}
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm font-body"
+          />
+          <p className="text-[10px] text-[#F2F0EA]/50">Excavator and front end loader. One shared list. One item per line. A machine uses this list when its name or code says excavator, FEL, or loader.</p>
+          <textarea
+            value={earthmovingText}
+            onChange={(e) => setEarthmovingText(e.target.value)}
+            rows={10}
             className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm font-body"
           />
           <label className="block text-[10px] text-[#F2F0EA]/50">Status buttons (comma-separated)</label>

@@ -261,7 +261,7 @@ export const ALLOWED_COLUMNS = {
   maintenance_parts: ["id", "maintenance_job_id", "inventory_item_id", "part_name", "quantity", "notes", "created_at"],
   inventory_items: ["id", "site_id", "sku", "name", "category", "quantity_on_hand", "unit", "reorder_level", "created_at", "updated_at"],
   inventory_movements: ["id", "site_id", "inventory_item_id", "maintenance_job_id", "quantity_change", "reason", "performed_by", "performed_by_name", "created_at"],
-  site_settings: ["id", "site_id", "billing_cycle_start_day", "primary_machine_id", "prestart_items", "prestart_status_options", "inspection_groups", "stop_reasons", "created_at", "updated_at"],
+  site_settings: ["id", "site_id", "billing_cycle_start_day", "primary_machine_id", "prestart_items", "earthmoving_prestart_items", "prestart_status_options", "inspection_groups", "stop_reasons", "created_at", "updated_at"],
 };
 
 /** Operator pre-start checklist (14 items) — before starting machine */
@@ -280,6 +280,23 @@ export const PRESTART_INSPECTION_ITEMS = [
   "See that ALL conveyor belts are train properly.",
   "Check manganese wear (where applicable).",
   "Check ALL scirting rubbers.",
+];
+
+/** Shared walk-around for an excavator and a front end loader. Admin can edit it per site. */
+export const EARTHMOVING_PRESTART_ITEMS = [
+  "Walk around the machine. Look for leaks, cracks, and loose or missing parts.",
+  "Check engine oil and top up if needed.",
+  "Check hydraulic oil level and top up if needed.",
+  "Check coolant and top up if needed.",
+  "Check the fuel level.",
+  "Check the battery terminals.",
+  "Check tracks or tyres.",
+  "Check the bucket, teeth or cutting edge, and the pins.",
+  "Check the arms, rams, and hydraulic hoses for leaks or damage.",
+  "Check all guards are in place and secured.",
+  "Check lights, horn, and the reverse alarm.",
+  "Check the seat belt and that the controls move freely.",
+  "Grease the pins and bushings.",
 ];
 
 export const PRESTART_STATUS_OPTIONS = ["OK", "Action taken", "Needs attention"];

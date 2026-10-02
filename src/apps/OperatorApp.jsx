@@ -17,6 +17,7 @@ import { stopReasonGroups, ownerForStopReason } from "../lib/stopReasons.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
+import { prestartItemsForMachine } from "../lib/siteConfig.js";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
 import { shiftDowntimeMinutes, formatDurationSeconds } from "../lib/shiftMetrics.js";
 import { SupervisorPicker, SupervisorWhatsAppButtons } from "../components/SupervisorPicker.jsx";
@@ -81,11 +82,16 @@ export function OperatorApp() {
   const [actionBusy, setActionBusy] = useState("");
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
+  const prestartItems = useMemo(
+    () => prestartItemsForMachine(siteConfig, activeMachine),
+    [siteConfig, activeMachine]
+  );
+
   const prestartDone = useMemo(
     () => hasCompletedPrestart(
-      inspections, user?.id, activeMachine?.id, workSession?.clock_in, siteConfig.prestart_items.length
+      inspections, user?.id, activeMachine?.id, workSession?.clock_in, prestartItems.length
     ),
-    [inspections, user?.id, activeMachine?.id, workSession?.clock_in, siteConfig.prestart_items.length]
+    [inspections, user?.id, activeMachine?.id, workSession?.clock_in, prestartItems.length]
   );
 
   /** Shift for this clock-in only — never skip pre-start for stale or in-progress RUNNING rows */
@@ -601,7 +607,7 @@ export function OperatorApp() {
             {workSession && !prestartDone && !sessionShift && !sessionDowntime && (
               <>
                 <PreStartInspectionChecklist
-                  items={siteConfig.prestart_items}
+                  items={prestartItems}
                   statusOptions={siteConfig.prestart_status_options}
                   results={inspectionResults} remarks={inspectionRemarks} photos={inspectionPhotos}
                   setResults={setInspectionResults} setRemarks={setInspectionRemarks} setPhotos={setInspectionPhotos}
