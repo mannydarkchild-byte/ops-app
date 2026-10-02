@@ -7,7 +7,7 @@ export function SupervisorPicker({ supervisors, value, onChange, suggestedId = n
   if (!supervisors.length) {
     return (
       <p className="font-body text-sm text-ops-text py-2">
-        No supervisors on this phone yet. When you have signal, tap Update so every supervisor on this site is saved here for offline.
+        No supervisor is saved on this phone for this site. An admin adds one with Add user, role Supervisor, on the same site. Then tap Update while this phone has signal.
       </p>
     );
   }

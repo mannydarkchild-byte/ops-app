@@ -227,13 +227,15 @@ export function OperatorApp() {
 
   const handleClockIn = async () => {
     if (actionBusy) return;
-    const sup = siteSupervisors.find((s) => s.id === clockInSupervisorId) || (
-      siteSupervisors.length === 0
-        ? { id: "UNASSIGNED", name: "To be assigned" }
-        : null
-    );
+    const sup = siteSupervisors.find((s) => s.id === clockInSupervisorId) || null;
     if (!sup) {
-      showAlert("Select a supervisor", "Choose who will sign off this shift.", "warning");
+      showAlert(
+        siteSupervisors.length ? "Select a supervisor" : "No supervisor on this site",
+        siteSupervisors.length
+          ? "Choose who will sign off this shift."
+          : "An admin must add a supervisor on this site. Then tap Update so the name appears here.",
+        "warning"
+      );
       return;
     }
     setActionBusy("clockin");
@@ -589,7 +591,7 @@ export function OperatorApp() {
                   )}
                 </FormSection>
                 <FormSection title="Ready to work" description="Tap when you are on site." accent="#15803D">
-                  <Button type="button" variant="primary" size="lg" className="w-full font-logo" onClick={handleClockIn} disabled={!!actionBusy || (siteSupervisors.length > 0 && !clockInSupervisorId)}>
+                  <Button type="button" variant="primary" size="lg" className="w-full font-logo" onClick={handleClockIn} disabled={!!actionBusy || !clockInSupervisorId}>
                     <IconClock /> {actionBusy === "clockin" ? "Clocking in…" : "Clock in"}
                   </Button>
                 </FormSection>
