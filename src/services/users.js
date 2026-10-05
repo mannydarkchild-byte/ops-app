@@ -13,7 +13,16 @@ export async function adminCreateUser({ email, password, name, role, siteId, mac
   if (!email?.trim() || !password || password.length < 6) throw new Error("Email and password (6+ chars) required");
 
   const { data: { session: adminSession } } = await supabase.auth.getSession();
-  if (!adminSession) throw new Error("Admin session required");
+  if (!adminSession?.access_token || !adminSession?.refresh_token) {
+    throw new Error("Admin session required");
+  }
+
+  // signUp may switch the client session to the new user when email confirm is off.
+  // Restore the admin session before privileged profile updates.
+  const adminTokens = {
+    access_token: adminSession.access_token,
+    refresh_token: adminSession.refresh_token,
+  };
 
   const { data, error } = await supabase.auth.signUp({
     email: email.trim(),
@@ -24,6 +33,9 @@ export async function adminCreateUser({ email, password, name, role, siteId, mac
   });
   if (error) throw error;
   if (!data.user?.id) throw new Error("User was not created — check if email already exists");
+
+  const { error: restoreErr } = await supabase.auth.setSession(adminTokens);
+  if (restoreErr) throw new Error("Could not restore admin session after creating user");
 
   const profile = {
     id: data.user.id,
@@ -42,11 +54,6 @@ export async function adminCreateUser({ email, password, name, role, siteId, mac
   if (profileErr) throw profileErr;
 
   await saveLocal("profiles", { ...profile, created_at: nowISO(), _sync_status: "synced" }, { enqueue: false });
-
-  await supabase.auth.setSession({
-    access_token: adminSession.access_token,
-    refresh_token: adminSession.refresh_token,
-  });
 
   return { user: data.user, profile, needsEmailConfirm: !data.session };
 }
