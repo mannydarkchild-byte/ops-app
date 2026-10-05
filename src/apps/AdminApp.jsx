@@ -442,13 +442,16 @@ export function AdminApp() {
                         onChange={(e) => updateProfileFields(p.id, { machine_id: e.target.value || null }).then(() => refreshLocal())}
                         className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]"
                       >
-                        <option value="">Default machine</option>
+                        <option value="">No default machine</option>
                         {machines.filter((m) => m.site_id === p.site_id).map((m) => (
                           <option key={m.id} value={m.id}>{m.name}</option>
                         ))}
                       </select>
                     )}
                   </div>
+                )}
+                {p.role === ROLES.OPERATOR && p.active !== false && (
+                  <p className="text-[10px] text-[#F2F0EA]/45">One login records every machine on this site. Each machine still gets its own shift and report.</p>
                 )}
 
                 {p.role === ROLES.SUPERVISOR && p.active !== false && (

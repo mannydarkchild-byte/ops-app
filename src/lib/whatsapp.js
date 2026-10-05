@@ -1,5 +1,5 @@
 /** Build WhatsApp deep link for supervisor shift verification */
-export function buildSupervisorVerifyWhatsApp(supervisorPhone, shift, machine, site) {
+export function buildSupervisorVerifyWhatsApp(supervisorPhone, shift, machine, site, { recordedBy } = {}) {
   const phone = String(supervisorPhone || "").replace(/\D/g, "");
   if (!phone) return null;
 
@@ -10,8 +10,9 @@ export function buildSupervisorVerifyWhatsApp(supervisorPhone, shift, machine, s
     "OPS — Daily Shift Verification",
     "",
     `Site: ${site?.name || "—"}`,
-    `Operator: ${shift.operator_name}`,
     `Machine: ${machine?.name || shift.machine_id}`,
+    `Machine operator: ${shift.operator_name}`,
+    `Recorded by: ${recordedBy || shift.operator_name}`,
     `Meter hours: ${meterHours}h (${shift.start_hour_meter}h → ${shift.end_hour_meter}h)`,
     shift.runtime_minutes != null ? `Runtime: ${Math.round(shift.runtime_minutes)}m · Downtime: ${Math.round(shift.downtime_minutes || 0)}m` : null,
     "",

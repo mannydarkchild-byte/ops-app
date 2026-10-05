@@ -49,7 +49,7 @@ export function SupervisorPicker({ supervisors, value, onChange, suggestedId = n
 }
 
 /** After submit — one WhatsApp button per supervisor (or just assigned one) */
-export function SupervisorWhatsAppButtons({ supervisors, shift, machine, site, assignedSupervisorId, onSent }) {
+export function SupervisorWhatsAppButtons({ supervisors, shift, machine, site, assignedSupervisorId, recordedBy, onSent }) {
   const targets = assignedSupervisorId
     ? supervisors.filter((s) => s.id === assignedSupervisorId)
     : supervisors.filter((s) => String(s.phone || "").replace(/\D/g, ""));
@@ -71,6 +71,7 @@ export function SupervisorWhatsAppButtons({ supervisors, shift, machine, site, a
           shift={shift}
           machine={machine}
           site={site}
+          recordedBy={recordedBy}
           onSent={onSent}
         />
       ))}
@@ -81,8 +82,8 @@ export function SupervisorWhatsAppButtons({ supervisors, shift, machine, site, a
   );
 }
 
-function SupervisorWhatsAppButton({ supervisor, shift, machine, site, onSent }) {
-  const url = buildSupervisorVerifyWhatsApp(supervisor.phone, shift, machine, site);
+function SupervisorWhatsAppButton({ supervisor, shift, machine, site, recordedBy, onSent }) {
+  const url = buildSupervisorVerifyWhatsApp(supervisor.phone, shift, machine, site, { recordedBy });
 
   return (
     <button

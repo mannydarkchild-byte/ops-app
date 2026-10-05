@@ -18,6 +18,8 @@ import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.j
 import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
 import { prestartItemsForMachine } from "../lib/siteConfig.js";
+import { rememberUsualOperator, usualOperatorName } from "../lib/shiftPeople.js";
+import { OperatorMachineBoard } from "../components/OperatorMachineBoard.jsx";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
 import { shiftDowntimeMinutes, formatDurationSeconds } from "../lib/shiftMetrics.js";
 import { SupervisorPicker, SupervisorWhatsAppButtons } from "../components/SupervisorPicker.jsx";
@@ -31,8 +33,8 @@ import { OperatorShiftTools } from "../components/OperatorShiftTools.jsx";
 
 export function OperatorApp() {
   const {
-    user, activeMachine, activeSite, machines, machineRun, workSession, downtime, hourMeter, events,
-    shifts, profiles, issues, issueMessages, inspections, workSessions, fuelLogs, hourReadings, refreshLocal, machineBlocked,
+    user, activeSite, machines, workSession, events,
+    shifts, profiles, issues, issueMessages, inspections, workSessions, fuelLogs, hourReadings, refreshLocal,
     getSettingsForSite,
   } = useOps();
 
@@ -70,6 +72,8 @@ export function OperatorApp() {
 
   const [submittedShift, setSubmittedShift] = useState(null);
   const [clockInSupervisorId, setClockInSupervisorId] = useState("");
+  const [pickedMachineId, setPickedMachineId] = useState("");
+  const [cabName, setCabName] = useState("");
   const [dayReady, setDayReady] = useState(() => {
     try {
       return sessionStorage.getItem(`ops-day-ready:${user?.id || "me"}`) === "1";
@@ -82,23 +86,55 @@ export function OperatorApp() {
   const [actionBusy, setActionBusy] = useState("");
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
+  const siteMachines = useMemo(
+    () => (machines || []).filter((m) => m.site_id === activeSite?.id && m.active !== false),
+    [machines, activeSite?.id]
+  );
+
+  const workMachine = useMemo(
+    () => siteMachines.find((m) => m.id === pickedMachineId) || null,
+    [siteMachines, pickedMachineId]
+  );
+
   const prestartItems = useMemo(
-    () => prestartItemsForMachine(siteConfig, activeMachine),
-    [siteConfig, activeMachine]
+    () => prestartItemsForMachine(siteConfig, workMachine),
+    [siteConfig, workMachine]
   );
 
   const prestartDone = useMemo(
     () => hasCompletedPrestart(
-      inspections, user?.id, activeMachine?.id, workSession?.clock_in, prestartItems.length
+      inspections, user?.id, workMachine?.id, workSession?.clock_in, prestartItems.length
     ),
-    [inspections, user?.id, activeMachine?.id, workSession?.clock_in, prestartItems.length]
+    [inspections, user?.id, workMachine?.id, workSession?.clock_in, prestartItems.length]
   );
 
-  /** Shift for this clock-in only — never skip pre-start for stale or in-progress RUNNING rows */
+  const machineRunForWork = useMemo(() => {
+    if (!workMachine) return null;
+    return shifts.find((s) => s.machine_id === workMachine.id && getShiftStatus(s) === SHIFT.RUNNING) || null;
+  }, [shifts, workMachine]);
+
+  /** Shift for this clock-in on the machine they picked. Other machines can stay running. */
   const sessionShift = useMemo(() => {
-    if (!machineRun || !workSession || !user?.id) return null;
-    return shiftBelongsToWorkSession(machineRun, workSession, user.id) ? machineRun : null;
-  }, [machineRun, workSession, user?.id]);
+    if (!machineRunForWork || !workSession || !user?.id) return null;
+    return shiftBelongsToWorkSession(machineRunForWork, workSession, user.id) ? machineRunForWork : null;
+  }, [machineRunForWork, workSession, user?.id]);
+
+  const machineHourMeter = useMemo(() => {
+    if (!workMachine) return 0;
+    const verified = shifts.filter((s) =>
+      s.machine_id === workMachine.id && getShiftStatus(s) === SHIFT.VERIFIED && s.end_hour_meter != null
+    );
+    if (!verified.length) return Number(workMachine.start_hour_meter || 0);
+    const latest = verified.reduce((a, b) => new Date(b.ended_at || 0) > new Date(a.ended_at || 0) ? b : a);
+    return Number(latest.end_hour_meter);
+  }, [shifts, workMachine]);
+
+  const myOpenShifts = useMemo(
+    () => (shifts || []).filter((s) =>
+      workSession && user?.id && shiftBelongsToWorkSession(s, workSession, user.id) && getShiftStatus(s) === SHIFT.RUNNING
+    ),
+    [shifts, workSession, user?.id]
+  );
 
   const sessionDowntime = useMemo(() => {
     if (!sessionShift) return null;
@@ -107,8 +143,10 @@ export function OperatorApp() {
 
   const runningSeconds = useLiveTimer(sessionShift?.started_at, !!sessionShift);
   const downtimeSeconds = useLiveTimer(sessionDowntime?.stopped_at, !!sessionDowntime);
-  const openingMeter = sessionShift ? Number(sessionShift.start_hour_meter).toFixed(1) : Number(hourMeter).toFixed(1);
-  const fuelMeterHint = sessionShift ? openingMeter : openingMeter;
+  const openingMeter = sessionShift
+    ? Number(sessionShift.start_hour_meter).toFixed(1)
+    : Number(machineHourMeter).toFixed(1);
+  const fuelMeterHint = openingMeter;
 
   const shiftDowntimeMin = useMemo(
     () => (sessionShift ? shiftDowntimeMinutes(events, sessionShift.id) : 0),
@@ -116,8 +154,8 @@ export function OperatorApp() {
   );
 
   const prestartDraftStorageKey = useMemo(
-    () => prestartDraftKey(user?.id, activeMachine?.id, workSession?.clock_in),
-    [user?.id, activeMachine?.id, workSession?.clock_in]
+    () => prestartDraftKey(user?.id, workMachine?.id, workSession?.clock_in),
+    [user?.id, workMachine?.id, workSession?.clock_in]
   );
 
   const {
@@ -158,9 +196,9 @@ export function OperatorApp() {
     () => (shifts || []).filter((s) =>
       s.operator_id === user?.id
       && getShiftStatus(s) === SHIFT.RUNNING
-      && s.id !== sessionShift?.id
+      && (!workSession || !shiftBelongsToWorkSession(s, workSession, user.id))
     ),
-    [shifts, user?.id, sessionShift?.id]
+    [shifts, user?.id, workSession]
   );
 
   /** Shift sent back by supervisor — operator must fix and resubmit before starting again */
@@ -172,8 +210,8 @@ export function OperatorApp() {
   }, [shifts, user?.id]);
 
   const correctionMachine = useMemo(
-    () => machines.find((m) => m.id === correctionShift?.machine_id) || activeMachine,
-    [machines, correctionShift?.machine_id, activeMachine]
+    () => machines.find((m) => m.id === correctionShift?.machine_id) || workMachine,
+    [machines, correctionShift?.machine_id, workMachine]
   );
 
   const siteSupervisors = useMemo(
@@ -211,7 +249,17 @@ export function OperatorApp() {
     }
   }, [workSession, suggestedSupervisor?.id, clockInSupervisorId]);
 
-  const blocked = machineBlocked && !sessionShift && !sessionDowntime;
+  const blockedByOther = machineRunForWork
+    && machineRunForWork.operator_id
+    && machineRunForWork.operator_id !== user?.id
+    ? machineRunForWork
+    : null;
+  const blocked = !!blockedByOther && !sessionShift && !sessionDowntime;
+  const staleOwnShift = machineRunForWork
+    && !sessionShift
+    && machineRunForWork.operator_id === user?.id
+    ? machineRunForWork
+    : null;
 
   const showWelcome = !workSession && !submittedShift && !correctionShift && !dayReady;
 
@@ -222,14 +270,27 @@ export function OperatorApp() {
     setDayReady(true);
   };
 
+  useEffect(() => {
+    setCabName(usualOperatorName(workMachine?.id));
+    setStartHour("");
+    setStartPhotoRef(null);
+    setStartPhotoPreview(null);
+    setStartPhotoError(false);
+    setEndHour("");
+    setEndPhotoRef(null);
+    setEndPhotoPreview(null);
+    setEndPhotoError(false);
+  }, [workMachine?.id]);
+
   const currentStep = useMemo(() => {
-    if (correctionShift && !submittedShift) return "correct";
-    if (submittedShift) return "end";
+    if (correctionShift && workMachine?.id === correctionShift.machine_id && !submittedShift) return "correct";
+    if (submittedShift && !workMachine) return "end";
+    if (!workSession) return "clock";
+    if (!workMachine) return "machines";
     if (sessionShift || sessionDowntime) return "run";
-    if (workSession && prestartDone) return "start";
-    if (workSession) return "inspect";
-    return "clock";
-  }, [correctionShift, submittedShift, sessionShift, sessionDowntime, workSession, prestartDone]);
+    if (prestartDone) return "start";
+    return "inspect";
+  }, [correctionShift, submittedShift, workMachine, sessionShift, sessionDowntime, workSession, prestartDone]);
 
   const handleClockIn = async () => {
     if (actionBusy) return;
@@ -246,9 +307,9 @@ export function OperatorApp() {
     }
     setActionBusy("clockin");
     try {
-      await wf.clockIn(user, activeMachine, activeSite, { assignedSupervisor: sup });
+      await wf.clockIn(user, siteMachines[0] || null, activeSite, { assignedSupervisor: sup });
       await refreshLocal();
-      showAlert("Clocked in", `You are on site. Supervisor: ${sup.name}. Complete the pre-start check next.`, "success");
+      showAlert("Clocked in", `You are on site. Supervisor: ${sup.name}. Choose a machine.`, "success");
     } catch (e) { showAlert("Could not clock in", e.message, "error"); }
     finally { setActionBusy(""); }
   };
@@ -261,13 +322,14 @@ export function OperatorApp() {
     }
     setActionBusy("clockout");
     try {
-      await wf.clockOutEarly(user, workSession, activeMachine, activeSite, {
+      await wf.clockOutEarly(user, workSession, workMachine || siteMachines[0] || null, activeSite, {
         reason: earlyClockOutReason,
         note: earlyClockOutNote,
       });
       setShowEarlyClockOut(false);
       setEarlyClockOutReason("");
       setEarlyClockOutNote("");
+      setPickedMachineId("");
       clearPrestartDraft();
       await refreshLocal();
       showAlert("Clocked out", "Your time on site was recorded. The machine was not started.", "success");
@@ -278,7 +340,7 @@ export function OperatorApp() {
 
   const handleInspection = async () => {
     try {
-      await wf.completeInspection(user, activeMachine, activeSite, {
+      await wf.completeInspection(user, workMachine, activeSite, {
         results: inspectionResults, remarks: inspectionRemarks, photos: inspectionPhotos,
       });
       clearPrestartDraft();
@@ -289,6 +351,11 @@ export function OperatorApp() {
 
   const handleStart = async () => {
     if (actionBusy) return;
+    const name = cabName.trim();
+    if (!name) {
+      showAlert("Who is in the cab?", "Enter the person operating this machine. Your login is saved separately as the person who recorded the shift.", "warning");
+      return;
+    }
     if (!startPhotoRef) {
       setStartPhotoError(true);
       showAlert("Photo required", "Take a photo of the hour meter before starting.", "warning");
@@ -296,11 +363,13 @@ export function OperatorApp() {
     }
     setActionBusy("start");
     try {
-      const result = await wf.startMachine(user, activeMachine, activeSite, {
+      rememberUsualOperator(workMachine.id, name);
+      const result = await wf.startMachine(user, workMachine, activeSite, {
         hourMeter: startHour,
         photoRef: startPhotoRef,
-        verifiedShifts: shifts.filter((s) => s.machine_id === activeMachine?.id),
+        verifiedShifts: shifts.filter((s) => s.machine_id === workMachine?.id),
         workSessionClockIn: workSession?.clock_in,
+        machineOperatorName: name,
       });
       setStartHour(""); setStartPhotoRef(null); setStartPhotoPreview(null);
       await refreshLocal();
@@ -317,7 +386,7 @@ export function OperatorApp() {
     const note = stopNote;
     setActionBusy("stop");
     try {
-      await wf.stopMachine(user, activeMachine, activeSite, sessionShift, { reason, note });
+      await wf.stopMachine(user, workMachine, activeSite, sessionShift, { reason, note });
       setShowStop(false); setStopReason(""); setStopNote("");
       await refreshLocal();
       showAlert("Machine stopped", reason, "info");
@@ -336,7 +405,7 @@ export function OperatorApp() {
     if (actionBusy) return;
     setActionBusy("restart");
     try {
-      await wf.restartMachine(user, activeMachine, activeSite, sessionShift, sessionDowntime, { note: restartNote });
+      await wf.restartMachine(user, workMachine, activeSite, sessionShift, sessionDowntime, { note: restartNote });
       setShowRestart(false); setRestartNote("");
       await refreshLocal();
       showAlert("Machine running", "The machine is running again.", "success");
@@ -358,7 +427,7 @@ export function OperatorApp() {
     }
     setActionBusy("end");
     try {
-      const { ended } = await wf.endMachineDay(user, activeMachine, activeSite, sessionShift, {
+      const { ended } = await wf.endMachineDay(user, workMachine, activeSite, sessionShift, {
         endHour, photoRef: endPhotoRef, assignedSupervisor: sup,
       });
       setShowEndDay(false);
@@ -366,13 +435,7 @@ export function OperatorApp() {
       setShowStop(false);
       setEndHour(""); setEndPhotoRef(null); setEndPhotoPreview(null);
       setSubmittedShift(ended);
-      if (workSession) {
-        try {
-          await wf.clockOut(user, workSession, { note: "End of machine day" });
-        } catch (clockErr) {
-          showAlert("Shift sent — clock out still needed", clockErr.message || "Tap Clock out to close your time.", "warning");
-        }
-      }
+      setPickedMachineId("");
       await refreshLocal();
     } catch (e) { showAlert("Could not finish shift", e.message, "error"); }
     finally { setActionBusy(""); }
@@ -392,6 +455,7 @@ export function OperatorApp() {
     if (!workSession) return;
     try {
       await wf.clockOut(user, workSession, { note: "Clocked out after shift sent" });
+      setPickedMachineId("");
       await refreshLocal();
     } catch (e) {
       showAlert("Could not clock out", e.message, "error");
@@ -399,22 +463,30 @@ export function OperatorApp() {
   };
 
   const handleClockOutTap = () => {
-    if (sessionShift) {
-      openEndDay();
+    if (myOpenShifts.length) {
+      const names = myOpenShifts
+        .map((s) => siteMachines.find((m) => m.id === s.machine_id)?.name || "A machine")
+        .join(", ");
+      showAlert(
+        "Finish each machine first",
+        `${names} still has an open shift. Open that machine and finish the shift, then clock out.`,
+        "warning"
+      );
+      setPickedMachineId("");
+      setSubmittedShift(null);
       return;
     }
-    const alreadySent = submittedShift || shifts.some((s) => (
+    const startedAny = (shifts || []).some((s) =>
       s.operator_id === user?.id
       && workSession
-      && getShiftStatus(s) !== SHIFT.RUNNING
       && s.started_at
       && new Date(s.started_at) >= new Date(workSession.clock_in)
-    ));
-    if (alreadySent) {
-      handleClockOutAfterShift();
+    );
+    if (!startedAny) {
+      setShowEarlyClockOut(true);
       return;
     }
-    setShowEarlyClockOut(true);
+    handleClockOutAfterShift();
   };
 
   const machineStatus = sessionShift && sessionDowntime ? "stopped" : sessionShift ? "running" : null;
@@ -446,7 +518,7 @@ export function OperatorApp() {
         ) : blocked && !submittedShift && !correctionShift ? (
           <div className="bg-[#EF4444]/10 border-b border-[#EF4444]/30 px-4 py-2.5">
             <p className="font-logo text-sm text-[#EF4444] text-center">
-              {machineBlocked.operator_name} is running {activeMachine?.name}
+              {blockedByOther.operator_name} is running {workMachine?.name}
             </p>
           </div>
         ) : null
@@ -469,7 +541,6 @@ export function OperatorApp() {
         {showWelcome && (
           <OperatorWelcome
             name={user?.name}
-            machineName={activeMachine?.name}
             siteName={activeSite?.name}
             reportsAttention={reportsAttention}
             onReady={startDay}
@@ -477,8 +548,18 @@ export function OperatorApp() {
           />
         )}
 
-        {!submittedShift && !showWelcome && (
+        {!showWelcome && (
           <OperatorFlowGuide currentStep={currentStep} />
+        )}
+
+        {workSession && workMachine && !showWelcome && (
+          <button
+            type="button"
+            onClick={() => setPickedMachineId("")}
+            className="mb-4 font-ui text-sm text-[#F5C518] underline underline-offset-2"
+          >
+            All machines
+          </button>
         )}
 
         {correctionShift && !submittedShift && (
@@ -494,9 +575,9 @@ export function OperatorApp() {
 
         {leftoverOpen.length > 0 && !submittedShift && (
           <div className="mb-4 bg-[#1a1212] border border-[#EF4444]/40 rounded-2xl p-4">
-            <p className="font-logo text-[#EF4444] mb-2">Open shift still on this machine</p>
+            <p className="font-logo text-[#EF4444] mb-2">A shift was left open</p>
             <p className="font-body text-[#F2F0EA]/75 mb-3">
-              This leftover is blocking a new start. Enter the closing meter and send it for sign-off, or delete it.
+              Close it before that machine can start again. Enter the closing meter and send it for sign-off, or delete it.
             </p>
             {leftoverOpen.map((shift) => (
               <div key={shift.id} className="mb-3 last:mb-0">
@@ -537,17 +618,13 @@ export function OperatorApp() {
             <p className="font-body text-sm text-[#F2F0EA]/60 mb-2">
               {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED
                 ? "Waiting for supervisor to sign off."
-                : `Waiting for ${submittedShift.assigned_supervisor_name || "supervisor"} to sign off. That is why the report says pending — your day is already sent.`}
+                : `Waiting for ${submittedShift.assigned_supervisor_name || "supervisor"} to sign this machine off. Choose the next machine below. Clock out when you leave site.`}
             </p>
-            {workSession && (
-              <button type="button" onClick={handleClockOutAfterShift} className="w-full mb-3 bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold">
-                Clock out now
-              </button>
-            )}
             <SupervisorWhatsAppButtons
               supervisors={siteSupervisors}
               shift={submittedShift}
-              machine={activeMachine}
+              machine={machines.find((m) => m.id === submittedShift.machine_id) || workMachine}
+              recordedBy={user?.name}
               site={activeSite}
               assignedSupervisorId={submittedShift.assigned_supervisor_id}
             />
@@ -567,7 +644,47 @@ export function OperatorApp() {
           </div>
         )}
 
-        {!submittedShift && !showWelcome && (
+        {!workSession && !showWelcome && (
+          <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
+            <div className="operator-group">
+              <p className="operator-group-label font-logo">Clock in</p>
+              <p className="operator-group-explain">This starts your time. It does not start a machine.</p>
+              <FormSection title="Supervisor on duty" description="Who will sign off the shifts you record today?" accent="#D4A017">
+                <SupervisorPicker
+                  supervisors={siteSupervisors}
+                  value={clockInSupervisorId}
+                  onChange={setClockInSupervisorId}
+                  suggestedId={suggestedSupervisor?.id}
+                />
+                {clockInSupervisorId && (
+                  <ChoiceHint>
+                    This person signs each machine. Clock in starts your time. Then you choose a machine.
+                  </ChoiceHint>
+                )}
+              </FormSection>
+              <FormSection title="Ready to work" description="Tap when you are on site." accent="#15803D">
+                <Button type="button" variant="primary" size="lg" className="w-full font-logo" onClick={handleClockIn} disabled={!!actionBusy || !clockInSupervisorId}>
+                  <IconClock /> {actionBusy === "clockin" ? "Clocking in…" : "Clock in"}
+                </Button>
+              </FormSection>
+            </div>
+          </div>
+        )}
+
+        {workSession && !workMachine && !showWelcome && (
+          <OperatorMachineBoard
+            machines={siteMachines}
+            shifts={shifts}
+            events={events}
+            user={user}
+            workSession={workSession}
+            inspections={inspections}
+            siteConfig={siteConfig}
+            onPick={setPickedMachineId}
+          />
+        )}
+
+        {workMachine && !submittedShift && !showWelcome && (
           <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
@@ -579,32 +696,43 @@ export function OperatorApp() {
               </div>
             )}
 
-            {!workSession && (
-              <div className="operator-group">
-                <p className="operator-group-label font-logo">Clock in</p>
-                <p className="operator-group-explain">This starts your time. It does not start the machine.</p>
-                <FormSection title="Supervisor on duty" description="Who will sign off this shift?" accent="#D4A017">
-                  <SupervisorPicker
-                    supervisors={siteSupervisors}
-                    value={clockInSupervisorId}
-                    onChange={setClockInSupervisorId}
-                    suggestedId={suggestedSupervisor?.id}
-                  />
-                  {clockInSupervisorId && (
-                    <ChoiceHint>
-                      This person will sign off your shift. Clock in starts your time — it does not start the machine.
-                    </ChoiceHint>
-                  )}
-                </FormSection>
-                <FormSection title="Ready to work" description="Tap when you are on site." accent="#15803D">
-                  <Button type="button" variant="primary" size="lg" className="w-full font-logo" onClick={handleClockIn} disabled={!!actionBusy || !clockInSupervisorId}>
-                    <IconClock /> {actionBusy === "clockin" ? "Clocking in…" : "Clock in"}
-                  </Button>
-                </FormSection>
+            {staleOwnShift && (
+              <div className="mb-4">
+                <p className="font-body text-base text-ops-text mb-3">
+                  Your earlier shift on {workMachine.name} is still open. Close it before starting a new one.
+                </p>
+                <OperatorShiftTools
+                  shift={staleOwnShift}
+                  user={user}
+                  supervisors={siteSupervisors}
+                  onDone={refreshLocal}
+                />
               </div>
             )}
 
-            {workSession && !prestartDone && !sessionShift && !sessionDowntime && (
+            {blocked && (
+              <p className="font-body text-base text-center text-ops-red">
+                {blockedByOther.operator_name} already has {workMachine.name} running. Choose another machine.
+              </p>
+            )}
+
+            {workSession && !blocked && !staleOwnShift && !sessionShift && !sessionDowntime && (
+              <FormSection
+                title="Who is in the cab?"
+                description="This name is the machine operator on the report. Your login is recorded separately."
+                accent="#F5C518"
+              >
+                <input
+                  value={cabName}
+                  onChange={(e) => setCabName(e.target.value)}
+                  onBlur={() => rememberUsualOperator(workMachine.id, cabName)}
+                  placeholder="Name of the person operating the machine"
+                  className="w-full bg-ops-black border border-ops-border p-4 rounded-xl text-ops-text text-lg"
+                />
+              </FormSection>
+            )}
+
+            {workSession && !blocked && !staleOwnShift && !prestartDone && !sessionShift && !sessionDowntime && (
               <>
                 <PreStartInspectionChecklist
                   items={prestartItems}
@@ -626,11 +754,11 @@ export function OperatorApp() {
               </>
             )}
 
-            {workSession && prestartDone && !sessionShift && !sessionDowntime && (
+            {workSession && !blocked && !staleOwnShift && prestartDone && !sessionShift && !sessionDowntime && (
               <div className="operator-group">
                 <p className="operator-group-label font-logo">Start machine</p>
-                <p className="operator-group-explain">Photo the hour meter, then tap Start machine.</p>
-                <FormSection title="Opening hour meter" description={`Last signed-off reading: ${hourMeter}h.`} accent="#15803D">
+                <p className="operator-group-explain">Photo the hour meter, then tap Start machine. You can leave it running and choose another machine.</p>
+                <FormSection title="Opening hour meter" description={`Last signed-off reading: ${machineHourMeter}h.`} accent="#15803D">
                   <MeterPhoto
                     value={startHour}
                     onValue={setStartHour}
@@ -645,7 +773,7 @@ export function OperatorApp() {
             {sessionShift && !sessionDowntime && (
               <div className="operator-group">
                 <p className="operator-group-label font-logo">Machine running</p>
-                <p className="operator-group-explain">Stop the machine if it goes down. Finish shift when you are done.</p>
+                <p className="operator-group-explain">Leave it running and choose another machine, or finish this shift when the day on this machine is done.</p>
                 <FormSection title="Machine running" description="Your time is already running at the top." accent="#15803D">
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
@@ -660,8 +788,11 @@ export function OperatorApp() {
                   {shiftDowntimeMin > 0 && (
                     <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
                   )}
+                  <button type="button" onClick={() => setPickedMachineId("")} className="w-full mb-2 py-3 rounded-xl border border-[#F5C518] text-[#F5C518] font-logo">
+                    Choose another machine
+                  </button>
                   <button type="button" onClick={openEndDay} className="w-full py-2 font-ui text-sm text-ops-muted underline underline-offset-2">
-                    Finish shift
+                    Finish this shift
                   </button>
                 </FormSection>
               </div>
@@ -673,8 +804,11 @@ export function OperatorApp() {
                 <p className="operator-group-explain">You are still on site. Restart the machine, or finish the shift.</p>
                 <FormSection title="Machine stopped" description={`Reason: ${sessionDowntime.reason}.`} accent="#B91C1C">
                   <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{Math.floor(downtimeSeconds / 60)} min down</p>
+                  <button type="button" onClick={() => setPickedMachineId("")} className="w-full mb-2 py-3 rounded-xl border border-[#F5C518] text-[#F5C518] font-logo">
+                    Choose another machine
+                  </button>
                   <button type="button" onClick={openEndDay} className="w-full py-2 font-ui text-sm text-ops-muted underline underline-offset-2">
-                    Finish shift
+                    Finish this shift
                   </button>
                 </FormSection>
               </div>
@@ -712,12 +846,12 @@ export function OperatorApp() {
           issueMessages={issueMessages}
           onDone={refreshLocal}
           scope="mine"
-          machines={activeMachine ? [activeMachine] : []}
+          machines={siteMachines}
         />
       )}
 
       {showReportIssue && (
-        <ReportIssueModal onClose={() => { setShowReportIssue(false); setReportPrefill(null); }} user={user} machine={activeMachine} site={activeSite} profiles={profiles} onDone={refreshLocal}
+        <ReportIssueModal onClose={() => { setShowReportIssue(false); setReportPrefill(null); }} user={user} machine={workMachine || siteMachines[0]} machines={siteMachines} site={activeSite} profiles={profiles} onDone={refreshLocal}
           initialArea={reportPrefill?.area || ""} initialDescription={reportPrefill?.description || ""} initialPriority={reportPrefill?.priority || "Medium"} />
       )}
       {suggestReport && (
@@ -735,7 +869,7 @@ export function OperatorApp() {
         </Modal>
       )}
       {showFuel && (
-        <FuelModal onClose={() => setShowFuel(false)} currentMeter={fuelMeterHint} user={user} machine={activeMachine} site={activeSite} shiftId={sessionShift?.id} onDone={refreshLocal} />
+        <FuelModal onClose={() => setShowFuel(false)} currentMeter={fuelMeterHint} user={user} machine={workMachine || siteMachines[0]} machines={siteMachines} shifts={shifts} site={activeSite} shiftId={sessionShift?.id} onDone={refreshLocal} />
       )}
       {showEarlyClockOut && (
         <Modal title="Clock out" color="yellow" onClose={() => { setShowEarlyClockOut(false); setEarlyClockOutReason(""); setEarlyClockOutNote(""); }}>
@@ -798,7 +932,7 @@ export function OperatorApp() {
       )}
       {showEndDay && (
         <Modal title="Finish shift" color="yellow" onClose={() => setShowEndDay(false)}>
-          <p className="font-body text-sm text-[#F2F0EA]/70 mb-4">This stops the machine hours and clocks you out.</p>
+          <p className="font-body text-sm text-[#F2F0EA]/70 mb-4">This sends this machine’s shift for sign-off. You stay clocked in so you can record the next machine.</p>
           <div className="mb-4 px-4 py-3 rounded-xl bg-[#F5C518]/10 border border-[#F5C518]/40">
             <p className="font-logo text-[10px] text-[#F5C518] tracking-wider mb-1">SUPERVISOR FOR THIS SHIFT</p>
             <p className="font-logo text-base text-[#F2F0EA]">{shiftSupervisor?.name || "—"}</p>
@@ -814,7 +948,7 @@ export function OperatorApp() {
           </FormSection>
           <button type="button" onClick={handleEndDay} disabled={!!actionBusy || !shiftSupervisor?.id || !endHour || !endPhotoRef}
             className="w-full min-h-12 bg-[#F5C518] text-black rounded-xl font-ui font-semibold disabled:opacity-40">
-            {actionBusy === "end" ? "Sending…" : "Finish shift and clock out"}
+            {actionBusy === "end" ? "Sending…" : "Send this machine’s shift"}
           </button>
         </Modal>
       )}

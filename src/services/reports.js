@@ -1,5 +1,6 @@
 import { SHIFT } from "../lib/constants.js";
 import { ownerForStopReason } from "../lib/stopReasons.js";
+import { shiftNameLines } from "../lib/shiftPeople.js";
 import { resolveMediaUrl } from "../lib/media.js";
 import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinutes } from "../lib/shiftMetrics.js";
 import { buildStockSeries } from "../lib/productivityPulse.js";
@@ -321,7 +322,7 @@ async function resolveInspectionPhotoMap(items) {
   return map;
 }
 
-export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls = {}, siteSettings }) {
+export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls = {}, siteSettings, profiles = [], workSessions = [] }) {
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = fuelLogs.filter((f) => f.shift_id === shift.id);
@@ -350,13 +351,14 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
     return `<span class="badge ${cls}">${esc(status)}</span>`;
   };
 
+  const names = shiftNameLines(shift, { profiles, workSessions });
   const prestartOk = prestart.filter((i) => /^ok$/i.test(i.status || "")).length;
   const prestartAction = prestart.filter((i) => /action/i.test(i.status || "")).length;
   const prestartBad = prestart.filter((i) => /attention|need|fail/i.test(i.status || "")).length;
   const prestartProblems = prestart.filter((i) => !/^ok$/i.test(i.status || ""));
   const downtimeChart = downtimeReasonChart(stops, siteSettings);
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Daily Report · ${esc(shift.operator_name)} · ${titleDate}</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Daily Report · ${esc(machine?.name || "Machine")} · ${titleDate}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Russo+One&display=swap" rel="stylesheet"/>
 <style>${reportPageStyles()}
@@ -388,10 +390,11 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
       </div>
       <div class="header-text">
         <h1 class="font-brand">Daily Shift Report</h1>
-        <p class="header-sub font-brand">${esc(shift.operator_name || "Operator")}</p>
+        <p class="header-sub font-brand">${esc(machine?.name || machine?.id || "Machine")}</p>
         <div class="header-meta">
+          <span>Machine operator · ${esc(names.machineOperator)}</span>
+          <span>Recorded by · ${esc(names.recordedBy)}</span>
           <span>${esc(site?.name || "Site")}</span>
-          <span>${esc(machine?.name || machine?.id || "Machine")}</span>
           <span>${titleDate}</span>
         </div>
       </div>
@@ -537,7 +540,7 @@ ${shiftFuel.length
 </body></html>`;
 }
 
-function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, siteSettings }) {
+function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, siteSettings, profiles = [], workSessions = [] }) {
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = (fuelLogs || []).filter((f) => f.shift_id === shift.id);
@@ -563,7 +566,8 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
         ["Daily Shift Report"],
         ["Site", site?.name || ""],
         ["Machine", machine?.name || machine?.id || ""],
-        ["Operator", shift.operator_name || ""],
+        ["Machine operator", shiftNameLines(shift, { profiles, workSessions }).machineOperator],
+        ["Recorded by", shiftNameLines(shift, { profiles, workSessions }).recordedBy],
         ["Date", fmtDateShort(shift.started_at)],
         ["Started", fmtDate(shift.started_at)],
         ["Ended", fmtDate(shift.ended_at)],
@@ -616,7 +620,7 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
   ];
 }
 
-export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [], siteSettings }) {
+export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [], siteSettings, profiles = [], workSessions = [] }) {
   const sigRef = firstMedia(shift.supervisor_signature_ref, shift.supervisor_signature);
   const prestartItems = shiftPrestart(inspections, shift);
   const prestartPhotoMap = await resolveInspectionPhotoMap(prestartItems);
@@ -630,14 +634,15 @@ export async function prepareShiftDailyReport(shift, { events = [], inspections 
     resolveLogoDataUrl(),
   ]);
 
+  const names = shiftNameLines(shift, { profiles, workSessions });
   const html = generateShiftDailyReportHTML(shift, {
-    events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls, siteSettings,
+    events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, logoUrl, prestartPhotoUrls, siteSettings, profiles, workSessions,
   });
 
   return {
     html,
-    title: `Daily Report · ${shift.operator_name} · ${fmtDateShort(shift.started_at)}`,
-    sheets: buildDailyReportSheets(shift, { events, inspections, fuelLogs, machine, site, siteSettings }),
+    title: `Daily Report · ${machine?.name || names.machineOperator} · ${fmtDateShort(shift.started_at)}`,
+    sheets: buildDailyReportSheets(shift, { events, inspections, fuelLogs, machine, site, siteSettings, profiles, workSessions }),
   };
 }
 

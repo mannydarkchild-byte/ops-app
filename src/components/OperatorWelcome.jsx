@@ -10,7 +10,6 @@ function greeting(now = new Date()) {
 
 export function OperatorWelcome({
   name,
-  machineName,
   siteName,
   reportsAttention = 0,
   onReady,
@@ -29,8 +28,7 @@ export function OperatorWelcome({
       <h2 className="operator-welcome-name font-logo">{firstName}</h2>
       <p className="operator-welcome-date font-body">{today}</p>
       <p className="operator-welcome-copy font-body">
-        {machineName ? `${machineName} is yours today.` : "Your machine is ready."}
-        {siteName ? ` ${siteName}.` : ""} Clock in when you are on site — that starts your time, not the machine.
+        You record every machine{siteName ? ` on ${siteName}` : ""}. Clock in once, then choose a machine. That starts your time, not the machine.
       </p>
       <Button type="button" variant="primary" size="lg" className="w-full font-logo operator-welcome-go" onClick={onReady}>
         Start my day

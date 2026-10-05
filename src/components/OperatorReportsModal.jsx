@@ -5,6 +5,7 @@ import { SHIFT } from "../lib/constants.js";
 import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod, dedupeShifts } from "../lib/utils.js";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
+import { shiftNameLines } from "../lib/shiftPeople.js";
 import { OperatorShiftTools } from "./OperatorShiftTools.jsx";
 
 const FILTERS = [
@@ -109,8 +110,8 @@ export function OperatorReportsModal({
   const afterChange = () => { onChanged?.(); };
 
   const reportContext = useMemo(
-    () => ({ events, inspections, fuelLogs, site, shifts, hourReadings, siteSettings }),
-    [events, inspections, fuelLogs, site, shifts, hourReadings, siteSettings]
+    () => ({ events, inspections, fuelLogs, site, shifts, hourReadings, siteSettings, profiles, workSessions }),
+    [events, inspections, fuelLogs, site, shifts, hourReadings, siteSettings, profiles, workSessions]
   );
 
   const viewReport = async (shift) => {
@@ -184,7 +185,11 @@ export function OperatorReportsModal({
                   <div className="flex justify-between gap-3 mb-2">
                     <div className="min-w-0">
                       <p className="font-logo text-base text-[#F2F0EA]">{machineName(shift.machine_id)}</p>
-                      <p className="font-body text-sm text-[#F2F0EA]/60 mt-0.5">{fmtDateShort(shift.started_at)}</p>
+                      <p className="font-body text-sm text-[#F2F0EA]/60 mt-0.5">
+                        {fmtDateShort(shift.started_at)}
+                        {" · "}
+                        {shiftNameLines(shift, { profiles, workSessions }).machineOperator}
+                      </p>
                     </div>
                     <p className="font-logo text-lg text-[#F5C518] shrink-0">
                       {Number(shift.hours_worked || 0).toFixed(1)}h

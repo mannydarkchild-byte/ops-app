@@ -275,6 +275,7 @@ export function MechanicApp() {
                   className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 mb-2 active:border-[#F5C518]"
                 >
                   <p className="font-logo text-sm">{j.title}</p>
+                  <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">{machineName(j.machine_id)}</p>
                   <p className="text-[10px] text-[#F2F0EA]/40 mt-1">
                     {iss ? issueStatusLabel(iss.status) : j.status} · {fmtDate(j.started_at)}
                   </p>
@@ -334,6 +335,7 @@ export function MechanicApp() {
 
       {selected && (
         <Modal title="REPAIR JOB" color="blue" onClose={() => setSelected(null)}>
+          <p className="font-logo text-base text-[#F5C518] mb-3">{machineName(selected.machine_id)}</p>
           {selectedIssue && (
             <div className="mb-4">
               <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-2">PROBLEM TIMELINE</p>

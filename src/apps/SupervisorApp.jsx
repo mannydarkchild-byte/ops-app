@@ -19,6 +19,7 @@ import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, dedupeShifts } from "../lib/utils.js";
 
 import { formatSyncErrorMessage } from "../lib/labels.js";
+import { shiftNameLines } from "../lib/shiftPeople.js";
 import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
 
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
@@ -163,7 +164,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     const openStop = events.find((e) => e.machine_id === machine.id && e.type === "STOP" && e.status === "open");
 
-    const activeSession = workSessions.find((s) => s.status === "active" && s.machine_id === machine.id);
+    const activeSession = workSessions.find((s) => s.status === "active" && (
+      s.machine_id === machine.id || (runningShift && s.operator_id === runningShift.operator_id)
+    ));
 
     return {
 
@@ -406,9 +409,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const reportContext = useMemo(() => ({
 
-    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings, siteSettings: siteConfig,
+    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings, siteSettings: siteConfig, profiles, workSessions,
 
-  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings, siteConfig]);
+  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings, siteConfig, profiles, workSessions]);
 
 
 
@@ -874,7 +877,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
                 ) : fleetStatus.map((f) => (
 
-                  <FleetMachineCard key={f.machine.id} fleet={f} onCloseShift={beginCloseShift} />
+                  <FleetMachineCard key={f.machine.id} fleet={f} onCloseShift={beginCloseShift} workSessions={workSessions} profiles={profiles} />
 
                 ))}
 
@@ -1462,9 +1465,10 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
 
-function FleetMachineCard({ fleet, onCloseShift }) {
+function FleetMachineCard({ fleet, onCloseShift, workSessions = [], profiles = [] }) {
 
   const { machine, runningShift, openStop, activeSession, isRunning, isStopped } = fleet;
+  const names = runningShift ? shiftNameLines(runningShift, { workSessions, profiles }) : null;
 
   const runningSeconds = useLiveTimer(runningShift?.started_at, isRunning);
 
@@ -1494,7 +1498,8 @@ function FleetMachineCard({ fleet, onCloseShift }) {
 
         <p className="text-sm text-[#F2F0EA]/70">
 
-          {Math.floor(runningSeconds / 3600)}h {Math.floor((runningSeconds % 3600) / 60)}m · {runningShift.operator_name}
+          {Math.floor(runningSeconds / 3600)}h {Math.floor((runningSeconds % 3600) / 60)}m · {names?.machineOperator}
+          {names && !names.samePerson ? ` · recorded by ${names.recordedBy}` : ""}
 
         </p>
 

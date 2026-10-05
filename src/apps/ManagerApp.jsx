@@ -13,6 +13,7 @@ import { SignedReportCard } from "../components/SignedReportCard.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
 import { ISSUE, SHIFT } from "../lib/constants.js";
 import { ownerForStopReason } from "../lib/stopReasons.js";
+import { shiftNameLines } from "../lib/shiftPeople.js";
 import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 import {
   fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, money, shiftBillableValue, dedupeShifts,
@@ -67,6 +68,7 @@ export function ManagerApp() {
   const [reportPreview, setReportPreview] = useState(null);
   const [moreView, setMoreView] = useState(null);
   const [showStopOwners, setShowStopOwners] = useState(false);
+  const [focusMachineId, setFocusMachineId] = useState("");
   const showAlert = (title, message, type = "info") =>
     setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -80,10 +82,16 @@ export function ManagerApp() {
     [siteSettings, user?.site_id]
   );
 
-  const primaryMachine = useMemo(
-    () => getPrimaryMachine(machines, user?.site_id, siteConfig),
-    [machines, user?.site_id, siteConfig]
+  const siteMachines = useMemo(
+    () => machines.filter((m) => m.site_id === user?.site_id && m.active !== false),
+    [machines, user?.site_id]
   );
+
+  const primaryMachine = useMemo(() => {
+    const picked = siteMachines.find((m) => m.id === focusMachineId);
+    if (picked) return picked;
+    return getPrimaryMachine(machines, user?.site_id, siteConfig);
+  }, [siteMachines, focusMachineId, machines, user?.site_id, siteConfig]);
 
   const billingPeriod = useMemo(
     () => getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day),
@@ -170,7 +178,10 @@ export function ManagerApp() {
       (e) => e.machine_id === primaryMachine.id && e.type === "STOP" && e.status === "open"
     );
     const activeSession = workSessions.find(
-      (s) => s.status === "active" && s.machine_id === primaryMachine.id
+      (s) => s.status === "active" && (
+        s.machine_id === primaryMachine.id
+        || (runningShift && s.operator_id === runningShift.operator_id)
+      )
     );
     return {
       machine: primaryMachine,
@@ -200,11 +211,6 @@ export function ManagerApp() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
   }, [events, primaryMachine?.id, billingPeriod, siteConfig]);
-
-  const siteMachines = useMemo(
-    () => machines.filter((m) => m.site_id === user?.site_id && m.active !== false),
-    [machines, user?.site_id]
-  );
 
   const myIssues = useMemo(
     () => issues.filter(
@@ -319,8 +325,8 @@ export function ManagerApp() {
   }), [events, fuelLogs, issues, primaryMachine?.id]);
 
   const reportContext = useMemo(() => ({
-    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings, siteSettings: siteConfig,
-  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings, siteConfig]);
+    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings, siteSettings: siteConfig, profiles, workSessions,
+  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings, siteConfig, profiles, workSessions]);
 
   const getReportPeriod = () => {
     const presets = getDatePresets(siteConfig.billing_cycle_start_day);
@@ -418,6 +424,22 @@ export function ManagerApp() {
           </div>
         )}
 
+        {tab !== "pulse" && siteMachines.length > 1 && (
+          <label className="block mb-4">
+            <span className="font-logo text-[10px] tracking-wider text-[#F5C518]">MACHINE</span>
+            <select
+              value={primaryMachine?.id || ""}
+              onChange={(e) => setFocusMachineId(e.target.value)}
+              className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA]"
+            >
+              {siteMachines.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+            <p className="font-body text-xs text-[#F2F0EA]/50 mt-1">Hours, diesel, and reports on this screen are for this machine only.</p>
+          </label>
+        )}
+
         {tab === "overview" && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -426,7 +448,7 @@ export function ManagerApp() {
               <Kpi label="Runtime" value={formatDurationMinutes(cycleStats.runtimeMin)} sub="App-tracked this cycle" color="#00A4A6" />
               <Kpi label="Downtime" value={formatDurationMinutes(cycleStats.downtimeMin)} sub={`Util ${cycleStats.utilization.toFixed(0)}%`} color="#EF4444" />
               <Kpi label="Diesel" value={`${cycleStats.litres.toFixed(1)} L`} sub={cycleStats.hours > 0 ? `${(cycleStats.litres / cycleStats.hours).toFixed(2)} L/h` : "—"} color="#F5C518" />
-              <Kpi label="Expenses" value={money(cycleStats.expenseTotal)} sub="Warrior this cycle" color="#F5C518" />
+              <Kpi label="Expenses" value={money(cycleStats.expenseTotal)} sub={`${primaryMachine?.name || "This machine"} this cycle`} color="#F5C518" />
               <Kpi
                 label="Net (approx)"
                 value={money(cycleStats.revenue - cycleStats.expenseTotal)}
@@ -436,7 +458,7 @@ export function ManagerApp() {
               <Kpi label="Site" value={activeSite?.name || "—"} sub={primaryMachine.code} color="#F2F0EA" />
             </div>
 
-            {fleetStatus && <WarriorStatusCard fleet={fleetStatus} />}
+            {fleetStatus && <WarriorStatusCard fleet={fleetStatus} workSessions={workSessions} profiles={profiles} />}
 
             {downtimeByReason.length > 0 && (
               <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
@@ -775,8 +797,9 @@ export function ManagerApp() {
   );
 }
 
-function WarriorStatusCard({ fleet }) {
+function WarriorStatusCard({ fleet, workSessions = [], profiles = [] }) {
   const { machine, runningShift, openStop, activeSession, isRunning, isStopped } = fleet;
+  const names = runningShift ? shiftNameLines(runningShift, { workSessions, profiles }) : null;
   const runningSeconds = useLiveTimer(runningShift?.started_at, isRunning);
   const downtimeSeconds = useLiveTimer(openStop?.stopped_at, isStopped);
   const statusColor = isStopped ? "#EF4444" : isRunning ? "#22C55E" : "#F2F0EA";
@@ -793,7 +816,8 @@ function WarriorStatusCard({ fleet }) {
       </div>
       {isRunning && (
         <p className="text-sm text-[#F2F0EA]/70">
-          {Math.floor(runningSeconds / 3600)}h {Math.floor((runningSeconds % 3600) / 60)}m · {runningShift.operator_name}
+          {Math.floor(runningSeconds / 3600)}h {Math.floor((runningSeconds % 3600) / 60)}m · {names.machineOperator}
+          {!names.samePerson ? ` · recorded by ${names.recordedBy}` : ""}
         </p>
       )}
       {isStopped && (

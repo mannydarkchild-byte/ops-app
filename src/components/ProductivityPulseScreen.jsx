@@ -16,7 +16,7 @@ function toDateInputValue(d) {
 
 /**
  * Live machine productivity — stock-style score for every role.
- * Primary machine only. Default window: today since midnight. History via day / cycle.
+ * One machine at a time. Opens on the primary machine. Default window: today since midnight.
  */
 export function ProductivityPulseScreen({ onClose, embedded = false }) {
   const {
@@ -25,10 +25,16 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
 
   const siteId = user?.site_id || activeSite?.id;
   const siteConfig = useMemo(() => getSettingsForSite(siteId), [getSettingsForSite, siteId]);
-  const machine = useMemo(
-    () => getPrimaryMachine(machines, siteId, siteConfig),
-    [machines, siteId, siteConfig]
+  const siteMachines = useMemo(
+    () => (machines || []).filter((m) => m.site_id === siteId && m.active !== false),
+    [machines, siteId]
   );
+  const [pickedId, setPickedId] = useState("");
+  const machine = useMemo(() => {
+    const picked = siteMachines.find((m) => m.id === pickedId);
+    if (picked) return picked;
+    return getPrimaryMachine(machines, siteId, siteConfig);
+  }, [siteMachines, pickedId, machines, siteId, siteConfig]);
 
   const [windowMode, setWindowMode] = useState("today");
   const [historyDay, setHistoryDay] = useState(() => toDateInputValue(new Date()));
@@ -92,6 +98,23 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
           Refresh
         </button>
       </div>
+
+      {siteMachines.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {siteMachines.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setPickedId(m.id)}
+              className={`shrink-0 px-3 py-2 rounded-xl font-logo text-sm ${
+                machine?.id === m.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"
+              }`}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex gap-1">
         {[

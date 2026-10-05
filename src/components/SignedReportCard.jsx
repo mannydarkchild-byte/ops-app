@@ -35,9 +35,9 @@ export function SignedReportCard({ shift, machineName, onViewReport, onDownloadR
     <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
       <div className="flex justify-between items-start gap-3 mb-3">
         <div className="min-w-0 flex-1">
-          <p className="font-logo text-sm text-[#F2F0EA]">{shift.operator_name || "Operator"}</p>
+          <p className="font-logo text-sm text-[#F2F0EA]">{machineName || "Machine"}</p>
           <p className="text-[10px] text-[#F2F0EA]/45 mt-0.5">
-            {fmtDateShort(shift.started_at)} · {machineName || "Machine"}
+            {fmtDateShort(shift.started_at)} · {shift.operator_name || "Operator"}
           </p>
           <p className="text-[10px] text-[#F5C518]/90 mt-1">
             ✓ Signed by {shift.supervisor_signature_name || "Supervisor"}

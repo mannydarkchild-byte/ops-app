@@ -46,7 +46,7 @@ async function clockInOnce(user, machine, site, { assignedSupervisor } = {}) {
   const s = {
     id: makeId("WORK"),
     site_id: site?.id,
-    machine_id: machine?.id,
+    machine_id: null,
     operator_id: user.id,
     operator_name: user.name,
     assigned_supervisor_id: assignedSupervisor.id,
@@ -59,7 +59,7 @@ async function clockInOnce(user, machine, site, { assignedSupervisor } = {}) {
     updated_at: nowISO(),
   };
   await saveLocal("work_sessions", s);
-  await addEvent(user, machine, site, "CLOCK_IN", { note: "Clocked in" });
+  if (machine?.id) await addEvent(user, machine, site, "CLOCK_IN", { note: "Clocked in" });
   scheduleSync();
   return s;
 }
@@ -84,9 +84,11 @@ async function clockOutOnce(user, workSession, { note, signatureRef, signatureNa
   };
   await saveLocal("work_sessions", updated);
   try {
-    await addEvent(user, { id: workSession.machine_id }, { id: workSession.site_id }, "CLOCK_OUT", {
-      note: note || "Clocked out",
-    });
+    if (workSession.machine_id) {
+      await addEvent(user, { id: workSession.machine_id }, { id: workSession.site_id }, "CLOCK_OUT", {
+        note: note || "Clocked out",
+      });
+    }
   } catch {}
   if (navigator.onLine) {
     try {
@@ -124,10 +126,12 @@ async function clockOutEarlyOnce(user, workSession, machine, site, { reason, not
     updated_at: now,
   };
   await saveLocal("work_sessions", updated);
-  await addEvent(user, machine, site, "CLOCK_OUT", {
-    reason,
-    note: `Early clock out — no shift started. ${note || ""}`.trim(),
-  });
+  if (machine?.id) {
+    await addEvent(user, machine, site, "CLOCK_OUT", {
+      reason,
+      note: `Early clock out — no shift started. ${note || ""}`.trim(),
+    });
+  }
   scheduleSync();
   return updated;
 }
@@ -224,7 +228,7 @@ export async function startMachine(user, machine, site, options = {}) {
   return withInflight(`start:${machine?.id}`, () => startMachineOnce(user, machine, site, options));
 }
 
-async function startMachineOnce(user, machine, site, { hourMeter, photoRef, verifiedShifts, workSessionClockIn } = {}) {
+async function startMachineOnce(user, machine, site, { hourMeter, photoRef, verifiedShifts, workSessionClockIn, machineOperatorName } = {}) {
   if (!photoRef) throw new Error("Hour meter photo is required");
   const h = Number(hourMeter);
   if (!Number.isFinite(h) || h < 0) throw new Error("Enter a valid hour meter reading");
@@ -270,13 +274,16 @@ async function startMachineOnce(user, machine, site, { hourMeter, photoRef, veri
   }
   if (h < baseline) throw new Error(`Reading below last verified (${baseline}h)`);
 
+  const cabName = String(machineOperatorName || "").trim();
+  if (!cabName) throw new Error("Enter who is operating this machine");
+
   const now = nowISO();
   const run = {
     id: makeId("RUN"),
     site_id: site?.id,
     machine_id: machine.id,
     operator_id: user.id,
-    operator_name: user.name,
+    operator_name: cabName,
     start_hour_meter: h,
     end_hour_meter: null,
     hours_worked: 0,
