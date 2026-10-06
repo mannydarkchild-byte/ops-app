@@ -99,7 +99,7 @@ export function StockChartSvg({ points, width = 760, height = 280, className = "
       <path d={path} fill="none" stroke="#F5C518" strokeWidth="2.8" strokeLinejoin="round" strokeLinecap="round" />
       {stopMarks.map((p, i) => (
         <circle key={`${p.t}-${i}`} cx={xAt(p.t)} cy={yAt(p.score)} r="4.5" fill="#EF4444" stroke="#0A0A0A" strokeWidth="1.5">
-          <title>{p.reason}{p.minutes != null ? ` · −${p.minutes}m` : ""}</title>
+          <title>{p.reason}{p.minutes != null ? ` · −${formatDurationMinutes(p.minutes)}` : ""}</title>
         </circle>
       ))}
       <circle cx={xAt(end.t)} cy={yAt(end.score)} r="5.5" fill="#F5C518" stroke="#F2F0EA" strokeWidth="1.5" />
@@ -142,7 +142,7 @@ export function stockChartSvgHtml(points, { esc, formatDurationMinutes: fmt }) {
     .map((p) => {
       const x = xAt(p.t).toFixed(1);
       const y = yAt(p.score).toFixed(1);
-      return `<circle cx="${x}" cy="${y}" r="4.5" fill="#EF4444" stroke="#fff" stroke-width="1.5"><title>${esc(p.reason)} · −${p.minutes || 0}m</title></circle>`;
+      return `<circle cx="${x}" cy="${y}" r="4.5" fill="#EF4444" stroke="#fff" stroke-width="1.5"><title>${esc(p.reason)} · −${fmt(p.minutes || 0)}</title></circle>`;
     })
     .join("");
   const yTicks = yTickValues(minS, maxS)

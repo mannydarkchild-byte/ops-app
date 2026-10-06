@@ -1,4 +1,4 @@
-import { shiftBillableHours } from "./shiftMetrics.js";
+import { formatDurationMinutes, shiftBillableHours } from "./shiftMetrics.js";
 
 /** Build WhatsApp deep link for supervisor shift verification */
 export function buildSupervisorVerifyWhatsApp(supervisorPhone, shift, machine, site, { recordedBy, events, siteSettings } = {}) {
@@ -18,7 +18,7 @@ export function buildSupervisorVerifyWhatsApp(supervisorPhone, shift, machine, s
     `Recorded by: ${recordedBy || shift.operator_name}`,
     `Machine hours: ${meterHours}h (${shift.start_hour_meter}h → ${shift.end_hour_meter}h)`,
     billable != null ? `Billable hours: ${billable}h (8h shift minus Darkchild downtime)` : null,
-    shift.runtime_minutes != null ? `Runtime: ${Math.round(shift.runtime_minutes)}m · Downtime: ${Math.round(shift.downtime_minutes || 0)}m` : null,
+    shift.runtime_minutes != null ? `Runtime: ${formatDurationMinutes(shift.runtime_minutes)} · Downtime: ${formatDurationMinutes(shift.downtime_minutes || 0)}` : null,
     "",
     "Tap to open OPS and verify:",
     verifyUrl,

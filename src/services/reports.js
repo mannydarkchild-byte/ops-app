@@ -6,7 +6,7 @@ import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinute
 import { buildStockSeries } from "../lib/productivityPulse.js";
 import { stockChartSvgHtml } from "../components/StockChart.jsx";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
-import { esc, fmtDate, fmtDateShort, money, shiftBillableValue } from "../lib/utils.js";
+import { esc, fmtDate, fmtDateShort, inPeriod, money, shiftBillableValue } from "../lib/utils.js";
 
 function shiftWindow(shift) {
   const start = new Date(shift.started_at).getTime();
@@ -669,8 +669,8 @@ export async function downloadShiftDailyReport(shift, ctx) {
 
 export function generateFullReportHTML(data, period, periodLabel, machine, site, { logoUrl, machines = [] } = {}) {
   const machineList = machines.length ? machines : machine ? [machine] : [];
-  const { shifts: runs, events, expenses, fuelLogs } = data;
-  const inRange = (iso) => iso && new Date(iso) >= period.start && new Date(iso) <= period.end;
+  const { shifts: runs = [], events = [], expenses = [], fuelLogs = [] } = data || {};
+  const inRange = (iso) => inPeriod(iso, period);
 
   const shifts = runs.filter((r) => inRange(r.started_at));
   const verified = shifts.filter((s) => s.shift_status === SHIFT.VERIFIED);
@@ -680,7 +680,7 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
   const billableHours = shifts.reduce((a, s) => a + shiftBillableHours(s, events, siteSettings), 0);
   const pendingBillable = pending.reduce((a, s) => a + shiftBillableHours(s, events, siteSettings), 0);
   const revenue = shifts.reduce((a, s) => a + shiftBillableValue(s, machineList, events, siteSettings), 0);
-  const periodExpenses = expenses.filter((e) => inRange(e.date));
+  const periodExpenses = expenses.filter((e) => inRange(e.date || e.created_at));
   const totalExpenses = periodExpenses.reduce((a, e) => a + Number(e.amount || 0), 0);
   const closedStops = events.filter((e) => e.type === "STOP" && e.status === "closed" && inRange(e.stopped_at));
   const totalDowntimeMin = closedStops.reduce((a, e) => a + Number(e.downtime_minutes || 0), 0);
@@ -976,7 +976,7 @@ export async function prepareOperationsReport(data, period, machine, site) {
     machines: machine ? [machine] : [],
   });
   const runs = data?.shifts || [];
-  const inRange = (iso) => iso && period?.start && period?.end && new Date(iso) >= period.start && new Date(iso) <= period.end;
+  const inRange = (iso) => inPeriod(iso, period);
   const periodShifts = runs.filter((r) => inRange(r.started_at));
   const sheets = [
     {

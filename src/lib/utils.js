@@ -62,10 +62,26 @@ export function getBillingPeriod(ref = new Date(), cycleStartDay = 26) {
   return { start, end, label: lbl };
 }
 
+/** Calendar dates stay on the local day. A bare YYYY-MM-DD is noon, not UTC midnight. */
+export function whenMs(iso) {
+  if (!iso) return NaN;
+  const s = String(iso).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T12:00:00`).getTime();
+  return new Date(s).getTime();
+}
+
 export function inPeriod(iso, period) {
   if (!iso || !period) return false;
-  const t = new Date(iso).getTime();
-  return t >= period.start.getTime() && t <= period.end.getTime();
+  const t = whenMs(iso);
+  return Number.isFinite(t) && t >= period.start.getTime() && t <= period.end.getTime();
+}
+
+/** A row counts for the site when its site matches, or its machine belongs to that site. */
+export function onSiteRecord(row, siteId, machines = []) {
+  if (!siteId) return true;
+  if (row?.site_id === siteId) return true;
+  const machine = (machines || []).find((m) => m.id && m.id === row?.machine_id);
+  return !!machine && (!machine.site_id || machine.site_id === siteId);
 }
 
 function isSupervisorRole(role) {

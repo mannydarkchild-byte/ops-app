@@ -31,6 +31,7 @@ import { AdminChecklistsPanel } from "../components/admin/AdminChecklistsPanel.j
 import { AdminActivityPanel } from "../components/admin/AdminActivityPanel.jsx";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
+import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
 
 
 
@@ -237,7 +238,7 @@ export function AdminApp() {
               <Kpi label={HOUR_LABELS.billable} value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${dashboard.overview.cycleShiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
               <Kpi label={HOUR_LABELS.machine} value={formatAdminMetric(dashboard.overview.machineHours, "hours")} sub={HOUR_LABELS.machineHint} color="#22C55E" />
               <Kpi label={HOUR_LABELS.revenue} value={formatAdminMetric(dashboard.overview.revenue, "money")} sub={HOUR_LABELS.revenueHint} color="#F5C518" />
-              <Kpi label={HOUR_LABELS.expenses} value={formatAdminMetric(dashboard.overview.expenseTotal, "money")} sub={`Net ${formatAdminMetric(dashboard.overview.net, "money")}`} color="#F97316" />
+              <Kpi label={HOUR_LABELS.expenses} value={formatAdminMetric(dashboard.overview.expenseTotal, "money")} sub={dashboard.overview.earlierExpenses > 0 ? `Net ${formatAdminMetric(dashboard.overview.net, "money")} · ${dashboard.overview.earlierExpenses} earlier` : `Net ${formatAdminMetric(dashboard.overview.net, "money")}`} color="#F97316" />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -331,6 +332,7 @@ export function AdminApp() {
               { label: "Machine pulse", onClick: () => setMoreView("pulse") },
               { label: "Machines", onClick: () => setMoreView("machines") },
               { label: "Checklists", onClick: () => setMoreView("checklists") },
+              { label: "Expenses", onClick: () => setMoreView("expenses") },
               { label: "Activity", onClick: () => setMoreView("activity") },
               { label: "Sync", onClick: () => setMoreView("sync") },
             ]}
@@ -356,6 +358,16 @@ export function AdminApp() {
             siteSettings={siteSettings}
             onSaved={refreshLocal}
             showAlert={showAlert}
+          />
+        )}
+
+        {tab === "more" && moreView === "expenses" && (
+          <SiteExpensesPanel
+            expenses={expenses}
+            machines={machines}
+            siteId={activeSite?.id}
+            cycleStartDay={getSettingsForSite(activeSite?.id).billing_cycle_start_day}
+            scopeLabel={activeSite?.name || "This site"}
           />
         )}
 

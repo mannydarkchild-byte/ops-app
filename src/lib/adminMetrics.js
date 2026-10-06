@@ -1,5 +1,5 @@
 import { ISSUE, MAINTENANCE_STATUS, ROLES, SHIFT } from "./constants.js";
-import { getBillingPeriod, inPeriod, isLiveShift, money, shiftBillableValue } from "./utils.js";
+import { getBillingPeriod, inPeriod, isLiveShift, money, onSiteRecord, shiftBillableValue } from "./utils.js";
 import { formatDurationMinutes, shiftBillableHours } from "./shiftMetrics.js";
 
 export function computeAdminDashboard({
@@ -19,14 +19,15 @@ export function computeAdminDashboard({
   siteId = null,
 }, period = getBillingPeriod()) {
   const onSite = (row) => !siteId || row.site_id === siteId;
+  const belongs = (row) => onSiteRecord(row, siteId, machines);
   profiles = profiles.filter(onSite);
   machines = machines.filter(onSite);
-  shifts = shifts.filter(onSite);
-  events = events.filter(onSite);
-  issues = issues.filter(onSite);
-  expenses = expenses.filter(onSite);
-  fuelLogs = fuelLogs.filter(onSite);
-  inspections = inspections.filter(onSite);
+  shifts = shifts.filter(belongs);
+  events = events.filter(belongs);
+  issues = issues.filter(belongs);
+  expenses = expenses.filter(belongs);
+  fuelLogs = fuelLogs.filter(belongs);
+  inspections = inspections.filter(belongs);
   maintenanceJobs = maintenanceJobs.filter(onSite);
   breakdowns = breakdowns.filter(onSite);
   workSessions = workSessions.filter(onSite);
@@ -51,7 +52,7 @@ export function computeAdminDashboard({
   const criticalIssues = openIssues.filter((i) => i.priority === "Critical");
   const waitingParts = openIssues.filter((i) => i.status === ISSUE.WAITING_FOR_PARTS);
 
-  const periodExpenses = expenses.filter((e) => inPeriod(e.date, period));
+  const periodExpenses = expenses.filter((e) => inPeriod(e.date || e.created_at, period));
   const periodFuel = fuelLogs.filter((f) => inPeriod(f.timestamp, period));
 
   const machineHours = cycleShifts.reduce((s, r) => s + Number(r.hours_worked || 0), 0);
@@ -109,6 +110,7 @@ export function computeAdminDashboard({
       cycleShiftCount: cycleShifts.length,
       revenue,
       expenseTotal,
+      earlierExpenses: Math.max(0, expenses.length - periodExpenses.length),
       net: revenue - expenseTotal,
       litres,
       runtimeMin,

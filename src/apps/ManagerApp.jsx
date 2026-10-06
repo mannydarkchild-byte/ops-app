@@ -14,7 +14,7 @@ import { AlertModal } from "../components/ui/Modal.jsx";
 import { ISSUE, SHIFT } from "../lib/constants.js";
 import { ownerForStopReason } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
-import { formatDurationMinutes, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
+import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import {
   fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
@@ -147,7 +147,7 @@ export function ManagerApp() {
     const litres = warriorFuel.reduce((sum, f) => sum + Number(f.litres || 0), 0);
 
     const warriorExpenses = expenses.filter(
-      (e) => e.machine_id === primaryMachine?.id && inPeriod(e.date, billingPeriod)
+      (e) => e.machine_id === primaryMachine?.id && inPeriod(e.date || e.created_at, billingPeriod)
     );
     const expenseTotal = warriorExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
@@ -285,7 +285,7 @@ export function ManagerApp() {
   const filteredExpenses = useMemo(
     () => expenses
       .filter((e) => e.machine_id === primaryMachine?.id)
-      .filter((e) => !expensePeriod || inPeriod(e.date, expensePeriod))
+      .filter((e) => !expensePeriod || inPeriod(e.date || e.created_at, expensePeriod))
       .sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at)),
     [expenses, primaryMachine?.id, expensePeriod]
   );
@@ -838,7 +838,7 @@ function WarriorStatusCard({ fleet, workSessions = [], profiles = [] }) {
         <div>
           <p className="font-logo text-sm text-[#EF4444]">{openStop.reason}</p>
           <p className="text-sm text-[#F2F0EA]/70 mt-1">
-            {Math.floor(downtimeSeconds / 60)} min · {openStop.operator_name}
+            {formatDurationSeconds(downtimeSeconds)} · {openStop.operator_name}
           </p>
         </div>
       )}

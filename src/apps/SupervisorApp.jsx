@@ -14,9 +14,9 @@ import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 
 import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
-import { formatDurationMinutes, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
+import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 
-import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
+import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, onSiteRecord, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
 
 import { formatSyncErrorMessage } from "../lib/labels.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
@@ -27,6 +27,7 @@ import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
+import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
 
 import * as wf from "../services/workflows.js";
 
@@ -107,6 +108,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
   const [showPulse, setShowPulse] = useState(false);
+  const [showExpenses, setShowExpenses] = useState(false);
   const [closeShift, setCloseShift] = useState(null);
   const [closeMeter, setCloseMeter] = useState("");
   const [closeBusy, setCloseBusy] = useState(false);
@@ -361,11 +363,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     () => shifts.filter(
 
-      (s) => s.site_id === user?.site_id && inPeriod(s.started_at, billingPeriod)
+      (s) => onSiteRecord(s, user?.site_id, machines) && inPeriod(s.started_at, billingPeriod)
 
     ),
 
-    [shifts, user?.site_id, billingPeriod]
+    [shifts, user?.site_id, machines, billingPeriod]
 
   );
 
@@ -379,13 +381,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     const revenue = dashboardShifts.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
 
-    const litres = (fuelLogs || []).filter((f) => f.site_id === user?.site_id && inPeriod(f.timestamp, billingPeriod))
+    const litres = (fuelLogs || []).filter((f) => onSiteRecord(f, user?.site_id, machines) && inPeriod(f.timestamp, billingPeriod))
 
       .reduce((sum, f) => sum + Number(f.litres || 0), 0);
 
-    const expenseTotal = (expenses || []).filter((e) => e.site_id === user?.site_id && inPeriod(e.date, billingPeriod))
+    const siteExpenses = (expenses || []).filter((e) => onSiteRecord(e, user?.site_id, machines));
 
-      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const cycleExpenses = siteExpenses.filter((e) => inPeriod(e.date || e.created_at, billingPeriod));
+
+    const expenseTotal = cycleExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
     return {
 
@@ -398,6 +402,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
       litres,
 
       expenseTotal,
+
+      earlierExpenses: Math.max(0, siteExpenses.length - cycleExpenses.length),
 
       runtimeMin: dashboardShifts.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0),
 
@@ -447,9 +453,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const reportContext = useMemo(() => ({
 
-    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings, siteSettings: siteConfig, profiles, workSessions,
+    events, inspections, fuelLogs, expenses, site: activeSite, shifts, hourReadings, siteSettings: siteConfig, profiles, workSessions,
 
-  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings, siteConfig, profiles, workSessions]);
+  }), [events, inspections, fuelLogs, expenses, activeSite, shifts, hourReadings, siteConfig, profiles, workSessions]);
 
 
 
@@ -813,7 +819,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
             <Kpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
             <Kpi label={HOUR_LABELS.machine} value={`${dashboardStats.machineHours.toFixed(1)}h`} sub={HOUR_LABELS.machineHint} color="#22C55E" />
             <Kpi label={HOUR_LABELS.revenue} value={money(dashboardStats.revenue)} sub={HOUR_LABELS.revenueHint} color="#F5C518" />
-            <Kpi label={HOUR_LABELS.expenses} value={money(dashboardStats.expenseTotal)} sub={HOUR_LABELS.expensesHint} color="#F5C518" />
+            <Kpi label={HOUR_LABELS.expenses} value={money(dashboardStats.expenseTotal)} sub={dashboardStats.earlierExpenses > 0 ? `${dashboardStats.earlierExpenses} earlier · open Expenses` : HOUR_LABELS.expensesHint} color="#F5C518" />
             <Kpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : HOUR_LABELS.expensesHint} color="#F5C518" />
             <Kpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub={`${HOUR_LABELS.runtime} ${formatDurationMinutes(dashboardStats.runtimeMin)}`} color="#EF4444" />
             </div>
@@ -1089,7 +1095,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
                 {(r.runtime_minutes > 0 || r.downtime_minutes > 0) && (
 
-                  <p className="text-[10px] text-[#F2F0EA]/35">Runtime {Math.round(r.runtime_minutes || 0)}m · Downtime {Math.round(r.downtime_minutes || 0)}m</p>
+                  <p className="text-[10px] text-[#F2F0EA]/35">Runtime {formatDurationMinutes(r.runtime_minutes || 0)} · Downtime {formatDurationMinutes(r.downtime_minutes || 0)}</p>
 
                 )}
 
@@ -1132,10 +1138,26 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
           </div>
         )}
 
-        {tab === "more" && !showPulse && (
+        {tab === "more" && showExpenses && (
+          <div className="space-y-3">
+            <button type="button" onClick={() => setShowExpenses(false)} className="font-ui text-sm text-[#F5C518]">Back</button>
+            <SiteExpensesPanel
+              expenses={expenses}
+              machines={siteMachines}
+              siteId={user?.site_id}
+              cycleStartDay={siteConfig.billing_cycle_start_day}
+              scopeLabel={activeSite?.name || "This site"}
+            />
+          </div>
+        )}
+
+        {tab === "more" && !showPulse && !showExpenses && (
           <div className="space-y-4">
             <MoreMenu
-              items={[{ label: "Machine pulse", onClick: () => setShowPulse(true) }]}
+              items={[
+                { label: "Machine pulse", onClick: () => setShowPulse(true) },
+                { label: "Expenses", onClick: () => setShowExpenses(true) },
+              ]}
             />
             <TimesheetPanel
               rows={timesheetRows}
@@ -1565,7 +1587,7 @@ function FleetMachineCard({ fleet, onCloseShift, workSessions = [], profiles = [
 
           <p className="text-sm text-[#F2F0EA]/70 mt-1">
 
-            {Math.floor(downtimeSeconds / 60)} min · {openStop.operator_name}
+            {formatDurationSeconds(downtimeSeconds)} · {openStop.operator_name}
 
           </p>
 

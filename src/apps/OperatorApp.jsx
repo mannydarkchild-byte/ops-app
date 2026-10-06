@@ -21,7 +21,7 @@ import { prestartItemsForMachine } from "../lib/siteConfig.js";
 import { rememberUsualOperator, usualOperatorName } from "../lib/shiftPeople.js";
 import { OperatorMachineBoard } from "../components/OperatorMachineBoard.jsx";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
-import { shiftDowntimeMinutes, formatDurationSeconds, shiftBillableHours } from "../lib/shiftMetrics.js";
+import { shiftDowntimeMinutes, formatDurationMinutes, formatDurationSeconds, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { SupervisorPicker, SupervisorWhatsAppButtons } from "../components/SupervisorPicker.jsx";
 import * as wf from "../services/workflows.js";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
@@ -624,7 +624,7 @@ export function OperatorApp() {
             </p>
             {(submittedShift.runtime_minutes > 0 || submittedShift.downtime_minutes > 0) && (
               <p className="font-body text-xs text-[#F2F0EA]/45 mb-1">
-                Runtime {Math.round(submittedShift.runtime_minutes || 0)}m · Downtime {Math.round(submittedShift.downtime_minutes || 0)}m
+                Runtime {formatDurationMinutes(submittedShift.runtime_minutes || 0)} · Downtime {formatDurationMinutes(submittedShift.downtime_minutes || 0)}
               </p>
             )}
             <p className="font-body text-sm text-[#F2F0EA]/60 mb-2">
@@ -800,7 +800,7 @@ export function OperatorApp() {
                     </div>
                   </div>
                   {shiftDowntimeMin > 0 && (
-                    <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {Math.round(shiftDowntimeMin)} min</p>
+                    <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {formatDurationMinutes(shiftDowntimeMin)}</p>
                   )}
                   <button type="button" onClick={() => setPickedMachineId("")} className="w-full mb-2 py-3 rounded-xl border border-[#F5C518] text-[#F5C518] font-logo">
                     Choose another machine
@@ -817,7 +817,7 @@ export function OperatorApp() {
                 <p className="operator-group-label font-logo">Machine stopped</p>
                 <p className="operator-group-explain">You are still on site. Restart the machine, or finish the shift.</p>
                 <FormSection title="Machine stopped" description={`Reason: ${sessionDowntime.reason}.`} accent="#B91C1C">
-                  <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{Math.floor(downtimeSeconds / 60)} min down</p>
+                  <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{formatDurationSeconds(downtimeSeconds)} down</p>
                   <button type="button" onClick={() => setPickedMachineId("")} className="w-full mb-2 py-3 rounded-xl border border-[#F5C518] text-[#F5C518] font-logo">
                     Choose another machine
                   </button>

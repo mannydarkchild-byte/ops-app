@@ -1,5 +1,5 @@
 import { ISSUE, SHIFT } from "./constants.js";
-import { fmtDate, money } from "./utils.js";
+import { fmtDate, money, onSiteRecord, whenMs } from "./utils.js";
 import { shiftBillableHours } from "./shiftMetrics.js";
 
 const TYPE_FILTERS = {
@@ -28,8 +28,8 @@ export function buildAdminActivityLog({
   type = "all",
 } = {}) {
   const cutoff = Date.now() - days * 86400000;
-  const inWindow = (iso) => iso && new Date(iso).getTime() >= cutoff;
-  const siteMatch = (rowSiteId) => siteId === "all" || rowSiteId === siteId;
+  const inWindow = (iso) => !days || (Number.isFinite(whenMs(iso)) && whenMs(iso) >= cutoff);
+  const siteMatch = (row) => siteId === "all" || onSiteRecord(row, siteId, machines);
   const machineName = (id) => {
     if (!id) return "Site-wide";
     return machines.find((m) => m.id === id)?.name || id;
@@ -39,7 +39,7 @@ export function buildAdminActivityLog({
   const items = [];
 
   for (const ws of workSessions) {
-    if (!siteMatch(ws.site_id) || !inWindow(ws.clock_in)) continue;
+    if (!siteMatch(ws) || !inWindow(ws.clock_in)) continue;
     items.push({
       id: `ws-in-${ws.id}`,
       at: ws.clock_in,
@@ -67,7 +67,7 @@ export function buildAdminActivityLog({
   }
 
   for (const e of events) {
-    if (!siteMatch(e.site_id) || !inWindow(e.timestamp || e.stopped_at || e.created_at)) continue;
+    if (!siteMatch(e) || !inWindow(e.timestamp || e.stopped_at || e.created_at)) continue;
     const at = e.timestamp || e.stopped_at || e.created_at;
     const kind = e.type === "STOP" || e.type === "MACHINE_STARTED" || e.type === "MACHINE_ENDED" ? "shift" : "clock";
     items.push({
@@ -85,7 +85,7 @@ export function buildAdminActivityLog({
 
   for (const s of shifts) {
     const at = s.verified_at || s.ended_at;
-    if (!siteMatch(s.site_id) || !at || !inWindow(at)) continue;
+    if (!siteMatch(s) || !at || !inWindow(at)) continue;
     if (s.shift_status !== SHIFT.VERIFIED) continue;
     items.push({
       id: `sh-${s.id}`,
@@ -101,7 +101,7 @@ export function buildAdminActivityLog({
   }
 
   for (const f of fuelLogs) {
-    if (!siteMatch(f.site_id) || !inWindow(f.timestamp || f.created_at)) continue;
+    if (!siteMatch(f) || !inWindow(f.timestamp || f.created_at)) continue;
     items.push({
       id: `fuel-${f.id}`,
       at: f.timestamp || f.created_at,
@@ -116,7 +116,7 @@ export function buildAdminActivityLog({
   }
 
   for (const i of issues) {
-    if (!siteMatch(i.site_id) || !inWindow(i.created_at)) continue;
+    if (!siteMatch(i) || !inWindow(i.created_at)) continue;
     items.push({
       id: `iss-${i.id}`,
       at: i.created_at,
@@ -132,7 +132,7 @@ export function buildAdminActivityLog({
 
   const inspectionBatches = new Map();
   for (const ins of inspections) {
-    if (!siteMatch(ins.site_id) || !inWindow(ins.timestamp || ins.created_at)) continue;
+    if (!siteMatch(ins) || !inWindow(ins.timestamp || ins.created_at)) continue;
     const key = ins.inspection_id || ins.id;
     if (!inspectionBatches.has(key)) {
       inspectionBatches.set(key, ins);
@@ -153,7 +153,7 @@ export function buildAdminActivityLog({
   }
 
   for (const ex of expenses) {
-    if (!siteMatch(ex.site_id) || !inWindow(ex.date || ex.created_at)) continue;
+    if (!siteMatch(ex) || !inWindow(ex.date || ex.created_at)) continue;
     items.push({
       id: `exp-${ex.id}`,
       at: ex.date || ex.created_at,

@@ -4,6 +4,7 @@ import { buildAdminActivityLog, formatActivityRow } from "../../lib/adminActivit
 const PERIODS = [
   { id: 7, label: "Last 7 days" },
   { id: 30, label: "Last 30 days" },
+  { id: 0, label: "All" },
 ];
 
 const TYPES = [

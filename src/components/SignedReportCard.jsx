@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { fmtDateShort } from "../lib/utils.js";
-import { shiftBillableHours } from "../lib/shiftMetrics.js";
+import { formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
 
 export function SignedReportCard({ shift, machineName, events, siteSettings, onViewReport, onDownloadReport, onShareReport }) {
   const [busy, setBusy] = useState(false);
@@ -53,7 +53,7 @@ export function SignedReportCard({ shift, machineName, events, siteSettings, onV
       <div className="flex flex-wrap gap-x-3 gap-y-1 mb-4 text-[10px] text-[#F2F0EA]/50">
         <span>Machine hours {Number(shift.hours_worked || 0).toFixed(1)}h · Meter {shift.start_hour_meter}h → {shift.end_hour_meter}h</span>
         {(shift.runtime_minutes > 0 || shift.downtime_minutes > 0) && (
-          <span>Runtime {Math.round(shift.runtime_minutes || 0)}m · Downtime {Math.round(shift.downtime_minutes || 0)}m</span>
+          <span>Runtime {formatDurationMinutes(shift.runtime_minutes || 0)} · Downtime {formatDurationMinutes(shift.downtime_minutes || 0)}</span>
         )}
       </div>
 
