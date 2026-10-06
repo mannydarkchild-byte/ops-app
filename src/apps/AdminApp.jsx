@@ -309,10 +309,6 @@ export function AdminApp() {
                 ))}
               </div>
             </section>
-
-            <button type="button" onClick={() => syncNow()} className="w-full bg-[#00A4A6] text-white py-3 rounded-xl font-logo font-bold text-xs">
-              🔄 SYNC ALL DATA
-            </button>
           </div>
         )}
 
@@ -432,13 +428,9 @@ export function AdminApp() {
                   </div>
 
                   <select value={p.role || ROLES.OPERATOR} onChange={(e) => handleRoleChange(p.id, e.target.value)}
-
                     disabled={p.active === false}
-
-                    className="bg-[#0A0A0A] border border-[#2A2A2A] p-1 rounded font-logo text-[10px]">
-
+                    className="ops-select max-w-[10rem] !min-h-11 !text-sm">
                     {MANAGEABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-
                   </select>
 
                 </div>
@@ -448,7 +440,7 @@ export function AdminApp() {
                     <select
                       defaultValue={p.site_id || ""}
                       onChange={(e) => updateProfileFields(p.id, { site_id: e.target.value || null }).then(() => refreshLocal())}
-                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]"
+                      className="ops-select !min-h-11 !text-sm"
                     >
                       <option value="">No site</option>
                       {sites.map((s) => (
@@ -459,7 +451,7 @@ export function AdminApp() {
                       <select
                         defaultValue={p.machine_id || ""}
                         onChange={(e) => updateProfileFields(p.id, { machine_id: e.target.value || null }).then(() => refreshLocal())}
-                        className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]"
+                        className="ops-select !min-h-11 !text-sm"
                       >
                         <option value="">No default machine</option>
                         {machines.filter((m) => m.site_id === p.site_id).map((m) => (
@@ -487,7 +479,7 @@ export function AdminApp() {
 
                       onChange={(e) => updateProfileFields(p.id, { shift_band: e.target.value }).then(() => refreshLocal())}
 
-                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]">
+                      className="ops-select !min-h-11 !text-sm">
 
                       <option value="day">Day shift</option>
 

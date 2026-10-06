@@ -111,7 +111,7 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
             type="button"
             onClick={remove}
             disabled={!!busy}
-            className="py-2 font-ui text-sm text-[#EF4444] disabled:opacity-40"
+            className="min-h-11 px-4 rounded-xl border border-[#EF4444]/40 text-[#EF4444] font-ui text-sm font-semibold disabled:opacity-40"
           >
             {busy === "delete" ? "Removing…" : "Delete"}
           </button>

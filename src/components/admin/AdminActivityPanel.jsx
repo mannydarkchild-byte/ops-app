@@ -50,7 +50,7 @@ export function AdminActivityPanel({
         <select
           value={siteId}
           onChange={(e) => setSiteId(e.target.value)}
-          className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl font-logo text-xs text-[#F2F0EA]"
+          className="ops-select"
         >
           <option value="all">All sites</option>
           {sites.map((s) => (
@@ -60,7 +60,7 @@ export function AdminActivityPanel({
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
-          className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl font-logo text-xs text-[#F2F0EA]"
+          className="ops-select"
         >
           {TYPES.map((t) => (
             <option key={t.id} value={t.id}>{t.label}</option>

@@ -30,6 +30,14 @@ import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { OperatorReportsModal, reportBucket } from "../components/OperatorReportsModal.jsx";
 import { OperatorWelcome } from "../components/OperatorWelcome.jsx";
 import { OperatorShiftTools } from "../components/OperatorShiftTools.jsx";
+import { OperatorQuickTools } from "../components/OperatorQuickTools.jsx";
+import { MoreMenu } from "../components/MoreMenu.jsx";
+
+const OPERATOR_TABS = [
+  { id: "today", label: "Today" },
+  { id: "messages", label: "Messages" },
+  { id: "more", label: "More" },
+];
 
 export function OperatorApp() {
   const {
@@ -81,6 +89,7 @@ export function OperatorApp() {
       return false;
     }
   });
+  const [navTab, setNavTab] = useState("today");
 
   const [alert, setAlert] = useState({ isOpen: false });
   const [actionBusy, setActionBusy] = useState("");
@@ -184,13 +193,13 @@ export function OperatorApp() {
     [shifts, user?.id]
   );
 
-  const operatorMenu = useMemo(() => [
-    { label: "Pulse", onClick: () => setSheet("pulse") },
-    { label: "Reports", onClick: () => setSheet("reports"), badge: reportsAttention },
-    { label: "Inbox", onClick: () => setSheet("inbox"), badge: inboxCount },
-    { label: "Log diesel", onClick: () => setShowFuel(true) },
-    { label: "Report a problem", onClick: () => setShowReportIssue(true) },
-  ], [reportsAttention, inboxCount]);
+  const operatorTabs = useMemo(
+    () => OPERATOR_TABS.map((t) => ({
+      ...t,
+      badge: t.id === "messages" ? inboxCount : t.id === "more" ? reportsAttention : 0,
+    })),
+    [inboxCount, reportsAttention]
+  );
 
   const leftoverOpen = useMemo(
     () => (shifts || []).filter((s) =>
@@ -499,7 +508,7 @@ export function OperatorApp() {
   };
 
   const machineStatus = sessionShift && sessionDowntime ? "stopped" : sessionShift ? "running" : null;
-  const machineFab = submittedShift || showWelcome || sheet || correctionShift
+  const machineFab = navTab !== "today" || submittedShift || showWelcome || sheet || correctionShift
     ? null
     : sessionShift && sessionDowntime
       ? "restart"
@@ -515,16 +524,21 @@ export function OperatorApp() {
       showSite={false}
       maxWidth="max-w-2xl"
       outdoor
-      menuItems={operatorMenu}
+      tabs={operatorTabs}
+      activeTab={navTab}
+      onTabChange={(id) => {
+        setNavTab(id);
+        setSheet(null);
+      }}
       alert={<AlertModal {...alert} confirmText="OK" />}
       banner={
-        correctionShift && !submittedShift ? (
+        navTab === "today" && correctionShift && !submittedShift ? (
           <div className="bg-[#F97316]/15 border-b border-[#F97316]/40 px-4 py-3">
             <p className="font-logo text-sm text-[#F97316] text-center">
               Supervisor sent a shift back — fix it below, or clock in to start a new one.
             </p>
           </div>
-        ) : blocked && !submittedShift && !correctionShift ? (
+        ) : navTab === "today" && blocked && !submittedShift && !correctionShift ? (
           <div className="bg-[#EF4444]/10 border-b border-[#EF4444]/30 px-4 py-2.5">
             <p className="font-logo text-sm text-[#EF4444] text-center">
               {blockedByOther.operator_name} is running {workMachine?.name}
@@ -533,6 +547,42 @@ export function OperatorApp() {
         ) : null
       }
     >
+        {navTab === "messages" && (
+          <div className="space-y-3">
+            <p className="font-ui text-base font-semibold text-ops-text">Messages</p>
+            <p className="font-body text-sm text-ops-muted">Problems you reported and replies from the team.</p>
+            <IssueInboxModal
+              variant="inline"
+              scope="mine"
+              user={user}
+              issues={issues.filter((i) => i.reporter_id === user?.id)}
+              issueMessages={issueMessages}
+              onDone={refreshLocal}
+              machines={machines}
+            />
+          </div>
+        )}
+
+        {navTab === "more" && (
+          <div className="space-y-4">
+            <MoreMenu
+              items={[
+                { label: "My reports", onClick: () => setSheet("reports") },
+                { label: "Log diesel", onClick: () => setShowFuel(true) },
+                { label: "Report a problem", onClick: () => setShowReportIssue(true) },
+                { label: "Machine pulse", onClick: () => setSheet("pulse") },
+              ]}
+            />
+            {reportsAttention > 0 && (
+              <p className="font-body text-sm text-ops-gold">
+                {reportsAttention} report{reportsAttention !== 1 ? "s" : ""} need your attention — open My reports.
+              </p>
+            )}
+          </div>
+        )}
+
+        {navTab === "today" && (
+          <>
         {workSession && (
           <div className="operator-time-bar mb-4">
             <div className="min-w-0">
@@ -553,7 +603,7 @@ export function OperatorApp() {
             siteName={activeSite?.name}
             reportsAttention={reportsAttention}
             onReady={startDay}
-            onMyReports={() => setSheet("reports")}
+            onMyReports={() => { setNavTab("more"); setSheet("reports"); }}
           />
         )}
 
@@ -565,9 +615,9 @@ export function OperatorApp() {
           <button
             type="button"
             onClick={() => setPickedMachineId("")}
-            className="mb-4 font-ui text-sm text-[#F5C518] underline underline-offset-2"
+            className="ops-chip ops-chip-gold mb-4"
           >
-            All machines
+            ← Machines
           </button>
         )}
 
@@ -652,7 +702,7 @@ export function OperatorApp() {
                 refreshLocal();
               }}
             />
-            <button type="button" onClick={dismissSubmitted} className="w-full py-2 font-ui text-sm text-ops-muted">
+            <button type="button" onClick={dismissSubmitted} className="w-full min-h-12 rounded-xl border border-ops-border bg-ops-card font-ui text-sm font-semibold text-ops-text">
               Done
             </button>
           </div>
@@ -790,11 +840,11 @@ export function OperatorApp() {
                 <p className="operator-group-explain">Leave it running and choose another machine, or finish this shift when the day on this machine is done.</p>
                 <FormSection title="Machine running" description="Your time is already running at the top." accent="#15803D">
                   <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
+                    <div className="ops-stat">
                       <p className="font-ui text-xs font-medium text-ops-muted">Opening meter</p>
                       <p className="font-ui text-4xl font-bold text-ops-gold mt-1">{openingMeter}h</p>
                     </div>
-                    <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
+                    <div className="ops-stat">
                       <p className="font-ui text-xs font-medium text-ops-muted">Time running</p>
                       <p className="font-ui text-4xl font-bold text-ops-green mt-1">{formatDurationSeconds(runningSeconds)}</p>
                     </div>
@@ -802,12 +852,16 @@ export function OperatorApp() {
                   {shiftDowntimeMin > 0 && (
                     <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {formatDurationMinutes(shiftDowntimeMin)}</p>
                   )}
-                  <button type="button" onClick={() => setPickedMachineId("")} className="w-full mb-2 py-3 rounded-xl border border-[#F5C518] text-[#F5C518] font-logo">
-                    Choose another machine
-                  </button>
-                  <button type="button" onClick={openEndDay} className="w-full py-2 font-ui text-sm text-ops-muted underline underline-offset-2">
+                  <Button type="button" variant="primary" size="lg" className="w-full mb-2" onClick={openEndDay}>
                     Finish this shift
-                  </button>
+                  </Button>
+                  <Button type="button" variant="secondary" size="md" className="w-full" onClick={() => setPickedMachineId("")}>
+                    Choose another machine
+                  </Button>
+                  <OperatorQuickTools
+                    onReport={() => setShowReportIssue(true)}
+                    onFuel={() => setShowFuel(true)}
+                  />
                 </FormSection>
               </div>
             )}
@@ -818,17 +872,23 @@ export function OperatorApp() {
                 <p className="operator-group-explain">You are still on site. Restart the machine, or finish the shift.</p>
                 <FormSection title="Machine stopped" description={`Reason: ${sessionDowntime.reason}.`} accent="#B91C1C">
                   <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{formatDurationSeconds(downtimeSeconds)} down</p>
-                  <button type="button" onClick={() => setPickedMachineId("")} className="w-full mb-2 py-3 rounded-xl border border-[#F5C518] text-[#F5C518] font-logo">
-                    Choose another machine
-                  </button>
-                  <button type="button" onClick={openEndDay} className="w-full py-2 font-ui text-sm text-ops-muted underline underline-offset-2">
+                  <Button type="button" variant="primary" size="lg" className="w-full mb-2" onClick={openEndDay}>
                     Finish this shift
-                  </button>
+                  </Button>
+                  <Button type="button" variant="secondary" size="md" className="w-full" onClick={() => setPickedMachineId("")}>
+                    Choose another machine
+                  </Button>
+                  <OperatorQuickTools
+                    onReport={() => setShowReportIssue(true)}
+                    onFuel={() => setShowFuel(true)}
+                  />
                 </FormSection>
               </div>
             )}
 
           </div>
+        )}
+          </>
         )}
 
       {sheet === "pulse" && <ProductivityPulseScreen onClose={() => setSheet(null)} />}
@@ -916,7 +976,7 @@ export function OperatorApp() {
       {showStop && (
         <Modal title="Stop machine" color="red" onClose={() => setShowStop(false)}>
           <FormSection step={1} title="Stop reason" description="Why is the machine stopping? This points downtime to Darkchild or Berlington." accent="#EF4444">
-            <select value={stopReason} onChange={(e) => setStopReason(e.target.value)} className="w-full bg-[#0A0A0A] border p-4 rounded-xl text-[#F2F0EA] text-lg min-h-[60px]">
+            <select value={stopReason} onChange={(e) => setStopReason(e.target.value)} className="ops-select text-lg !min-h-[60px]">
               <option value="">Select reason…</option>
               {stopGroups.map((group) => (
                 <optgroup key={group.owner} label={group.hint}>

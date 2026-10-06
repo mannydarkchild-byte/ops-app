@@ -67,26 +67,6 @@ export function OfflineBanner() {
   );
 }
 
-export function SyncDot() {
-  const { syncState, syncNow } = useOps();
-  const meta = SYNC_META[syncState.status] || SYNC_META.idle;
-  return (
-    <button
-      type="button"
-      onClick={() => syncNow()}
-      title={
-        syncState.errors?.length
-          ? `${syncState.errors[0]} — tap to retry`
-          : syncState.pending
-            ? `${syncState.pending} not uploaded — tap to update`
-            : `${meta.label} — tap to update`
-      }
-      className={`w-2.5 h-2.5 rounded-full shrink-0 ${meta.dot}`}
-      aria-label="Sync status"
-    />
-  );
-}
-
 function SyncButton({ roomy = false }) {
   const { syncState, syncNow } = useOps();
   const meta = SYNC_META[syncState.status] || SYNC_META.idle;
@@ -323,8 +303,11 @@ function TabGlyph({ id }) {
   if (id === "reports" || id === "inspections") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M7 3h8l4 4v14H7z" /><path d="M15 3v4h4M10 12h6M10 16h6" /></svg>;
   }
-  if (id === "inbox" || id === "issues") {
+  if (id === "inbox" || id === "issues" || id === "messages") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 6h16v12H4z" /><path d="m4 8 8 6 8-6" /></svg>;
+  }
+  if (id === "today") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 11.5 12 4l8 7.5V20H4z" /></svg>;
   }
   if (id === "more") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><circle cx="6" cy="12" r="1.2" fill="currentColor" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /><circle cx="18" cy="12" r="1.2" fill="currentColor" /></svg>;

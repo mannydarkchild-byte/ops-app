@@ -213,11 +213,27 @@ input[type="number"] {
 
 /* Remove iOS default input styling — do NOT reset button border-radius (breaks Tailwind rounded-*) */
 input,
-textarea,
-select {
+textarea {
   -webkit-appearance: none;
   appearance: none;
   border-radius: 0;
+}
+
+/* Selects keep appearance:none but always show a chevron so they read as dropdowns */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0.75rem;
+  background-color: var(--ops-inset, #0A0A0A);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23F5C518' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
+  min-height: 48px;
+  font-size: 16px;
+  line-height: 1.35;
+  cursor: pointer;
 }
 
 button {
@@ -229,6 +245,151 @@ input:focus,
 textarea:focus,
 select:focus {
   outline: none;
+}
+
+html.theme-light select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238A5A00' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+/* Preferred select class — readable, glove-friendly */
+.ops-select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.75rem 2.5rem 0.75rem 0.875rem;
+  border: 1px solid var(--ops-border);
+  border-radius: 0.75rem;
+  background-color: var(--ops-inset, #0A0A0A);
+  color: var(--ops-text);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+/* Filter / attention chips — real tap targets */
+.ops-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 40px;
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--ops-border);
+  background: var(--ops-card);
+  color: var(--ops-text);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.ops-chip-on,
+.ops-chip[aria-pressed="true"],
+.ops-chip.is-on {
+  background: #F5C518;
+  border-color: #F5C518;
+  color: #0A0A0A;
+}
+
+.ops-chip-attention {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.ops-chip-gold {
+  color: #F5C518;
+  border-color: rgba(245, 197, 24, 0.45);
+}
+
+.ops-chip-warn {
+  color: #F97316;
+  border-color: rgba(249, 115, 22, 0.45);
+}
+
+.ops-chip-danger {
+  color: #EF4444;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+/* Tappable list / picker rows */
+.ops-list-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+  min-height: 64px;
+  padding: 0.875rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--ops-border);
+  background: var(--ops-card);
+  color: var(--ops-text);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.ops-list-row:active {
+  border-color: #F5C518;
+}
+
+.ops-list-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ops-list-row-title {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.ops-list-row-meta {
+  margin-top: 0.2rem;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ops-muted);
+}
+
+.ops-list-row-chevron {
+  flex-shrink: 0;
+  color: #F5C518;
+  font-size: 1.35rem;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.ops-list-row-blocked .ops-list-row-meta {
+  color: #EF4444;
+}
+
+.ops-list-row-ready .ops-list-row-meta {
+  color: #F5C518;
+}
+
+.ops-list-row-running .ops-list-row-meta {
+  color: #22C55E;
+}
+
+.ops-list-row-stopped .ops-list-row-meta {
+  color: #EF4444;
+}
+
+/* Display-only metric tiles — quieter than buttons */
+.ops-stat {
+  border-radius: 0.75rem;
+  border: 1px solid var(--ops-border);
+  background: var(--ops-elevated, #0A0A0A);
+  padding: 1rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+html.theme-light .ops-list-row-chevron {
+  color: #8A5A00;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -501,20 +662,21 @@ button,
 
 .operator-clock-out {
   flex-shrink: 0;
-  min-height: 2.25rem;
-  padding: 0 0.25rem;
+  min-height: 44px;
+  padding: 0 0.85rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  border: 0;
-  background: transparent;
-  color: var(--ops-muted);
+  border: 1px solid var(--ops-border);
+  border-radius: 0.75rem;
+  background: var(--ops-card);
+  color: var(--ops-text);
   font-size: 0.875rem;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 
 .operator-group-label {

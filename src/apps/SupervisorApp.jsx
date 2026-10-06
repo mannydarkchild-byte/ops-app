@@ -16,7 +16,7 @@ import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 
-import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, onSiteRecord, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
+import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, onSiteRecord, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
 
 import { formatSyncErrorMessage } from "../lib/labels.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
@@ -28,6 +28,7 @@ import { openShiftDailyReport, printTimesheetReport } from "../services/reports.
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
+import { Chip } from "../components/ui/Chip.jsx";
 
 import * as wf from "../services/workflows.js";
 
@@ -45,7 +46,7 @@ const TABS = [
   { id: "live", label: "Live" },
   { id: "verify", label: "Sign off" },
   { id: "issues", label: "Problems" },
-  { id: "reports", label: "Reports" },
+  { id: "pulse", label: "Pulse" },
   { id: "more", label: "More" },
 ];
 
@@ -107,8 +108,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
-  const [showPulse, setShowPulse] = useState(false);
   const [showExpenses, setShowExpenses] = useState(false);
+  const [showReports, setShowReports] = useState(false);
   const [closeShift, setCloseShift] = useState(null);
   const [closeMeter, setCloseMeter] = useState("");
   const [closeBusy, setCloseBusy] = useState(false);
@@ -744,7 +745,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
       showSite={false}
       tabs={tabItems}
       activeTab={tab}
-      onTabChange={setTab}
+      onTabChange={(id) => {
+        setTab(id);
+        setShowExpenses(false);
+        setShowReports(false);
+      }}
       onSync={syncNow}
       maxWidth="max-w-2xl"
       leaveApp
@@ -753,47 +758,47 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
         {(myPendingVerify > 0 || criticalIssues > 0 || stoppedMachines > 0 || openShiftsToClose.length > 0) && (
 
-          <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-xl px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-xl px-3 py-3 mb-4 flex flex-wrap items-center gap-2">
 
-            <span className="font-logo text-sm text-[#EF4444]">Needs attention</span>
+            <span className="font-ui text-sm font-semibold text-[#EF4444]">Needs attention</span>
 
             {myPendingVerify > 0 && (
 
-              <button type="button" onClick={() => setTab("verify")} className="ops-chip font-logo text-sm text-[#F5C518] hover:underline">
+              <Chip tone="gold" onClick={() => setTab("verify")}>
 
                 {myPendingVerify} to sign off
 
-              </button>
+              </Chip>
 
             )}
 
             {criticalIssues > 0 && (
 
-              <button type="button" onClick={() => setTab("issues")} className="ops-chip font-logo text-sm text-[#EF4444] hover:underline">
+              <Chip tone="danger" onClick={() => setTab("issues")}>
 
                 {criticalIssues} critical issue{criticalIssues !== 1 ? "s" : ""}
 
-              </button>
+              </Chip>
 
             )}
 
             {openShiftsToClose.length > 0 && (
 
-              <button type="button" onClick={() => setTab("live")} className="ops-chip font-logo text-sm text-[#F5C518] hover:underline">
+              <Chip tone="gold" onClick={() => setTab("live")}>
 
                 {openShiftsToClose.length} open shift{openShiftsToClose.length !== 1 ? "s" : ""} to close
 
-              </button>
+              </Chip>
 
             )}
 
             {stoppedMachines > 0 && (
 
-              <button type="button" onClick={() => setTab("live")} className="ops-chip font-logo text-sm text-[#F97316] hover:underline">
+              <Chip tone="warn" onClick={() => setTab("live")}>
 
                 {stoppedMachines} machine{stoppedMachines !== 1 ? "s" : ""} stopped
 
-              </button>
+              </Chip>
 
             )}
 
@@ -812,56 +817,24 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
               sub="Clocked in or still running"
               color="#F5C518"
             />
-            <Kpi label="To sign off" value={String(myPendingVerify)} sub="Tap Sign Off" color="#22C55E" />
+            <Kpi
+              label="To sign off"
+              value={String(myPendingVerify)}
+              sub="Open Sign off"
+              color="#22C55E"
+              onClick={() => setTab("verify")}
+            />
             </div>
-            <p className="font-body text-xs text-[#F2F0EA]/50">This site · this cycle</p>
+            <p className="font-body text-xs text-[#F2F0EA]/50">This site · this cycle · open Reports in More for full totals</p>
             <div className="grid grid-cols-2 gap-3">
-            <Kpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
-            <Kpi label={HOUR_LABELS.machine} value={`${dashboardStats.machineHours.toFixed(1)}h`} sub={HOUR_LABELS.machineHint} color="#22C55E" />
-            <Kpi label={HOUR_LABELS.revenue} value={money(dashboardStats.revenue)} sub={HOUR_LABELS.revenueHint} color="#F5C518" />
-            <Kpi label={HOUR_LABELS.expenses} value={money(dashboardStats.expenseTotal)} sub={dashboardStats.earlierExpenses > 0 ? `${dashboardStats.earlierExpenses} earlier · open Expenses` : HOUR_LABELS.expensesHint} color="#F5C518" />
-            <Kpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : HOUR_LABELS.expensesHint} color="#F5C518" />
+            <Kpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts`} color="#22C55E" />
             <Kpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub={`${HOUR_LABELS.runtime} ${formatDurationMinutes(dashboardStats.runtimeMin)}`} color="#EF4444" />
             </div>
           </div>
         )}
 
-        {tab === "reports" && (
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <Kpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
-            <Kpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub={`${signedReports.length} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
-            <Kpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub={HOUR_LABELS.machineHint} color="#22C55E" />
-          </div>
-        )}
-
-
-
-        {tab === "reports" && (
-
-          <div className="flex flex-wrap gap-1 mb-4">
-
-            {REPORT_FILTERS.map((f) => (
-
-              <button
-
-                key={f.id}
-
-                type="button"
-
-                onClick={() => setReportFilter(f.id)}
-
-                className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${reportFilter === f.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}
-
-              >
-
-                {f.label}
-
-              </button>
-
-            ))}
-
-          </div>
-
+        {tab === "pulse" && (
+          <ProductivityPulseScreen embedded />
         )}
 
 
@@ -973,21 +946,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
             <div className="flex gap-1 mb-2">
 
-              <button type="button" onClick={() => setVerifyScope("mine")}
-
-                className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${verifyScope === "mine" ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}>
-
-                Assigned to me
-
-              </button>
-
-              <button type="button" onClick={() => setVerifyScope("all")}
-
-                className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${verifyScope === "all" ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}>
-
-                All site
-
-              </button>
+              <Chip selected={verifyScope === "mine"} onClick={() => setVerifyScope("mine")}>Assigned to me</Chip>
+              <Chip selected={verifyScope === "all"} onClick={() => setVerifyScope("all")}>All site</Chip>
 
             </div>
 
@@ -1131,16 +1091,41 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
 
-        {tab === "more" && showPulse && (
+        {tab === "more" && showReports && (
           <div className="space-y-3">
-            <button type="button" onClick={() => setShowPulse(false)} className="font-ui text-sm text-[#F5C518]">Back</button>
-            <ProductivityPulseScreen embedded />
+            <button type="button" onClick={() => setShowReports(false)} className="ops-chip ops-chip-gold">← Back</button>
+            <div className="grid grid-cols-2 gap-3">
+              <Kpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
+              <Kpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub={`${signedReports.length} shifts`} color="#22C55E" />
+              <Kpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub={HOUR_LABELS.machineHint} color="#22C55E" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {REPORT_FILTERS.map((f) => (
+                <Chip key={f.id} selected={reportFilter === f.id} onClick={() => setReportFilter(f.id)}>
+                  {f.label}
+                </Chip>
+              ))}
+            </div>
+            {signedReports.length === 0 ? (
+              <p className="text-sm text-[#F2F0EA]/40 text-center py-8">No signed reports for this period.</p>
+            ) : signedReports.map((r) => (
+              <SignedReportCard
+                key={r.id}
+                shift={r}
+                machineName={machineName(r.machine_id)}
+                events={events}
+                siteSettings={siteConfig}
+                onViewReport={handleViewReport}
+                onDownloadReport={handleDownloadReport}
+                onShareReport={handleShareReport}
+              />
+            ))}
           </div>
         )}
 
         {tab === "more" && showExpenses && (
           <div className="space-y-3">
-            <button type="button" onClick={() => setShowExpenses(false)} className="font-ui text-sm text-[#F5C518]">Back</button>
+            <button type="button" onClick={() => setShowExpenses(false)} className="ops-chip ops-chip-gold">← Back</button>
             <SiteExpensesPanel
               expenses={expenses}
               machines={siteMachines}
@@ -1151,11 +1136,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
           </div>
         )}
 
-        {tab === "more" && !showPulse && !showExpenses && (
+        {tab === "more" && !showReports && !showExpenses && (
           <div className="space-y-4">
             <MoreMenu
               items={[
-                { label: "Machine pulse", onClick: () => setShowPulse(true) },
+                { label: "Signed reports", onClick: () => setShowReports(true) },
                 { label: "Expenses", onClick: () => setShowExpenses(true) },
               ]}
             />
@@ -1176,42 +1161,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
             />
           </div>
         )}
-
-        {tab === "reports" && (
-          <div className="space-y-3">
-            {signedReports.length === 0 ? (
-
-              <p className="text-sm text-[#F2F0EA]/40 text-center py-8">No signed reports for this period.</p>
-
-            ) : signedReports.map((r) => (
-
-              <SignedReportCard
-
-                key={r.id}
-
-                shift={r}
-
-                machineName={machineName(r.machine_id)}
-
-                events={events}
-
-                siteSettings={siteConfig}
-
-                onViewReport={handleViewReport}
-
-                onDownloadReport={handleDownloadReport}
-
-                onShareReport={handleShareReport}
-
-              />
-
-            ))}
-
-          </div>
-
-        )}
-
-
 
         {tab === "issues" && (
 
@@ -1625,11 +1574,18 @@ function FleetMachineCard({ fleet, onCloseShift, workSessions = [], profiles = [
 
 
 
-function Kpi({ label, value, sub, color }) {
+function Kpi({ label, value, sub, color, onClick }) {
+
+  const Tag = onClick ? "button" : "div";
 
   return (
 
-    <div className="rounded-2xl p-4 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
+    <Tag
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={`rounded-2xl p-4 border text-left w-full ${onClick ? "cursor-pointer active:scale-[0.99]" : ""}`}
+      style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}
+    >
 
       <p className="font-logo text-[#F2F0EA]/60">{label}</p>
 
@@ -1637,7 +1593,9 @@ function Kpi({ label, value, sub, color }) {
 
       <p className="font-body text-[#F2F0EA]/50 mt-1">{sub}</p>
 
-    </div>
+      {onClick && <span className="ops-list-row-chevron mt-1 inline-block" aria-hidden>›</span>}
+
+    </Tag>
 
   );
 

@@ -67,7 +67,7 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
         <select
           value={selected?.id || ""}
           onChange={(e) => setSelectedId(e.target.value)}
-          className="flex-1 min-w-[160px] bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl font-logo text-xs text-[#F2F0EA]"
+          className="ops-select"
         >
           {sites.map((s) => (
             <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
@@ -148,7 +148,7 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
           <select
             value={settings.primary_machine_id || ""}
             onChange={(e) => saveSettings({ primary_machine_id: e.target.value || null })}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            className="ops-select"
           >
             <option value="">Auto (first / W2100)</option>
             {siteMachines.map((m) => (

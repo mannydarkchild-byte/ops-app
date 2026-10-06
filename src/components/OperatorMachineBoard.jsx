@@ -50,7 +50,7 @@ export function OperatorMachineBoard({
   return (
     <div className="space-y-3">
       <p className="font-body text-base text-ops-muted">
-        Tap a machine. Leave it running and choose the next one. Each machine gets its own report.
+        Choose a machine. Leave it running and pick the next one. Each machine gets its own report.
       </p>
       {machines.map((machine) => {
         const status = statusForMachine(machine, {
@@ -66,27 +66,28 @@ export function OperatorMachineBoard({
         );
         const label = stopped ? `Stopped · ${running.operator_name || "in the cab"}` : status.label;
         const tone = stopped ? "stopped" : status.tone;
-        const toneClass = tone === "running"
-          ? "border-ops-green/50 text-ops-green"
-          : tone === "stopped"
-            ? "border-ops-red/50 text-ops-red"
-            : tone === "blocked"
-              ? "border-ops-red/40 text-ops-red"
-              : tone === "ready"
-                ? "border-[#F5C518]/50 text-[#F5C518]"
-                : "border-ops-border text-ops-muted";
+        const toneClass = tone === "running" ? "ops-list-row-running"
+          : tone === "stopped" ? "ops-list-row-stopped"
+            : tone === "blocked" ? "ops-list-row-blocked"
+              : tone === "ready" ? "ops-list-row-ready"
+                : "";
+
         return (
           <button
             key={machine.id}
             type="button"
             onClick={() => onPick(machine.id)}
-            className={`w-full text-left rounded-2xl border bg-ops-card p-4 active:border-[#F5C518] ${toneClass}`}
+            className={`ops-list-row ${toneClass}`}
+            aria-label={`${machine.name}. ${label}. ${tone === "blocked" ? "Open for details." : "Select."}`}
           >
-            <p className="font-logo text-2xl text-ops-text">{machine.name}</p>
-            {machine.code && (
-              <p className="font-body text-sm text-ops-muted mt-0.5">{machine.code}</p>
-            )}
-            <p className="font-ui text-sm mt-2">{label}</p>
+            <div className="ops-list-row-body">
+              <p className="ops-list-row-title">{machine.name}</p>
+              {machine.code && (
+                <p className="font-body text-sm text-ops-muted mt-0.5">{machine.code}</p>
+              )}
+              <p className="ops-list-row-meta">{label}</p>
+            </div>
+            <span className="ops-list-row-chevron" aria-hidden>›</span>
           </button>
         );
       })}

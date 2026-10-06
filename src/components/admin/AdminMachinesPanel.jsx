@@ -49,7 +49,7 @@ export function AdminMachinesPanel({ sites, machines, onSaved, showAlert }) {
         <select
           value={siteFilter}
           onChange={(e) => setSiteFilter(e.target.value)}
-          className="flex-1 min-w-[140px] bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl font-logo text-xs text-[#F2F0EA]"
+          className="ops-select"
         >
           <option value="all">All sites</option>
           {sites.map((s) => (
@@ -70,7 +70,7 @@ export function AdminMachinesPanel({ sites, machines, onSaved, showAlert }) {
           <select
             value={form.siteId}
             onChange={(e) => setForm((f) => ({ ...f, siteId: e.target.value }))}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            className="ops-select"
           >
             {sites.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>

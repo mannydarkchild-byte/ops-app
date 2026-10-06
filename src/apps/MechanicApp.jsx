@@ -391,7 +391,7 @@ export function MechanicApp() {
           <select
             value={inspectionMachineId}
             onChange={(e) => setInspectionMachineId(e.target.value)}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded mb-4 text-[#F2F0EA]"
+            className="ops-select mb-4"
           >
             {siteMachines.map((m) => (
               <option key={m.id} value={m.id}>{m.name}</option>
