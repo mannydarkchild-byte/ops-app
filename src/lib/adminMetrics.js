@@ -1,6 +1,6 @@
 import { ISSUE, MAINTENANCE_STATUS, ROLES, SHIFT } from "./constants.js";
 import { getBillingPeriod, inPeriod, money, shiftBillableValue } from "./utils.js";
-import { formatDurationMinutes } from "./shiftMetrics.js";
+import { formatDurationMinutes, shiftBillableHours } from "./shiftMetrics.js";
 
 export function computeAdminDashboard({
   profiles = [],
@@ -15,6 +15,7 @@ export function computeAdminDashboard({
   breakdowns = [],
   workSessions = [],
   syncState = {},
+  siteSettings = null,
 }, period = getBillingPeriod()) {
   const activeProfiles = profiles.filter((p) => p.active !== false);
   const byRole = (role) => activeProfiles.filter((p) => p.role === role);
@@ -35,8 +36,9 @@ export function computeAdminDashboard({
   const periodExpenses = expenses.filter((e) => inPeriod(e.date, period));
   const periodFuel = fuelLogs.filter((f) => inPeriod(f.timestamp, period));
 
-  const billableHours = verifiedShifts.reduce((s, r) => s + Number(r.hours_worked || 0), 0);
-  const revenue = verifiedShifts.reduce((s, r) => s + shiftBillableValue(r, machines), 0);
+  const machineHours = verifiedShifts.reduce((s, r) => s + Number(r.hours_worked || 0), 0);
+  const billableHours = verifiedShifts.reduce((s, r) => s + shiftBillableHours(r, events, siteSettings), 0);
+  const revenue = verifiedShifts.reduce((s, r) => s + shiftBillableValue(r, machines, events, siteSettings), 0);
   const expenseTotal = periodExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   const litres = periodFuel.reduce((s, f) => s + Number(f.litres || 0), 0);
   const runtimeMin = verifiedShifts.reduce((s, r) => s + Number(r.runtime_minutes || 0), 0);
@@ -85,6 +87,7 @@ export function computeAdminDashboard({
     periodLabel: period.label,
     overview: {
       billableHours,
+      machineHours,
       revenue,
       expenseTotal,
       net: revenue - expenseTotal,
@@ -107,6 +110,7 @@ export function computeAdminDashboard({
         clockedIn: activeOperators.size,
         verifiedShifts: verifiedShifts.length,
         billableHours,
+        machineHours,
         topName: topOperatorProfile?.name || "—",
         topShifts: topOperator?.[1] || 0,
         prestartInspections: prestartCount,

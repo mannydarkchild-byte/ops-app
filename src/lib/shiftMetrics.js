@@ -1,4 +1,9 @@
-/** Billable machine hours — always from hour meter readings, never from app timer */
+import { DEFAULT_STOP_OWNERS, ownerForStopReason } from "./stopReasons.js";
+
+/** A billed shift is 8 hours, less downtime owned by Darkchild. */
+export const STANDARD_SHIFT_HOURS = 8;
+
+/** Machine hours from the hour meter. This is not the billable figure. */
 export function meterHoursWorked(startMeter, endMeter) {
   const start = Number(startMeter);
   const end = Number(endMeter);
@@ -12,6 +17,29 @@ export function shiftDowntimeMinutes(events, shiftId) {
   return events
     .filter((e) => e.shift_id === shiftId && e.type === "STOP" && e.status === "closed")
     .reduce((sum, e) => sum + Number(e.downtime_minutes || 0), 0);
+}
+
+function settingsForShift(shift, siteSettings) {
+  if (!siteSettings) return null;
+  if (Array.isArray(siteSettings)) {
+    return siteSettings.find((row) => row.site_id === shift?.site_id) || null;
+  }
+  return siteSettings;
+}
+
+/** Closed Darkchild stops on this shift, in minutes. Berlington and site stops are not deducted. */
+export function darkchildDowntimeMinutes(events, shift, siteSettings) {
+  const settings = settingsForShift(shift, siteSettings);
+  return consolidateShiftStops(events, shift).reduce((sum, stop) => {
+    if (ownerForStopReason(stop.reason, settings) !== DEFAULT_STOP_OWNERS.DARKCHILD) return sum;
+    return sum + Number(stop.downtime_minutes || 0);
+  }, 0);
+}
+
+/** Billable hours = 8-hour shift minus Darkchild downtime. Never the hour meter. */
+export function shiftBillableHours(shift, events, siteSettings) {
+  const deducted = darkchildDowntimeMinutes(events, shift, siteSettings) / 60;
+  return Math.max(0, STANDARD_SHIFT_HOURS - deducted);
 }
 
 /** App runtime = elapsed shift time minus downtime (not meter hours) */

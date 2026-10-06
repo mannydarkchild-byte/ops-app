@@ -233,6 +233,12 @@ async function startMachineOnce(user, machine, site, { hourMeter, photoRef, veri
   const h = Number(hourMeter);
   if (!Number.isFinite(h) || h < 0) throw new Error("Enter a valid hour meter reading");
 
+  const localBefore = await readTable("shifts");
+  const already = ownRunningShift(localBefore, machine.id, user.id);
+  if (already) {
+    return { run: already, lock: { accepted: true }, alreadyRunning: true };
+  }
+
   const remote = await reconcileMachineOpenState(machine.id);
   if (remote.known && remote.shift && remote.shift.operator_id !== user.id) {
     throw new Error(`${remote.shift.operator_name || "Another operator"} is already running ${machine.name || machine.id}`);
@@ -257,6 +263,9 @@ async function startMachineOnce(user, machine, site, { hourMeter, photoRef, veri
     return { run: ownRun, lock: { accepted: true }, alreadyRunning: true };
   }
   for (const stale of runningOnMachine) {
+    if (stale.operator_id === user.id) {
+      return { run: stale, lock: { accepted: true }, alreadyRunning: true };
+    }
     const liveOnServer = remote.known && remote.shift && remote.shift.id === stale.id;
     if (liveOnServer) {
       const who = stale.operator_name || "An operator";

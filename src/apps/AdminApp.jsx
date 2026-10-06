@@ -75,8 +75,9 @@ export function AdminApp() {
     () => computeAdminDashboard({
       profiles, machines, shifts, events, issues, expenses, fuelLogs,
       inspections, maintenanceJobs, breakdowns, workSessions, syncState,
+      siteSettings,
     }, billingPeriod),
-    [profiles, machines, shifts, events, issues, expenses, fuelLogs, inspections, maintenanceJobs, breakdowns, workSessions, syncState, billingPeriod]
+    [profiles, machines, shifts, events, issues, expenses, fuelLogs, inspections, maintenanceJobs, breakdowns, workSessions, syncState, billingPeriod, siteSettings]
   );
 
   const visibleProfiles = profiles
@@ -229,7 +230,7 @@ export function AdminApp() {
         {tab === "dashboard" && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label="Billable hours" value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${dashboard.overview.machinesRunning} running`} color="#22C55E" />
+              <Kpi label="Billable hours" value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${formatAdminMetric(dashboard.overview.machineHours, "hours")} machine hours`} color="#22C55E" />
               <Kpi label="Revenue" value={formatAdminMetric(dashboard.overview.revenue, "money")} sub="Verified shifts" color="#F5C518" />
               <Kpi label="Expenses" value={formatAdminMetric(dashboard.overview.expenseTotal, "money")} sub={`Net ${formatAdminMetric(dashboard.overview.net, "money")}`} color="#F97316" />
               <Kpi label="Open problems" value={dashboard.overview.openIssues} sub={`${dashboard.overview.criticalIssues} critical`} color="#EF4444" />
@@ -250,6 +251,7 @@ export function AdminApp() {
                   { label: "Clocked in now", value: dashboard.roles.operator.clockedIn },
                   { label: "Verified shifts", value: dashboard.roles.operator.verifiedShifts },
                   { label: "Billable hours", value: formatAdminMetric(dashboard.roles.operator.billableHours, "hours") },
+                  { label: "Machine hours", value: formatAdminMetric(dashboard.roles.operator.machineHours, "hours") },
                   { label: "Pre-starts", value: dashboard.roles.operator.prestartInspections },
                   { label: "Early clock-outs", value: dashboard.roles.operator.earlyClockOuts },
                   { label: "Top operator", value: `${dashboard.roles.operator.topName} (${dashboard.roles.operator.topShifts})` },

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { fmtDateShort } from "../lib/utils.js";
+import { shiftBillableHours } from "../lib/shiftMetrics.js";
 
-export function SignedReportCard({ shift, machineName, onViewReport, onDownloadReport, onShareReport }) {
+export function SignedReportCard({ shift, machineName, events, siteSettings, onViewReport, onDownloadReport, onShareReport }) {
   const [busy, setBusy] = useState(false);
 
   const openReport = async () => {
@@ -44,13 +45,13 @@ export function SignedReportCard({ shift, machineName, onViewReport, onDownloadR
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="font-logo text-lg text-[#22C55E]">{Number(shift.hours_worked || 0).toFixed(1)}h</p>
+          <p className="font-logo text-lg text-[#22C55E]">{shiftBillableHours(shift, events, siteSettings).toFixed(1)}h</p>
           <p className="text-[9px] text-[#F2F0EA]/40">billable</p>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 mb-4 text-[10px] text-[#F2F0EA]/50">
-        <span>Meter {shift.start_hour_meter}h → {shift.end_hour_meter}h</span>
+        <span>Machine hours {Number(shift.hours_worked || 0).toFixed(1)}h · Meter {shift.start_hour_meter}h → {shift.end_hour_meter}h</span>
         {(shift.runtime_minutes > 0 || shift.downtime_minutes > 0) && (
           <span>Runtime {Math.round(shift.runtime_minutes || 0)}m · Downtime {Math.round(shift.downtime_minutes || 0)}m</span>
         )}

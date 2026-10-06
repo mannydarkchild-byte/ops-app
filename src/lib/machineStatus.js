@@ -39,15 +39,38 @@ export async function hydrateOpenShiftsFromServer() {
   return remote;
 }
 
+/** Keep a local RUNNING row until the server agrees it is closed. An empty server list often means the new shift has not uploaded yet. */
+async function localRunMustBeKept(shift) {
+  const db = await ensureDB();
+  const queued = await db.sync_queue
+    .filter((q) => q.table === "shifts" && q.record_id === shift.id)
+    .first();
+  if (queued) return true;
+  const started = new Date(shift.started_at || shift.created_at || 0).getTime();
+  if (!Number.isFinite(started) || Date.now() - started < 2 * 60 * 1000) return true;
+  if (!navigator.onLine) return true;
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("shift_status")
+    .eq("id", shift.id)
+    .maybeSingle();
+  if (error) return true;
+  if (!data) return false;
+  return data.shift_status === SHIFT.RUNNING;
+}
+
 async function dropLocalRunningShifts(machineId, keepId = null) {
   const db = await ensureDB();
   const locals = (await db.shifts.toArray()).filter(
     (s) => s.machine_id === machineId && isLocalRunning(s) && s.id !== keepId
   );
+  let dropped = 0;
   for (const shift of locals) {
+    if (await localRunMustBeKept(shift)) continue;
     await dropLocalRecord("shifts", shift.id);
+    dropped += 1;
   }
-  return locals.length;
+  return dropped;
 }
 
 /** Drop local RUNNING rows that are not this operator’s current clock-in. */
@@ -62,6 +85,7 @@ export async function clearStaleLocalRuns(machineId, workSession, userId) {
       && shift.operator_id === userId
       && new Date(shift.started_at).getTime() >= new Date(workSession.clock_in).getTime();
     if (belongs) continue;
+    if (await localRunMustBeKept(shift)) continue;
     await dropLocalRecord("shifts", shift.id);
     dropped += 1;
   }
@@ -69,16 +93,22 @@ export async function clearStaleLocalRuns(machineId, workSession, userId) {
   return dropped;
 }
 
-/** Align phone lock + local RUNNING rows with the server. Server with no open shift wins. */
+/** Align the phone with the server. A local open shift stays until the server shows that same shift is no longer running. */
 export async function reconcileMachineOpenState(machineId) {
   const db = await ensureDB();
   const remote = await fetchServerOpenShift(machineId);
 
   if (remote.known && !remote.shift) {
+    await dropLocalRunningShifts(machineId);
+    const stillOpen = (await db.shifts.toArray()).some(
+      (s) => s.machine_id === machineId && isLocalRunning(s)
+    );
+    if (stillOpen) {
+      return { ...remote, status: null, cleared: false };
+    }
     try {
       await supabase.rpc("stop_machine", { p_machine_id: machineId });
     } catch {}
-    await dropLocalRunningShifts(machineId);
     await db.machine_locks.delete(machineId);
     const cached = await db.machine_status.get(machineId);
     const cleared = {

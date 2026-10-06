@@ -1,5 +1,6 @@
 import { ISSUE, SHIFT } from "./constants.js";
 import { fmtDate } from "./utils.js";
+import { shiftBillableHours } from "./shiftMetrics.js";
 
 const TYPE_FILTERS = {
   all: () => true,
@@ -95,7 +96,7 @@ export function buildAdminActivityLog({
       site: siteName(s.site_id),
       operator: s.operator_name,
       machine: machineName(s.machine_id),
-      detail: `${Number(s.hours_worked || 0).toFixed(1)}h billable`,
+      detail: `${shiftBillableHours(s, events).toFixed(1)}h billable · ${Number(s.hours_worked || 0).toFixed(1)}h machine`,
     });
   }
 

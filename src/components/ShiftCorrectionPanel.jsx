@@ -57,7 +57,7 @@ export function ShiftCorrectionPanel({ shift, machine, site, user, onDone, onRes
         <p><span className="text-[#F2F0EA]/50">Date:</span> {fmtDateShort(shift.started_at)}</p>
         <p><span className="text-[#F2F0EA]/50">Machine:</span> {machine?.name || "—"}</p>
         <p><span className="text-[#F2F0EA]/50">Meter now on report:</span> {shift.start_hour_meter}h → {shift.end_hour_meter}h</p>
-        <p><span className="text-[#F2F0EA]/50">Hours on report:</span> {Number(shift.hours_worked || 0).toFixed(1)}h</p>
+        <p><span className="text-[#F2F0EA]/50">Machine hours on report:</span> {Number(shift.hours_worked || 0).toFixed(1)}h</p>
       </div>
 
       <label className="block font-logo text-sm text-[#F2F0EA] mb-2">Correct closing meter reading</label>

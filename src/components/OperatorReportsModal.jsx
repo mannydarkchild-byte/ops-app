@@ -6,6 +6,7 @@ import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod, dedupeShifts 
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
+import { shiftBillableHours } from "../lib/shiftMetrics.js";
 import { OperatorShiftTools } from "./OperatorShiftTools.jsx";
 
 const FILTERS = [
@@ -90,15 +91,17 @@ export function OperatorReportsModal({
     const sentBack = cycleShifts.filter((s) => reportBucket(s) === "sent_back");
     const notSent = cycleShifts.filter((s) => reportBucket(s) === "not_sent");
     const meterHours = signed.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0);
+    const billableHours = signed.reduce((sum, s) => sum + shiftBillableHours(s, events, siteSettings), 0);
     return {
       signed: signed.length,
       pending: pending.length,
       sentBack: sentBack.length,
       notSent: notSent.length,
       meterHours,
+      billableHours,
       yourTime: timesheet.hours,
     };
-  }, [cycleShifts, timesheet.hours]);
+  }, [cycleShifts, timesheet.hours, events, siteSettings]);
 
   const list = useMemo(
     () => (filter === "all" ? mine : mine.filter((s) => reportBucket(s) === filter)),
@@ -149,7 +152,8 @@ export function OperatorReportsModal({
 
         <div className="grid grid-cols-2 gap-2 mb-4">
           <DashTile label="Your time" value={`${dash.yourTime.toFixed(1)}h`} hint="Clock-in to clock-out" />
-          <DashTile label="Machine hours" value={`${dash.meterHours.toFixed(1)}h`} hint="Signed meter hours" />
+          <DashTile label="Machine hours" value={`${dash.meterHours.toFixed(1)}h`} hint="Hour meter" />
+          <DashTile label="Billable hours" value={`${dash.billableHours.toFixed(1)}h`} hint="8h minus Darkchild downtime" />
           <DashTile label="Signed off" value={String(dash.signed)} hint="Supervisor signed" color="#22C55E" />
           <DashTile label="Pending" value={String(dash.pending + dash.sentBack)} hint={dash.sentBack ? `${dash.sentBack} sent back` : "Waiting for supervisor"} color="#F5C518" />
         </div>
@@ -191,9 +195,12 @@ export function OperatorReportsModal({
                         {shiftNameLines(shift, { profiles, workSessions }).machineOperator}
                       </p>
                     </div>
-                    <p className="font-logo text-lg text-[#F5C518] shrink-0">
-                      {Number(shift.hours_worked || 0).toFixed(1)}h
-                    </p>
+                    <div className="text-right shrink-0">
+                      <p className="font-logo text-lg text-[#F5C518] shrink-0">
+                        {shiftBillableHours(shift, events, siteSettings).toFixed(1)}h
+                      </p>
+                      <p className="text-[10px] text-[#F2F0EA]/40">billable · {Number(shift.hours_worked || 0).toFixed(1)}h machine</p>
+                    </div>
                   </div>
                   <p className={`font-logo text-sm mb-3 ${BUCKET_COLOR[bucket]}`}>{BUCKET_LABEL[bucket]}</p>
                   {canView ? (

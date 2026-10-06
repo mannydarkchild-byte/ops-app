@@ -14,7 +14,7 @@ import { AlertModal } from "../components/ui/Modal.jsx";
 import { ISSUE, SHIFT } from "../lib/constants.js";
 import { ownerForStopReason } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
-import { formatDurationMinutes } from "../lib/shiftMetrics.js";
+import { formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
 import {
   fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, money, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
@@ -137,8 +137,9 @@ export function ManagerApp() {
   );
 
   const cycleStats = useMemo(() => {
-    const hours = cycleVerified.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0);
-    const revenue = cycleVerified.reduce((sum, s) => sum + shiftBillableValue(s, machines), 0);
+    const machineHours = cycleVerified.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0);
+    const billableHours = cycleVerified.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0);
+    const revenue = cycleVerified.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
     const runtimeMin = cycleVerified.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0);
     const downtimeMin = cycleVerified.reduce((sum, s) => sum + Number(s.downtime_minutes || 0), 0);
 
@@ -161,13 +162,22 @@ export function ManagerApp() {
     );
     const downtimeFromEvents = closedStops.reduce((sum, e) => sum + Number(e.downtime_minutes || 0), 0);
 
-    const utilDenom = hours + downtimeFromEvents / 60;
-    const utilization = utilDenom > 0 ? (hours / utilDenom) * 100 : 0;
+    const utilDenom = machineHours + downtimeFromEvents / 60;
+    const utilization = utilDenom > 0 ? (machineHours / utilDenom) * 100 : 0;
 
     return {
-      hours, revenue, runtimeMin, downtimeMin, litres, expenseTotal, utilization, shiftCount: cycleVerified.length,
+      hours: machineHours,
+      machineHours,
+      billableHours,
+      revenue,
+      runtimeMin,
+      downtimeMin,
+      litres,
+      expenseTotal,
+      utilization,
+      shiftCount: cycleVerified.length,
     };
-  }, [cycleVerified, fuelLogs, expenses, events, primaryMachine?.id, machines, billingPeriod]);
+  }, [cycleVerified, fuelLogs, expenses, events, primaryMachine?.id, machines, billingPeriod, siteConfig]);
 
   const fleetStatus = useMemo(() => {
     if (!primaryMachine) return null;
@@ -296,23 +306,26 @@ export function ManagerApp() {
     const inScope = expensePeriod
       ? verified.filter((s) => inPeriod(s.verified_at || s.ended_at, expensePeriod))
       : verified;
-    return inScope.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0);
-  }, [warriorShifts, expensePeriod]);
+    return {
+      machine: inScope.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0),
+      billable: inScope.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0),
+    };
+  }, [warriorShifts, expensePeriod, events, siteConfig]);
 
   const expensePeriodRevenue = useMemo(() => {
     const verified = warriorShifts.filter((s) => s.shift_status === SHIFT.VERIFIED);
     const inScope = expensePeriod
       ? verified.filter((s) => inPeriod(s.verified_at || s.ended_at, expensePeriod))
       : verified;
-    return inScope.reduce((sum, s) => sum + shiftBillableValue(s, machines), 0);
-  }, [warriorShifts, expensePeriod, machines]);
+    return inScope.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
+  }, [warriorShifts, expensePeriod, machines, events, siteConfig]);
 
   const expenseDashboard = useMemo(() => {
     const total = filteredExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
     const count = filteredExpenses.length;
     const [topCat, topAmt] = expenseByCategory[0] || ["—", 0];
     const avg = count > 0 ? total / count : 0;
-    const costPerHour = expensePeriodHours > 0 ? total / expensePeriodHours : null;
+    const costPerHour = expensePeriodHours.billable > 0 ? total / expensePeriodHours.billable : null;
     const pctRevenue = expensePeriodRevenue > 0 ? (total / expensePeriodRevenue) * 100 : null;
     const periodLabel = expensePeriod?.label || "All time";
     return { total, count, topCat, topAmt, avg, costPerHour, pctRevenue, periodLabel };
@@ -341,7 +354,8 @@ export function ManagerApp() {
     fuelLogs: warriorActivity.fuelLogs,
     inspections: inspections.filter((i) => i.machine_id === primaryMachine?.id),
     submissions,
-  }), [warriorShifts, warriorActivity, expenses, inspections, submissions, primaryMachine?.id]);
+    siteSettings: siteConfig,
+  }), [warriorShifts, warriorActivity, expenses, inspections, submissions, primaryMachine?.id, siteConfig]);
 
   const handleViewReport = async (shift) => {
     try {
@@ -443,8 +457,8 @@ export function ManagerApp() {
         {tab === "overview" && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label="Billable Hours" value={`${cycleStats.hours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} signed shifts`} color="#22C55E" />
-              <Kpi label="Revenue" value={money(cycleStats.revenue)} sub={`R${primaryMachine.billable_rate}/h meter rate`} color="#22C55E" />
+              <Kpi label="Billable hours" value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.machineHours.toFixed(1)}h machine hours · ${cycleStats.shiftCount} signed`} color="#22C55E" />
+              <Kpi label="Revenue" value={money(cycleStats.revenue)} sub={`R${primaryMachine.billable_rate}/h × billable hours`} color="#22C55E" />
               <Kpi label="Runtime" value={formatDurationMinutes(cycleStats.runtimeMin)} sub="App-tracked this cycle" color="#00A4A6" />
               <Kpi label="Downtime" value={formatDurationMinutes(cycleStats.downtimeMin)} sub={`Util ${cycleStats.utilization.toFixed(0)}%`} color="#EF4444" />
               <Kpi label="Diesel" value={`${cycleStats.litres.toFixed(1)} L`} sub={cycleStats.hours > 0 ? `${(cycleStats.litres / cycleStats.hours).toFixed(2)} L/h` : "—"} color="#F5C518" />
@@ -591,7 +605,7 @@ export function ManagerApp() {
               <Kpi
                 label="Cost / Hour"
                 value={expenseDashboard.costPerHour != null ? money(expenseDashboard.costPerHour) : "—"}
-                sub={expensePeriodHours > 0 ? `${expensePeriodHours.toFixed(1)}h billable` : "No signed hours"}
+                sub={expensePeriodHours.billable > 0 ? `${expensePeriodHours.billable.toFixed(1)}h billable · ${expensePeriodHours.machine.toFixed(1)}h machine` : "No signed hours"}
                 color="#EF4444"
               />
               {expenseDashboard.pctRevenue != null && (
@@ -719,6 +733,8 @@ export function ManagerApp() {
                       key={r.id}
                       shift={r}
                       machineName={primaryMachine.name}
+                      events={events}
+                      siteSettings={siteConfig}
                       onViewReport={handleViewReport}
                       onDownloadReport={handleViewReport}
                       onShareReport={handleViewReport}

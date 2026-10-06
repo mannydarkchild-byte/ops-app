@@ -21,7 +21,7 @@ import { prestartItemsForMachine } from "../lib/siteConfig.js";
 import { rememberUsualOperator, usualOperatorName } from "../lib/shiftPeople.js";
 import { OperatorMachineBoard } from "../components/OperatorMachineBoard.jsx";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
-import { shiftDowntimeMinutes, formatDurationSeconds } from "../lib/shiftMetrics.js";
+import { shiftDowntimeMinutes, formatDurationSeconds, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { SupervisorPicker, SupervisorWhatsAppButtons } from "../components/SupervisorPicker.jsx";
 import * as wf from "../services/workflows.js";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
@@ -361,6 +361,15 @@ export function OperatorApp() {
       showAlert("Photo required", "Take a photo of the hour meter before starting.", "warning");
       return;
     }
+    const openHere = (shifts || []).find((s) =>
+      s.machine_id === workMachine?.id
+      && s.operator_id === user?.id
+      && getShiftStatus(s) === SHIFT.RUNNING
+    );
+    if (openHere) {
+      showAlert("Already running", `${workMachine?.name || "This machine"} already has an open shift. Finish that one before starting another.`, "warning");
+      return;
+    }
     setActionBusy("start");
     try {
       rememberUsualOperator(workMachine.id, name);
@@ -608,7 +617,10 @@ export function OperatorApp() {
               {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "Sent Back to Supervisor" : "Shift Sent"}
             </h2>
             <p className="font-body text-sm text-[#F2F0EA]/70 mb-1">
-              Meter hours: {Number(submittedShift.hours_worked || 0).toFixed(1)}h ({submittedShift.start_hour_meter}h → {submittedShift.end_hour_meter}h)
+              Machine hours: {Number(submittedShift.hours_worked || 0).toFixed(1)}h ({submittedShift.start_hour_meter}h → {submittedShift.end_hour_meter}h)
+            </p>
+            <p className="font-body text-sm text-[#F2F0EA]/70 mb-1">
+              Billable hours: {shiftBillableHours(submittedShift, events, siteConfig).toFixed(1)}h (8h shift minus Darkchild downtime)
             </p>
             {(submittedShift.runtime_minutes > 0 || submittedShift.downtime_minutes > 0) && (
               <p className="font-body text-xs text-[#F2F0EA]/45 mb-1">
@@ -626,6 +638,8 @@ export function OperatorApp() {
               machine={machines.find((m) => m.id === submittedShift.machine_id) || workMachine}
               recordedBy={user?.name}
               site={activeSite}
+              events={events}
+              siteSettings={siteConfig}
               assignedSupervisorId={submittedShift.assigned_supervisor_id}
             />
             <OperatorShiftTools

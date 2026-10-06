@@ -2,7 +2,7 @@ import { SHIFT } from "../lib/constants.js";
 import { ownerForStopReason } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { resolveMediaUrl } from "../lib/media.js";
-import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinutes } from "../lib/shiftMetrics.js";
+import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { buildStockSeries } from "../lib/productivityPulse.js";
 import { stockChartSvgHtml } from "../components/StockChart.jsx";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
@@ -208,6 +208,7 @@ function reportPageStyles() {
   .header-meta{margin-top:8px;font-size:13px;color:#57534E;display:flex;flex-wrap:wrap;gap:6px 16px}
   .content{padding:24px 36px 40px}
   .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+  .summary.quad{grid-template-columns:repeat(2,1fr)}
   .summary-cell{background:#FAFAF7;border:1px solid #E8E6E0;border-radius:12px;padding:16px 18px}
   .summary-cell.highlight{background:#FFFBEB;border-color:#F5C518}
   .summary-cell .label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6B6960;margin-bottom:4px}
@@ -352,6 +353,8 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
   };
 
   const names = shiftNameLines(shift, { profiles, workSessions });
+  const machineHours = Number(shift.hours_worked || 0);
+  const billableHours = shiftBillableHours(shift, events, siteSettings);
   const prestartOk = prestart.filter((i) => /^ok$/i.test(i.status || "")).length;
   const prestartAction = prestart.filter((i) => /action/i.test(i.status || "")).length;
   const prestartBad = prestart.filter((i) => /attention|need|fail/i.test(i.status || "")).length;
@@ -402,10 +405,15 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
   </header>
 
   <main class="content">
-    <div class="summary">
+    <div class="summary quad">
       <div class="summary-cell highlight">
         <div class="label">Billable hours</div>
-        <div class="value font-brand">${Number(shift.hours_worked || 0).toFixed(1)}h</div>
+        <div class="value font-brand">${billableHours.toFixed(1)}h</div>
+        <div class="sub">8h shift minus Darkchild downtime</div>
+      </div>
+      <div class="summary-cell highlight">
+        <div class="label">Machine hours</div>
+        <div class="value font-brand">${machineHours.toFixed(1)}h</div>
         <div class="sub">Meter ${shift.start_hour_meter}h → ${shift.end_hour_meter}h</div>
       </div>
       <div class="summary-cell">
@@ -527,7 +535,7 @@ ${shiftFuel.length
     ? `<img src="${esc(signatureUrl)}" alt="Supervisor signature"/>`
     : `<p class="note" style="margin:8px 0 0">${esc(shift.supervisor_signature_name || "Signature not on this phone yet — tap Update and open the report again.")}</p>`}
         </div>
-        <p class="note">Signed daily report for billing reference. Billable hours are taken from hour meter readings only; runtime and downtime are app-tracked operational metrics.</p>
+        <p class="note">Billable hours are an 8-hour shift minus downtime owned by Darkchild. Machine hours are the hour meter. Runtime and downtime are app-tracked.</p>
       </div>
     </section>
 
@@ -575,7 +583,9 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
         ["Verified at", fmtDate(shift.verified_at || shift.ended_at)],
         ["Opening meter (h)", shift.start_hour_meter ?? ""],
         ["Closing meter (h)", shift.end_hour_meter ?? ""],
-        ["Billable hours", Number(shift.hours_worked || 0)],
+        ["Machine hours", Number(shift.hours_worked || 0)],
+        ["Billable hours", shiftBillableHours(shift, events, siteSettings)],
+        ["Billable basis", "8h shift minus Darkchild downtime"],
         ["Runtime (min)", Number(shift.runtime_minutes || 0)],
         ["Downtime (min)", Number(shift.downtime_minutes || 0)],
       ],
@@ -665,18 +675,20 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
   const shifts = runs.filter((r) => inRange(r.started_at));
   const verified = shifts.filter((s) => s.shift_status === SHIFT.VERIFIED);
   const pending = shifts.filter((s) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(s.shift_status));
-  const verifiedHours = verified.reduce((a, s) => a + Number(s.hours_worked || 0), 0);
-  const pendingHours = pending.reduce((a, s) => a + Number(s.hours_worked || 0), 0);
-  const revenue = verified.reduce((a, s) => a + shiftBillableValue(s, machineList), 0);
+  const siteSettings = data.siteSettings || null;
+  const machineHours = verified.reduce((a, s) => a + Number(s.hours_worked || 0), 0);
+  const billableHours = verified.reduce((a, s) => a + shiftBillableHours(s, events, siteSettings), 0);
+  const pendingBillable = pending.reduce((a, s) => a + shiftBillableHours(s, events, siteSettings), 0);
+  const revenue = verified.reduce((a, s) => a + shiftBillableValue(s, machineList, events, siteSettings), 0);
   const periodExpenses = expenses.filter((e) => inRange(e.date));
   const totalExpenses = periodExpenses.reduce((a, e) => a + Number(e.amount || 0), 0);
   const closedStops = events.filter((e) => e.type === "STOP" && e.status === "closed" && inRange(e.stopped_at));
   const totalDowntimeMin = closedStops.reduce((a, e) => a + Number(e.downtime_minutes || 0), 0);
   const totalDowntimeHours = totalDowntimeMin / 60;
-  const utilisation = (verifiedHours + totalDowntimeHours) > 0 ? (verifiedHours / (verifiedHours + totalDowntimeHours)) * 100 : 0;
+  const utilisation = (machineHours + totalDowntimeHours) > 0 ? (machineHours / (machineHours + totalDowntimeHours)) * 100 : 0;
   const periodFuels = fuelLogs.filter((f) => inRange(f.timestamp));
   const totalLitres = periodFuels.reduce((a, f) => a + Number(f.litres || 0), 0);
-  const consumption = verifiedHours > 0 ? totalLitres / verifiedHours : 0;
+  const consumption = machineHours > 0 ? totalLitres / machineHours : 0;
   const runtimeMin = verified.reduce((a, s) => a + Number(s.runtime_minutes || 0), 0);
 
   const downtimeByReason = {};
@@ -710,7 +722,8 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
       <td>${esc(s.operator_name)}</td>
       <td>${fmtDateShort(s.started_at)}</td>
       <td>${Number(s.hours_worked || 0).toFixed(1)}h</td>
-      <td>${money(shiftBillableValue(s, machineList))}</td>
+      <td>${shiftBillableHours(s, events, siteSettings).toFixed(1)}h</td>
+      <td>${money(shiftBillableValue(s, machineList, events, siteSettings))}</td>
       <td>${esc(s.supervisor_signature_name || "—")}</td>
     </tr>`)
     .join("");
@@ -743,13 +756,18 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
     <div class="summary">
       <div class="summary-cell highlight">
         <div class="label">Billable hours</div>
-        <div class="value">${verifiedHours.toFixed(1)}h</div>
-        <div class="sub">${verified.length} verified shift${verified.length !== 1 ? "s" : ""}</div>
+        <div class="value">${billableHours.toFixed(1)}h</div>
+        <div class="sub">8h shift minus Darkchild downtime</div>
+      </div>
+      <div class="summary-cell highlight">
+        <div class="label">Machine hours</div>
+        <div class="value">${machineHours.toFixed(1)}h</div>
+        <div class="sub">${verified.length} verified shift${verified.length !== 1 ? "s" : ""} · hour meter</div>
       </div>
       <div class="summary-cell highlight">
         <div class="label">Revenue</div>
         <div class="value">${money(revenue)}</div>
-        <div class="sub">Hour meter · signed shifts</div>
+        <div class="sub">Billable hours × rate</div>
       </div>
       <div class="summary-cell">
         <div class="label">Net (approx)</div>
@@ -779,12 +797,12 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
       <div class="item"><div class="label">Expenses</div><div class="value">${money(totalExpenses)}</div></div>
     </div>
 
-    ${pendingHours > 0 ? `<div class="callout">⚠ ${pending.length} shift(s) pending supervisor verification (${pendingHours.toFixed(1)}h billable)</div>` : ""}
+    ${pendingBillable > 0 ? `<div class="callout">⚠ ${pending.length} shift(s) pending supervisor verification (${pendingBillable.toFixed(1)}h billable)</div>` : ""}
 
     <section>
       <h2>Verified shifts</h2>
-      <table><thead><tr><th>Operator</th><th>Date</th><th>Hours</th><th>Value</th><th>Signed by</th></tr></thead><tbody>
-${shiftRows || '<tr class="empty"><td colspan="5">No verified shifts in this period</td></tr>'}
+      <table><thead><tr><th>Operator</th><th>Date</th><th>Machine hours</th><th>Billable</th><th>Value</th><th>Signed by</th></tr></thead><tbody>
+${shiftRows || '<tr class="empty"><td colspan="6">No verified shifts in this period</td></tr>'}
       </tbody></table>
     </section>
 
@@ -809,7 +827,7 @@ ${expenseRows || '<tr class="empty"><td colspan="2">No expenses recorded</td></t
       </tbody></table>
     </section>
 
-    <p class="note">Billable hours from hour meter readings on supervisor-signed shifts. Runtime and downtime are app-tracked operational metrics. Generated from local OPS data.</p>
+    <p class="note">Billable hours are an 8-hour shift minus downtime owned by Darkchild, on supervisor-signed shifts. Machine hours are the hour meter. Runtime and downtime are app-tracked. Generated from local OPS data.</p>
 
     <footer class="footer">
       <span>OPS Operations · ${esc(site?.name || "Site")}</span>
@@ -964,11 +982,12 @@ export async function prepareOperationsReport(data, period, machine, site) {
     {
       name: "Shifts",
       rows: [
-        ["Operator", "Date", "Hours", "Runtime min", "Downtime min", "Signed by"],
+        ["Operator", "Date", "Machine hours", "Billable hours", "Runtime min", "Downtime min", "Signed by"],
         ...periodShifts.map((s) => [
           s.operator_name || "",
           fmtDateShort(s.started_at),
           Number(s.hours_worked || 0),
+          shiftBillableHours(s, data?.events || [], data?.siteSettings),
           Number(s.runtime_minutes || 0),
           Number(s.downtime_minutes || 0),
           s.supervisor_signature_name || "",
@@ -1059,7 +1078,7 @@ export function generateTimesheetReportHTML(workSessions, period, site, { logoUr
       </div>
     </div>
 
-    <p class="callout">Hours are time on site (clock-in → clock-out). Machine billable hours stay on the operations report.</p>
+    <p class="callout">Hours are time on site (clock-in → clock-out). Machine hours and billable hours stay on the operations report.</p>
 
     <section>
       <h2>By operator</h2>

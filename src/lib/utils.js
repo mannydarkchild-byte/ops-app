@@ -1,4 +1,5 @@
 import { ISSUE, PRESTART_INSPECTION_ITEMS, PRIMARY_MACHINE_CODE, ROLES, SHIFT } from "./constants.js";
+import { shiftBillableHours } from "./shiftMetrics.js";
 
 export const nowISO = () => new Date().toISOString();
 export const money = (n) => `R${Number(n || 0).toFixed(2)}`;
@@ -174,9 +175,12 @@ export function getPrimaryMachine(machines, siteId, siteSettings = null) {
   );
 }
 
-export function shiftBillableValue(shift, machines) {
+export function shiftBillableValue(shift, machines, events = null, siteSettings = null) {
   const machine = machines.find((m) => m.id === shift.machine_id);
-  return Number(shift.hours_worked || 0) * Number(machine?.billable_rate || 0);
+  const hours = events
+    ? shiftBillableHours(shift, events, siteSettings)
+    : Number(shift.hours_worked || 0);
+  return hours * Number(machine?.billable_rate || 0);
 }
 
 export function getDatePresets(cycleStartDay = 26) {

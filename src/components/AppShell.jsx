@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { SYNC_LABELS, syncControlLabel, parseSyncError } from "../lib/labels.js";
 import { Button } from "./ui/Button.jsx";
@@ -219,10 +219,32 @@ export function ThemeToggle({ className = "" }) {
 export function AppHeader({ right, subtitle, menuItems = [] }) {
   const { user, signOut } = useOps();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const menuButtonRef = useRef(null);
   const role = (user?.role || "operator").toLowerCase();
   const roleLabel = subtitle || role.charAt(0).toUpperCase() + role.slice(1);
   const colors = ROLE_COLORS[role] || ROLE_COLORS.operator;
   const displayName = (user?.name || user?.email?.split("@")[0] || "User").split(/\s+/)[0];
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const closeIfOutside = (event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (menuRef.current?.contains(target)) return;
+      if (menuButtonRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeIfOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeIfOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
 
   return (
     <header className="sticky top-0 z-30 bg-ops-black border-b border-ops-border mobile-safe-top shadow-ops-sm">
@@ -238,6 +260,7 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
           </div>
         </div>
         <button
+          ref={menuButtonRef}
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           aria-expanded={menuOpen}
@@ -252,7 +275,7 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
         </button>
       </div>
       {menuOpen && (
-        <div className="absolute right-3 top-full z-40 w-64 rounded-xl border border-ops-border bg-ops-card shadow-ops-sm p-2 space-y-1">
+        <div ref={menuRef} className="absolute right-3 top-full z-40 w-64 rounded-xl border border-ops-border bg-ops-card shadow-ops-sm p-2 space-y-1">
           {menuItems.length > 0 && (
             <div className="pb-1 mb-1 border-b border-ops-border">
               {menuItems.map((item) => (

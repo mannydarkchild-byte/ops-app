@@ -14,7 +14,7 @@ import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 
 import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
-import { formatDurationMinutes } from "../lib/shiftMetrics.js";
+import { formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
 
 import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, dedupeShifts } from "../lib/utils.js";
 
@@ -315,6 +315,14 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
     () => signedReports.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0),
 
     [signedReports]
+
+  );
+
+  const signedBillable = useMemo(
+
+    () => signedReports.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0),
+
+    [signedReports, events, siteConfig]
 
   );
 
@@ -776,7 +784,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
         {tab === "reports" && (
           <div className="grid grid-cols-2 gap-3 mb-4">
             <Kpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
-            <Kpi label="Meter hours" value={`${signedHours.toFixed(1)}h`} sub="Hour meter" color="#22C55E" />
+            <Kpi label="Billable hours" value={`${signedBillable.toFixed(1)}h`} sub={`${signedHours.toFixed(1)}h machine hours`} color="#22C55E" />
           </div>
         )}
 
@@ -967,7 +975,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
                       <p className="text-sm text-[#F2F0EA]/60 mt-1">
 
-                        Meter: {r.start_hour_meter}h → {r.end_hour_meter}h · {Number(r.hours_worked || 0).toFixed(1)}h billable
+                        Meter: {r.start_hour_meter}h → {r.end_hour_meter}h · {Number(r.hours_worked || 0).toFixed(1)}h machine · {shiftBillableHours(r, events, siteConfig).toFixed(1)}h billable
 
                       </p>
 
@@ -1035,7 +1043,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
                 <p className="text-[10px] text-[#F2F0EA]/40">
 
-                  Meter: {r.start_hour_meter}h → {r.end_hour_meter}h · <strong>{Number(r.hours_worked || 0).toFixed(1)}h billable</strong>
+                  Meter: {r.start_hour_meter}h → {r.end_hour_meter}h · <strong>{Number(r.hours_worked || 0).toFixed(1)}h machine · {shiftBillableHours(r, events, siteConfig).toFixed(1)}h billable</strong>
 
                 </p>
 
@@ -1122,6 +1130,10 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
                 shift={r}
 
                 machineName={machineName(r.machine_id)}
+
+                events={events}
+
+                siteSettings={siteConfig}
 
                 onViewReport={handleViewReport}
 
@@ -1391,7 +1403,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
           <p className="font-body text-sm text-[#F2F0EA]/70 mb-4">
 
-            {verifyTarget.operator_name} · {Number(verifyTarget.hours_worked || 0).toFixed(1)}h · {verifyTarget.start_hour_meter}h → {verifyTarget.end_hour_meter}h
+            {verifyTarget.operator_name} · {Number(verifyTarget.hours_worked || 0).toFixed(1)}h machine · {shiftBillableHours(verifyTarget, events, siteConfig).toFixed(1)}h billable · {verifyTarget.start_hour_meter}h → {verifyTarget.end_hour_meter}h
 
           </p>
 
