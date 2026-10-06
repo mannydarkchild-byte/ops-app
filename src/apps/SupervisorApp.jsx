@@ -14,9 +14,9 @@ import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 
 import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
-import { formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
+import { formatDurationMinutes, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 
-import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, dedupeShifts } from "../lib/utils.js";
+import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, money, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
 
 import { formatSyncErrorMessage } from "../lib/labels.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
@@ -64,7 +64,7 @@ const REPORT_FILTERS = [
 
 export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVerifyConsumed }) {
 
-  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, inspections, hourReadings, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
+  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, expenses, inspections, hourReadings, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
 
   const siteConfig = useMemo(
     () => getSettingsForSite(user?.site_id || activeSite?.id),
@@ -359,7 +359,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     () => shifts.filter(
 
-      (s) => getShiftStatus(s) === SHIFT.VERIFIED && s.site_id === user?.site_id && inPeriod(s.verified_at || s.ended_at, billingPeriod)
+      (s) => s.site_id === user?.site_id && inPeriod(s.started_at, billingPeriod)
 
     ),
 
@@ -369,17 +369,45 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
 
-  const dashboardStats = useMemo(() => ({
+  const dashboardStats = useMemo(() => {
 
-    hours: dashboardShifts.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0),
+    const machineHours = dashboardShifts.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0);
 
-    runtimeMin: dashboardShifts.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0),
+    const billableHours = dashboardShifts.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0);
 
-    downtimeMin: dashboardShifts.reduce((sum, s) => sum + Number(s.downtime_minutes || 0), 0),
+    const revenue = dashboardShifts.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
 
-    reports: dashboardShifts.length,
+    const litres = (fuelLogs || []).filter((f) => f.site_id === user?.site_id && inPeriod(f.timestamp, billingPeriod))
 
-  }), [dashboardShifts]);
+      .reduce((sum, f) => sum + Number(f.litres || 0), 0);
+
+    const expenseTotal = (expenses || []).filter((e) => e.site_id === user?.site_id && inPeriod(e.date, billingPeriod))
+
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+    return {
+
+      machineHours,
+
+      billableHours,
+
+      revenue,
+
+      litres,
+
+      expenseTotal,
+
+      runtimeMin: dashboardShifts.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0),
+
+      downtimeMin: dashboardShifts.reduce((sum, s) => sum + Number(s.downtime_minutes || 0), 0),
+
+      reports: dashboardShifts.length,
+
+      shiftCount: dashboardShifts.length,
+
+    };
+
+  }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, user?.site_id, billingPeriod]);
 
 
 
@@ -778,13 +806,23 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
             />
             <Kpi label="To sign off" value={String(myPendingVerify)} sub="Tap Sign Off" color="#22C55E" />
             </div>
+            <p className="font-body text-xs text-[#F2F0EA]/50">This site · this cycle</p>
+            <div className="grid grid-cols-2 gap-3">
+            <Kpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
+            <Kpi label={HOUR_LABELS.machine} value={`${dashboardStats.machineHours.toFixed(1)}h`} sub={HOUR_LABELS.machineHint} color="#22C55E" />
+            <Kpi label={HOUR_LABELS.revenue} value={money(dashboardStats.revenue)} sub={HOUR_LABELS.revenueHint} color="#F5C518" />
+            <Kpi label={HOUR_LABELS.expenses} value={money(dashboardStats.expenseTotal)} sub={HOUR_LABELS.expensesHint} color="#F5C518" />
+            <Kpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : HOUR_LABELS.expensesHint} color="#F5C518" />
+            <Kpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub={`${HOUR_LABELS.runtime} ${formatDurationMinutes(dashboardStats.runtimeMin)}`} color="#EF4444" />
+            </div>
           </div>
         )}
 
         {tab === "reports" && (
           <div className="grid grid-cols-2 gap-3 mb-4">
             <Kpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
-            <Kpi label="Billable hours" value={`${signedBillable.toFixed(1)}h`} sub={`${signedHours.toFixed(1)}h machine hours`} color="#22C55E" />
+            <Kpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub={`${signedReports.length} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
+            <Kpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub={HOUR_LABELS.machineHint} color="#22C55E" />
           </div>
         )}
 

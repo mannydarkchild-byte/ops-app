@@ -16,13 +16,27 @@ export function computeAdminDashboard({
   workSessions = [],
   syncState = {},
   siteSettings = null,
+  siteId = null,
 }, period = getBillingPeriod()) {
+  const onSite = (row) => !siteId || row.site_id === siteId;
+  profiles = profiles.filter(onSite);
+  machines = machines.filter(onSite);
+  shifts = shifts.filter(onSite);
+  events = events.filter(onSite);
+  issues = issues.filter(onSite);
+  expenses = expenses.filter(onSite);
+  fuelLogs = fuelLogs.filter(onSite);
+  inspections = inspections.filter(onSite);
+  maintenanceJobs = maintenanceJobs.filter(onSite);
+  breakdowns = breakdowns.filter(onSite);
+  workSessions = workSessions.filter(onSite);
   const activeProfiles = profiles.filter((p) => p.active !== false);
   const byRole = (role) => activeProfiles.filter((p) => p.role === role);
 
   const verifiedShifts = shifts.filter(
     (s) => s.shift_status === SHIFT.VERIFIED && inPeriod(s.verified_at || s.ended_at, period)
   );
+  const cycleShifts = shifts.filter((s) => inPeriod(s.started_at, period));
   const pendingVerify = shifts.filter(
     (s) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(s.shift_status)
   );
@@ -36,13 +50,13 @@ export function computeAdminDashboard({
   const periodExpenses = expenses.filter((e) => inPeriod(e.date, period));
   const periodFuel = fuelLogs.filter((f) => inPeriod(f.timestamp, period));
 
-  const machineHours = verifiedShifts.reduce((s, r) => s + Number(r.hours_worked || 0), 0);
-  const billableHours = verifiedShifts.reduce((s, r) => s + shiftBillableHours(r, events, siteSettings), 0);
-  const revenue = verifiedShifts.reduce((s, r) => s + shiftBillableValue(r, machines, events, siteSettings), 0);
+  const machineHours = cycleShifts.reduce((s, r) => s + Number(r.hours_worked || 0), 0);
+  const billableHours = cycleShifts.reduce((s, r) => s + shiftBillableHours(r, events, siteSettings), 0);
+  const revenue = cycleShifts.reduce((s, r) => s + shiftBillableValue(r, machines, events, siteSettings), 0);
   const expenseTotal = periodExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   const litres = periodFuel.reduce((s, f) => s + Number(f.litres || 0), 0);
-  const runtimeMin = verifiedShifts.reduce((s, r) => s + Number(r.runtime_minutes || 0), 0);
-  const downtimeMin = verifiedShifts.reduce((s, r) => s + Number(r.downtime_minutes || 0), 0);
+  const runtimeMin = cycleShifts.reduce((s, r) => s + Number(r.runtime_minutes || 0), 0);
+  const downtimeMin = cycleShifts.reduce((s, r) => s + Number(r.downtime_minutes || 0), 0);
 
   const activeMechanicJobs = maintenanceJobs.filter((j) => j.status !== MAINTENANCE_STATUS.COMPLETED);
   const completedMechanicJobs = maintenanceJobs.filter(
@@ -88,6 +102,7 @@ export function computeAdminDashboard({
     overview: {
       billableHours,
       machineHours,
+      cycleShiftCount: cycleShifts.length,
       revenue,
       expenseTotal,
       net: revenue - expenseTotal,

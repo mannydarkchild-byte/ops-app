@@ -3,6 +3,25 @@ import { DEFAULT_STOP_OWNERS, ownerForStopReason } from "./stopReasons.js";
 /** A billed shift is 8 hours, less downtime owned by Darkchild. */
 export const STANDARD_SHIFT_HOURS = 8;
 
+/** Same words on the manager, supervisor, and admin home screens. */
+export const HOUR_LABELS = {
+  billable: "Billable hours",
+  billableHint: "All shifts this cycle",
+  machine: "Machine hours",
+  machineHint: "Hour meter",
+  revenue: "Revenue",
+  revenueHint: "Billable hours × rate",
+  runtime: "Runtime",
+  runtimeHint: "App-tracked",
+  downtime: "Downtime",
+  downtimeHint: "App-tracked",
+  diesel: "Diesel",
+  expenses: "Expenses",
+  expensesHint: "This cycle",
+  net: "Net",
+  netHint: "Revenue minus expenses",
+};
+
 /** Machine hours from the hour meter. This is not the billable figure. */
 export function meterHoursWorked(startMeter, endMeter) {
   const start = Number(startMeter);

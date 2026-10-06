@@ -676,10 +676,10 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
   const verified = shifts.filter((s) => s.shift_status === SHIFT.VERIFIED);
   const pending = shifts.filter((s) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(s.shift_status));
   const siteSettings = data.siteSettings || null;
-  const machineHours = verified.reduce((a, s) => a + Number(s.hours_worked || 0), 0);
-  const billableHours = verified.reduce((a, s) => a + shiftBillableHours(s, events, siteSettings), 0);
+  const machineHours = shifts.reduce((a, s) => a + Number(s.hours_worked || 0), 0);
+  const billableHours = shifts.reduce((a, s) => a + shiftBillableHours(s, events, siteSettings), 0);
   const pendingBillable = pending.reduce((a, s) => a + shiftBillableHours(s, events, siteSettings), 0);
-  const revenue = verified.reduce((a, s) => a + shiftBillableValue(s, machineList, events, siteSettings), 0);
+  const revenue = shifts.reduce((a, s) => a + shiftBillableValue(s, machineList, events, siteSettings), 0);
   const periodExpenses = expenses.filter((e) => inRange(e.date));
   const totalExpenses = periodExpenses.reduce((a, e) => a + Number(e.amount || 0), 0);
   const closedStops = events.filter((e) => e.type === "STOP" && e.status === "closed" && inRange(e.stopped_at));
@@ -757,7 +757,7 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
       <div class="summary-cell highlight">
         <div class="label">Billable hours</div>
         <div class="value">${billableHours.toFixed(1)}h</div>
-        <div class="sub">8h shift minus Darkchild downtime</div>
+        <div class="sub">${shifts.length} shifts · 8h each minus Darkchild downtime</div>
       </div>
       <div class="summary-cell highlight">
         <div class="label">Machine hours</div>

@@ -14,7 +14,7 @@ import { AlertModal } from "../components/ui/Modal.jsx";
 import { ISSUE, SHIFT } from "../lib/constants.js";
 import { ownerForStopReason } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
-import { formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
+import { formatDurationMinutes, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import {
   fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, money, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
@@ -31,7 +31,7 @@ import * as wf from "../services/workflows.js";
 const TABS = [
   { id: "overview", label: "Home" },
   { id: "pulse", label: "Pulse" },
-  { id: "issues", label: "Issues" },
+  { id: "issues", label: "Problems" },
   { id: "reports", label: "Reports" },
   { id: "more", label: "More" },
 ];
@@ -129,19 +129,17 @@ export function ManagerApp() {
     [shifts, primaryMachine?.id]
   );
 
-  const cycleVerified = useMemo(
-    () => warriorShifts.filter(
-      (s) => s.shift_status === SHIFT.VERIFIED && inPeriod(s.verified_at || s.ended_at, billingPeriod)
-    ),
+  const cycleShifts = useMemo(
+    () => warriorShifts.filter((s) => inPeriod(s.started_at, billingPeriod)),
     [warriorShifts, billingPeriod]
   );
 
   const cycleStats = useMemo(() => {
-    const machineHours = cycleVerified.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0);
-    const billableHours = cycleVerified.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0);
-    const revenue = cycleVerified.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
-    const runtimeMin = cycleVerified.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0);
-    const downtimeMin = cycleVerified.reduce((sum, s) => sum + Number(s.downtime_minutes || 0), 0);
+    const machineHours = cycleShifts.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0);
+    const billableHours = cycleShifts.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0);
+    const revenue = cycleShifts.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
+    const runtimeMin = cycleShifts.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0);
+    const downtimeMin = cycleShifts.reduce((sum, s) => sum + Number(s.downtime_minutes || 0), 0);
 
     const warriorFuel = fuelLogs.filter(
       (f) => f.machine_id === primaryMachine?.id && inPeriod(f.timestamp, billingPeriod)
@@ -175,9 +173,9 @@ export function ManagerApp() {
       litres,
       expenseTotal,
       utilization,
-      shiftCount: cycleVerified.length,
+      shiftCount: cycleShifts.length,
     };
-  }, [cycleVerified, fuelLogs, expenses, events, primaryMachine?.id, machines, billingPeriod, siteConfig]);
+  }, [cycleShifts, fuelLogs, expenses, events, primaryMachine?.id, machines, billingPeriod, siteConfig]);
 
   const fleetStatus = useMemo(() => {
     if (!primaryMachine) return null;
@@ -302,10 +300,9 @@ export function ManagerApp() {
   }, [filteredExpenses]);
 
   const expensePeriodHours = useMemo(() => {
-    const verified = warriorShifts.filter((s) => s.shift_status === SHIFT.VERIFIED);
     const inScope = expensePeriod
-      ? verified.filter((s) => inPeriod(s.verified_at || s.ended_at, expensePeriod))
-      : verified;
+      ? warriorShifts.filter((s) => inPeriod(s.started_at, expensePeriod))
+      : warriorShifts;
     return {
       machine: inScope.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0),
       billable: inScope.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0),
@@ -313,10 +310,9 @@ export function ManagerApp() {
   }, [warriorShifts, expensePeriod, events, siteConfig]);
 
   const expensePeriodRevenue = useMemo(() => {
-    const verified = warriorShifts.filter((s) => s.shift_status === SHIFT.VERIFIED);
     const inScope = expensePeriod
-      ? verified.filter((s) => inPeriod(s.verified_at || s.ended_at, expensePeriod))
-      : verified;
+      ? warriorShifts.filter((s) => inPeriod(s.started_at, expensePeriod))
+      : warriorShifts;
     return inScope.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
   }, [warriorShifts, expensePeriod, machines, events, siteConfig]);
 
@@ -450,26 +446,27 @@ export function ManagerApp() {
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
-            <p className="font-body text-xs text-[#F2F0EA]/50 mt-1">Hours, diesel, and reports on this screen are for this machine only.</p>
+            <p className="font-body text-xs text-[#F2F0EA]/50 mt-1">Billable hours, machine hours, diesel, and expenses on this screen are for this machine only.</p>
           </label>
         )}
 
         {tab === "overview" && (
           <div className="space-y-4">
+            <p className="font-body text-xs text-[#F2F0EA]/50">This machine · this cycle</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label="Billable hours" value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.machineHours.toFixed(1)}h machine hours · ${cycleStats.shiftCount} signed`} color="#22C55E" />
-              <Kpi label="Revenue" value={money(cycleStats.revenue)} sub={`R${primaryMachine.billable_rate}/h × billable hours`} color="#22C55E" />
-              <Kpi label="Runtime" value={formatDurationMinutes(cycleStats.runtimeMin)} sub="App-tracked this cycle" color="#00A4A6" />
-              <Kpi label="Downtime" value={formatDurationMinutes(cycleStats.downtimeMin)} sub={`Util ${cycleStats.utilization.toFixed(0)}%`} color="#EF4444" />
-              <Kpi label="Diesel" value={`${cycleStats.litres.toFixed(1)} L`} sub={cycleStats.hours > 0 ? `${(cycleStats.litres / cycleStats.hours).toFixed(2)} L/h` : "—"} color="#F5C518" />
-              <Kpi label="Expenses" value={money(cycleStats.expenseTotal)} sub={`${primaryMachine?.name || "This machine"} this cycle`} color="#F5C518" />
+              <Kpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
+              <Kpi label={HOUR_LABELS.machine} value={`${cycleStats.machineHours.toFixed(1)}h`} sub={`${HOUR_LABELS.machineHint} · ${cycleStats.shiftCount} signed`} color="#22C55E" />
+              <Kpi label={HOUR_LABELS.revenue} value={money(cycleStats.revenue)} sub={`R${primaryMachine.billable_rate}/h · ${HOUR_LABELS.revenueHint}`} color="#22C55E" />
+              <Kpi label={HOUR_LABELS.expenses} value={money(cycleStats.expenseTotal)} sub={HOUR_LABELS.expensesHint} color="#F5C518" />
+              <Kpi label={HOUR_LABELS.runtime} value={formatDurationMinutes(cycleStats.runtimeMin)} sub={HOUR_LABELS.runtimeHint} color="#00A4A6" />
+              <Kpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(cycleStats.downtimeMin)} sub={HOUR_LABELS.downtimeHint} color="#EF4444" />
+              <Kpi label={HOUR_LABELS.diesel} value={`${cycleStats.litres.toFixed(1)} L`} sub={cycleStats.machineHours > 0 ? `${(cycleStats.litres / cycleStats.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" />
               <Kpi
-                label="Net (approx)"
+                label={HOUR_LABELS.net}
                 value={money(cycleStats.revenue - cycleStats.expenseTotal)}
-                sub="Revenue minus expenses"
+                sub={HOUR_LABELS.netHint}
                 color="#F2F0EA"
               />
-              <Kpi label="Site" value={activeSite?.name || "—"} sub={primaryMachine.code} color="#F2F0EA" />
             </div>
 
             {fleetStatus && <WarriorStatusCard fleet={fleetStatus} workSessions={workSessions} profiles={profiles} />}
@@ -575,7 +572,7 @@ export function ManagerApp() {
               onClick={() => setShowImportExpenses(true)}
               className="w-full border border-[#F5C518]/50 text-[#F5C518] py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
             >
-              IMPORT BANK EXCEL
+              UPLOAD BANK RECON
             </button>
 
             <div className="flex flex-wrap gap-1">
@@ -594,7 +591,7 @@ export function ManagerApp() {
             <p className="text-[10px] text-[#F2F0EA]/40">{primaryMachine.name} · {expenseDashboard.periodLabel}</p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label="Total Spend" value={money(expenseDashboard.total)} sub={`${expenseDashboard.count} entries`} color="#F5C518" />
+              <Kpi label={HOUR_LABELS.expenses} value={money(expenseDashboard.total)} sub={`${expenseDashboard.count} entries`} color="#F5C518" />
               <Kpi
                 label="Top Category"
                 value={expenseDashboard.topCat}
@@ -605,7 +602,7 @@ export function ManagerApp() {
               <Kpi
                 label="Cost / Hour"
                 value={expenseDashboard.costPerHour != null ? money(expenseDashboard.costPerHour) : "—"}
-                sub={expensePeriodHours.billable > 0 ? `${expensePeriodHours.billable.toFixed(1)}h billable · ${expensePeriodHours.machine.toFixed(1)}h machine` : "No signed hours"}
+                sub={expensePeriodHours.billable > 0 ? `${expensePeriodHours.billable.toFixed(1)}h billable hours · ${expensePeriodHours.machine.toFixed(1)}h machine hours` : "No signed hours"}
                 color="#EF4444"
               />
               {expenseDashboard.pctRevenue != null && (
@@ -773,6 +770,7 @@ export function ManagerApp() {
           onClose={() => setShowImportExpenses(false)}
           user={user}
           machine={primaryMachine}
+          machines={siteMachines}
           site={activeSite}
           existing={expenses}
           onDone={() => { refreshLocal(); showAlert("Expenses saved", "Bank payments were added and will sync.", "success"); }}

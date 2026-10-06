@@ -16,6 +16,8 @@ import { ROLES } from "../lib/constants.js";
 
 import { computeAdminDashboard, formatAdminMetric } from "../lib/adminMetrics.js";
 
+import { HOUR_LABELS } from "../lib/shiftMetrics.js";
+
 import { getBillingPeriod } from "../lib/utils.js";
 
 import { AlertModal } from "../components/ui/Modal.jsx";
@@ -76,8 +78,9 @@ export function AdminApp() {
       profiles, machines, shifts, events, issues, expenses, fuelLogs,
       inspections, maintenanceJobs, breakdowns, workSessions, syncState,
       siteSettings,
+      siteId: activeSite?.id || null,
     }, billingPeriod),
-    [profiles, machines, shifts, events, issues, expenses, fuelLogs, inspections, maintenanceJobs, breakdowns, workSessions, syncState, billingPeriod, siteSettings]
+    [profiles, machines, shifts, events, issues, expenses, fuelLogs, inspections, maintenanceJobs, breakdowns, workSessions, syncState, billingPeriod, siteSettings, activeSite?.id]
   );
 
   const visibleProfiles = profiles
@@ -229,19 +232,21 @@ export function AdminApp() {
 
         {tab === "dashboard" && (
           <div className="space-y-4">
+            <p className="font-body text-xs text-[#F2F0EA]/50">This site · this cycle</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label="Billable hours" value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${formatAdminMetric(dashboard.overview.machineHours, "hours")} machine hours`} color="#22C55E" />
-              <Kpi label="Revenue" value={formatAdminMetric(dashboard.overview.revenue, "money")} sub="Verified shifts" color="#F5C518" />
-              <Kpi label="Expenses" value={formatAdminMetric(dashboard.overview.expenseTotal, "money")} sub={`Net ${formatAdminMetric(dashboard.overview.net, "money")}`} color="#F97316" />
-              <Kpi label="Open problems" value={dashboard.overview.openIssues} sub={`${dashboard.overview.criticalIssues} critical`} color="#EF4444" />
+              <Kpi label={HOUR_LABELS.billable} value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${dashboard.overview.cycleShiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
+              <Kpi label={HOUR_LABELS.machine} value={formatAdminMetric(dashboard.overview.machineHours, "hours")} sub={HOUR_LABELS.machineHint} color="#22C55E" />
+              <Kpi label={HOUR_LABELS.revenue} value={formatAdminMetric(dashboard.overview.revenue, "money")} sub={HOUR_LABELS.revenueHint} color="#F5C518" />
+              <Kpi label={HOUR_LABELS.expenses} value={formatAdminMetric(dashboard.overview.expenseTotal, "money")} sub={`Net ${formatAdminMetric(dashboard.overview.net, "money")}`} color="#F97316" />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Kpi label="Pending sign-off" value={dashboard.overview.pendingVerify} sub="Shifts awaiting supervisor" color="#00A4A6" />
-              <Kpi label="Downtime" value={formatAdminMetric(dashboard.overview.downtimeMin, "duration")} sub={`Runtime ${formatAdminMetric(dashboard.overview.runtimeMin, "duration")}`} color="#F2F0EA" />
-              <Kpi label="Diesel" value={formatAdminMetric(dashboard.overview.litres, "litres")} sub="This billing period" color="#F5C518" />
-              <Kpi label="Sync queue" value={dashboard.overview.syncPending} sub={(syncState.status || "idle").toUpperCase()} color="#00A4A6" />
+              <Kpi label={HOUR_LABELS.downtime} value={formatAdminMetric(dashboard.overview.downtimeMin, "duration")} sub={`${HOUR_LABELS.runtime} ${formatAdminMetric(dashboard.overview.runtimeMin, "duration")}`} color="#F2F0EA" />
+              <Kpi label={HOUR_LABELS.diesel} value={formatAdminMetric(dashboard.overview.litres, "litres")} sub={dashboard.overview.machineHours > 0 ? `${(dashboard.overview.litres / dashboard.overview.machineHours).toFixed(2)} L per machine hour` : HOUR_LABELS.expensesHint} color="#F5C518" />
+              <Kpi label="Open problems" value={dashboard.overview.openIssues} sub={`${dashboard.overview.criticalIssues} critical`} color="#EF4444" />
             </div>
+            <p className="font-body text-xs text-[#F2F0EA]/40">Sync queue {dashboard.overview.syncPending}</p>
 
             <section>
               <p className="font-logo text-[10px] text-[#F5C518] mb-2 tracking-wider">BY ROLE</p>
@@ -250,8 +255,8 @@ export function AdminApp() {
                   { label: "Active staff", value: dashboard.roles.operator.headcount },
                   { label: "Clocked in now", value: dashboard.roles.operator.clockedIn },
                   { label: "Verified shifts", value: dashboard.roles.operator.verifiedShifts },
-                  { label: "Billable hours", value: formatAdminMetric(dashboard.roles.operator.billableHours, "hours") },
-                  { label: "Machine hours", value: formatAdminMetric(dashboard.roles.operator.machineHours, "hours") },
+                  { label: HOUR_LABELS.billable, value: formatAdminMetric(dashboard.roles.operator.billableHours, "hours") },
+                  { label: HOUR_LABELS.machine, value: formatAdminMetric(dashboard.roles.operator.machineHours, "hours") },
                   { label: "Pre-starts", value: dashboard.roles.operator.prestartInspections },
                   { label: "Early clock-outs", value: dashboard.roles.operator.earlyClockOuts },
                   { label: "Top operator", value: `${dashboard.roles.operator.topName} (${dashboard.roles.operator.topShifts})` },
