@@ -3,6 +3,12 @@ import { supabase } from "./supabase.js";
 import { MEDIA_BUCKET } from "./constants.js";
 import { makeId } from "./utils.js";
 
+/** Stored in DB / media_blobs instead of public URLs (private bucket). */
+export const STORAGE_REF_PREFIX = "storage:";
+
+const SIGNED_URL_TTL_SEC = 60 * 60;
+const signedUrlCache = new Map();
+
 /** Store a blob locally; returns media ref id */
 export async function storeMediaBlob(blob, { mimeType = "image/jpeg", kind = "photo" } = {}) {
   const database = await ensureDB();
@@ -33,14 +39,71 @@ export async function storeMediaDataUrl(dataUrl, kind = "photo") {
   return storeMediaBlob(blob, { mimeType: mime, kind });
 }
 
-/** Resolve media ref to displayable URL (local blob URL or remote) */
+export function toStorageRef(path) {
+  if (!path) return null;
+  if (path.startsWith(STORAGE_REF_PREFIX)) return path;
+  return `${STORAGE_REF_PREFIX}${path.replace(/^\/+/, "")}`;
+}
+
+/** Extract bucket-relative path from storage: refs or legacy public/signed URLs. */
+export function parseStoragePath(ref) {
+  if (!ref || typeof ref !== "string") return null;
+  if (ref.startsWith(STORAGE_REF_PREFIX)) return ref.slice(STORAGE_REF_PREFIX.length);
+  if (ref.startsWith("MEDIA_") || ref.startsWith("data:") || ref.startsWith("blob:")) return null;
+
+  const m = ref.match(/\/storage\/v1\/object\/(?:public|sign)\/ops-media\/([^?]+)/i);
+  if (m) return decodeURIComponent(m[1]);
+
+  // Bare relative path written by older clients after upload
+  if (!ref.includes("://") && !ref.includes(" ") && ref.includes("/")) return ref.replace(/^\/+/, "");
+
+  return null;
+}
+
+async function createSignedMediaUrl(path, expiresIn = SIGNED_URL_TTL_SEC) {
+  const cacheKey = path;
+  const cached = signedUrlCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now() + 30_000) return cached.url;
+
+  const { data, error } = await supabase.storage.from(MEDIA_BUCKET).createSignedUrl(path, expiresIn);
+  if (error) throw error;
+  const url = data?.signedUrl;
+  if (!url) throw new Error("Could not create signed media URL");
+  signedUrlCache.set(cacheKey, { url, expiresAt: Date.now() + expiresIn * 1000 });
+  return url;
+}
+
+/** Resolve media ref to displayable URL (local blob URL, signed remote, or data) */
 export async function resolveMediaUrl(ref) {
   if (!ref) return null;
-  if (ref.startsWith("http") || ref.startsWith("data:") || ref.startsWith("blob:")) return ref;
+  if (ref.startsWith("data:") || ref.startsWith("blob:")) return ref;
+
+  const storagePath = parseStoragePath(ref);
+  if (storagePath) {
+    try {
+      return await createSignedMediaUrl(storagePath);
+    } catch (e) {
+      console.warn("resolveMediaUrl signed:", e);
+      return null;
+    }
+  }
+
+  if (ref.startsWith("http")) return ref;
+
   const database = await ensureDB();
   const row = await database.media_blobs.get(ref);
   if (!row) return null;
-  if (row.remote_url) return row.remote_url;
+  if (row.remote_url) {
+    const path = parseStoragePath(row.remote_url);
+    if (path) {
+      try {
+        return await createSignedMediaUrl(path);
+      } catch (e) {
+        console.warn("resolveMediaUrl blob signed:", e);
+      }
+    }
+    if (row.remote_url.startsWith("http")) return row.remote_url;
+  }
   if (row.blob) return URL.createObjectURL(row.blob);
   return null;
 }
@@ -76,8 +139,8 @@ export async function uploadPendingMedia({ machineCode = "general" } = {}) {
         .from(MEDIA_BUCKET)
         .upload(path, item.blob, { contentType: item.mime_type, upsert: true, cacheControl: "31536000" });
       if (upErr) throw upErr;
-      const { data: { publicUrl } } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
-      await database.media_blobs.update(item.id, { status: "uploaded", remote_url: publicUrl });
+      const storageRef = toStorageRef(path);
+      await database.media_blobs.update(item.id, { status: "uploaded", remote_url: storageRef });
       uploaded++;
     } catch (e) {
       const msg = e?.message || String(e);
@@ -88,13 +151,13 @@ export async function uploadPendingMedia({ machineCode = "general" } = {}) {
   return { uploaded, errors };
 }
 
-/** Replace media refs in payload with remote URLs before push */
+/** Replace media refs in payload with storage refs (or signed-ready paths) before push */
 export async function resolveMediaRefsInRecord(record) {
   const out = { ...record };
   const refFields = Object.keys(out).filter((k) => k.endsWith("_ref") || k === "media_ref");
   for (const field of refFields) {
     const ref = out[field];
-    if (!ref || ref.startsWith("http")) continue;
+    if (!ref || ref.startsWith("http") || ref.startsWith(STORAGE_REF_PREFIX)) continue;
     const database = getDB();
     const row = await database.media_blobs.get(ref);
     if (row?.remote_url) out[field] = row.remote_url;
@@ -109,8 +172,13 @@ export async function resolveMediaRefsInRecord(record) {
     if ((field.includes("photo") || field === "supervisor_signature") && out[field]?.startsWith?.("data:")) {
       const ref = await storeMediaDataUrl(out[field], field);
       if (typeof ref === "string" && !ref.startsWith("data:")) {
-        const url = await resolveMediaUrl(ref);
-        if (url?.startsWith("http")) out[field.replace(/_ref$/, "")] = url;
+        await uploadPendingMedia();
+        const database = getDB();
+        const row = await database.media_blobs.get(ref);
+        if (row?.remote_url) {
+          const target = field.endsWith("_ref") ? field : field;
+          out[target] = row.remote_url;
+        }
       }
     }
   }

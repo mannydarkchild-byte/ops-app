@@ -69,8 +69,9 @@ export async function pushOneQueueItem(item) {
     if (shift?.site_id) resolved.site_id = shift.site_id;
   }
   if (item.table === "events" && resolved.photo_ref && !resolved.photo_data) {
-    if (typeof resolved.photo_ref === "string" && resolved.photo_ref.startsWith("http")) {
-      resolved.photo_data = resolved.photo_ref;
+    const ref = resolved.photo_ref;
+    if (typeof ref === "string" && (ref.startsWith("http") || ref.startsWith("storage:"))) {
+      resolved.photo_data = ref;
     }
     delete resolved.photo_ref;
   }
