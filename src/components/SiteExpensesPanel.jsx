@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { EditExpenseModal } from "./ExpenseModal.jsx";
 import { fmtDateShort, getBillingPeriod, getDatePresets, inPeriod, money, onSiteRecord } from "../lib/utils.js";
 
 const FILTERS = [
@@ -7,8 +8,9 @@ const FILTERS = [
   { id: "all", label: "All" },
 ];
 
-export function SiteExpensesPanel({ expenses = [], machines = [], siteId, cycleStartDay = 26, scopeLabel = "This site" }) {
+export function SiteExpensesPanel({ expenses = [], machines = [], siteId, cycleStartDay = 26, scopeLabel = "This site", canEdit = false, onSaved }) {
   const [filter, setFilter] = useState("cycle");
+  const [editing, setEditing] = useState(null);
 
   const period = useMemo(() => {
     if (filter === "all") return null;
@@ -50,19 +52,38 @@ export function SiteExpensesPanel({ expenses = [], machines = [], siteId, cycleS
         </p>
       ) : (
         <div className="space-y-2">
-          {rows.map((e) => (
-            <div key={e.id} className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3 flex justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-logo text-xs">{e.category || "Expense"}</p>
-                <p className="text-[10px] text-[#F2F0EA]/50 truncate">{e.description || e.vendor || "—"}</p>
-                <p className="text-[9px] text-[#F2F0EA]/30 mt-0.5">
-                  {machineName(e.machine_id)} · {fmtDateShort(e.date || e.created_at)}
-                </p>
+          {rows.map((e) => {
+            const body = (
+              <>
+                <div className="min-w-0">
+                  <p className="font-logo text-xs">{e.category || "Expense"}</p>
+                  <p className="text-[10px] text-[#F2F0EA]/50 truncate">{e.description || e.vendor || "—"}</p>
+                  <p className="text-[9px] text-[#F2F0EA]/30 mt-0.5">
+                    {machineName(e.machine_id)} · {fmtDateShort(e.date || e.created_at)}
+                    {canEdit ? ` · ${e.receipt_ref || e.receipt_photo ? "Receipt on file" : "No receipt"}` : ""}
+                  </p>
+                </div>
+                <p className="font-logo text-[#F5C518] shrink-0">{money(e.amount)}</p>
+              </>
+            );
+            return canEdit ? (
+              <button key={e.id} type="button" onClick={() => setEditing(e)} className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3 flex justify-between gap-3">
+                {body}
+              </button>
+            ) : (
+              <div key={e.id} className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3 flex justify-between gap-3">
+                {body}
               </div>
-              <p className="font-logo text-[#F5C518] shrink-0">{money(e.amount)}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
+      )}
+      {editing && (
+        <EditExpenseModal
+          expense={editing}
+          onClose={() => setEditing(null)}
+          onDone={async () => { await onSaved?.(); }}
+        />
       )}
     </div>
   );

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "./ui/Modal.jsx";
 import { FormSection } from "./ui/FormSection.jsx";
 import { VoiceInput } from "./ui/VoiceInput.jsx";
 import { EXPENSE_CATEGORIES } from "../lib/constants.js";
-import { pickMedia } from "../lib/media.js";
+import { pickGalleryPhoto, resolveMediaUrl } from "../lib/media.js";
+import { money } from "../lib/utils.js";
 import * as wf from "../services/workflows.js";
 
 export function ExpenseModal({ onClose, user, machine, site, onDone, allowCustomDate = true }) {
@@ -79,7 +80,7 @@ export function ExpenseModal({ onClose, user, machine, site, onDone, allowCustom
         <VoiceInput value={description} onChange={setDescription} placeholder="What was purchased…" rows={2} />
         <button
           type="button"
-          onClick={() => pickMedia("photo", ({ ref }) => setReceiptRef(ref))}
+          onClick={() => pickGalleryPhoto(({ ref }) => setReceiptRef(ref))}
           className="w-full mt-2 py-3 border border-[#2A2A2A] rounded-xl font-logo text-xs text-[#F2F0EA]/70"
         >
           {receiptRef ? "✓ Receipt attached" : "+ Receipt photo (optional)"}
@@ -93,6 +94,79 @@ export function ExpenseModal({ onClose, user, machine, site, onDone, allowCustom
         className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold disabled:opacity-40"
       >
         {busy ? "SAVING…" : allowCustomDate && expenseDate < new Date().toISOString().slice(0, 10) ? "SAVE BACKDATED EXPENSE" : "SAVE EXPENSE"}
+      </button>
+    </Modal>
+  );
+}
+
+export function EditExpenseModal({ expense, onClose, onDone }) {
+  const [category, setCategory] = useState(expense?.category || "Other");
+  const [receiptRef, setReceiptRef] = useState(expense?.receipt_ref || null);
+  const [preview, setPreview] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const savedReceipt = expense?.receipt_ref || expense?.receipt_photo || null;
+
+  useEffect(() => {
+    let cancelled = false;
+    const ref = receiptRef || savedReceipt;
+    if (!ref) {
+      setPreview(null);
+      return undefined;
+    }
+    resolveMediaUrl(ref).then((url) => {
+      if (!cancelled) setPreview(url);
+    });
+    return () => { cancelled = true; };
+  }, [receiptRef, savedReceipt]);
+
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await wf.updateExpense(expense, {
+        category,
+        receiptRef: receiptRef && receiptRef !== expense?.receipt_ref ? receiptRef : undefined,
+      });
+      await onDone?.();
+      onClose();
+    } catch (e) {
+      setError(e.message || "Could not save this expense");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="EXPENSE" color="blue" onClose={onClose}>
+      <p className="font-body text-sm text-[#F2F0EA]/70 mb-3">
+        {money(expense?.amount)} · {expense?.description || expense?.vendor || "No description"}
+      </p>
+      <FormSection step={1} title="Category" description="Correct the category if the recon guess is wrong." accent="#00A4A6">
+        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-full text-[#F2F0EA]">
+          {EXPENSE_CATEGORIES.map((x) => <option key={x}>{x}</option>)}
+        </select>
+      </FormSection>
+      <FormSection step={2} title="Receipt" description="Add a photo of the receipt for this payment." accent="#00A4A6">
+        {preview && (
+          <img src={preview} alt="Receipt" className="w-full max-h-48 object-contain rounded-2xl bg-[#0A0A0A] mb-2" />
+        )}
+        <button
+          type="button"
+          onClick={() => pickGalleryPhoto(({ ref }) => setReceiptRef(ref))}
+          className="w-full py-3 border border-[#2A2A2A] rounded-full font-logo text-xs text-[#F2F0EA]/70"
+        >
+          {receiptRef || savedReceipt ? "Replace receipt photo" : "Upload receipt photo"}
+        </button>
+      </FormSection>
+      {error && <p className="text-sm text-[#EF4444] mb-2">{error}</p>}
+      <button
+        type="button"
+        onClick={save}
+        disabled={busy}
+        className="w-full bg-[#00A4A6] text-white py-4 rounded-full font-logo font-bold disabled:opacity-40"
+      >
+        {busy ? "SAVING…" : "SAVE"}
       </button>
     </Modal>
   );

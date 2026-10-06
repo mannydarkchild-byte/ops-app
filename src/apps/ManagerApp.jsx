@@ -4,7 +4,7 @@ import { useLiveTimer } from "../hooks/useLiveTimer.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { BackdateReadingModal } from "../components/BackdateReadingModal.jsx";
 import { ActivityFeed } from "../components/ActivityFeed.jsx";
-import { ExpenseModal } from "../components/ExpenseModal.jsx";
+import { EditExpenseModal, ExpenseModal } from "../components/ExpenseModal.jsx";
 import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
@@ -63,6 +63,7 @@ export function ManagerApp() {
   const [showBackdate, setShowBackdate] = useState(false);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
   const [showImportExpenses, setShowImportExpenses] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
   const [reportPreview, setReportPreview] = useState(null);
@@ -589,6 +590,7 @@ export function ManagerApp() {
             </div>
 
             <p className="text-[10px] text-[#F2F0EA]/40">{primaryMachine.name} · {expenseDashboard.periodLabel}</p>
+            <p className="text-[10px] text-[#F2F0EA]/40">Tap a payment to change its category or add a receipt.</p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Kpi label={HOUR_LABELS.expenses} value={money(expenseDashboard.total)} sub={`${expenseDashboard.count} entries`} color="#F5C518" />
@@ -642,14 +644,21 @@ export function ManagerApp() {
             ) : (
               <div className="space-y-2">
                 {filteredExpenses.map((e) => (
-                  <div key={e.id} className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3 flex justify-between gap-3">
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => setEditingExpense(e)}
+                    className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3 flex justify-between gap-3"
+                  >
                     <div className="min-w-0">
                       <p className="font-logo text-xs">{e.category}</p>
                       <p className="text-[10px] text-[#F2F0EA]/40 truncate">{e.description || e.vendor || "—"}</p>
-                      <p className="text-[9px] text-[#F2F0EA]/30 mt-0.5">{fmtDateShort(e.date)}</p>
+                      <p className="text-[9px] text-[#F2F0EA]/30 mt-0.5">
+                        {fmtDateShort(e.date)} · {e.receipt_ref || e.receipt_photo ? "Receipt on file" : "No receipt"}
+                      </p>
                     </div>
                     <p className="font-logo text-[#F5C518] shrink-0">{money(e.amount)}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -785,6 +794,14 @@ export function ManagerApp() {
           site={activeSite}
           onDone={refreshLocal}
           allowCustomDate
+        />
+      )}
+
+      {editingExpense && (
+        <EditExpenseModal
+          expense={editingExpense}
+          onClose={() => setEditingExpense(null)}
+          onDone={refreshLocal}
         />
       )}
 

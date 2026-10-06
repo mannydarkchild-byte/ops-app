@@ -1147,6 +1147,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
               siteId={user?.site_id}
               cycleStartDay={siteConfig.billing_cycle_start_day}
               scopeLabel={activeSite?.name || "This site"}
+              canEdit
+              onSaved={refreshLocal}
             />
           </div>
         )}

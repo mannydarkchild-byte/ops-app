@@ -29,6 +29,11 @@
 }
 
 .ops-site h1 { font-size: clamp(2.6rem, 5.4vw, 4.6rem); max-width: 14ch; }
+.ops-hero-copy h1 {
+  font-size: clamp(1.85rem, 3.4vw, 3.05rem);
+  max-width: 16em;
+  line-height: 1.12;
+}
 .ops-site h2 { font-size: clamp(2rem, 3.4vw, 3.1rem); max-width: 18ch; }
 .ops-kicker {
   color: var(--gold);
@@ -123,8 +128,9 @@
   align-items: center;
   justify-content: center;
   min-height: 2.85rem;
-  padding: 0.6rem 1.15rem;
+  padding: 0.6rem 1.35rem;
   border: 1px solid transparent;
+  border-radius: 999px;
   text-decoration: none;
   font: 650 0.95rem/1 Inter, system-ui, sans-serif;
   cursor: pointer;
@@ -642,7 +648,7 @@
 }
 .ops-foot p { color: var(--muted); max-width: 28rem; margin-top: 0.4rem; }
 .ops-foot nav { display: flex; flex-wrap: wrap; gap: 0.8rem 1.1rem; align-content: flex-start; }
-.ops-foot a, .ops-foot button {
+.ops-foot a, .ops-foot button:not(.ops-btn) {
   color: var(--ink);
   background: none;
   border: 0;
@@ -651,7 +657,8 @@
   font: inherit;
   text-decoration: none;
 }
-.ops-foot a:hover, .ops-foot button:hover { color: var(--gold); }
+.ops-foot .ops-btn { margin-top: 0.15rem; }
+.ops-foot a:hover, .ops-foot button:not(.ops-btn):hover { color: var(--gold); }
 
 @keyframes ops-draw {
   to { stroke-dashoffset: 0; }
@@ -687,6 +694,7 @@
     width: 2.6rem;
     height: 2.6rem;
     border: 1px solid rgba(242, 240, 234, 0.25);
+    border-radius: 999px;
     background: transparent;
     color: var(--ink);
   }

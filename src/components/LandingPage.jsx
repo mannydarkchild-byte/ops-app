@@ -121,8 +121,7 @@ export function LandingPage({ onLogin }) {
           <button type="button" className="ops-nav-login" onClick={() => { closeMenu(); onLogin(); }}>Log in</button>
         </nav>
         <div className="ops-nav-actions">
-          <button type="button" className="ops-nav-login ops-nav-login-desk" onClick={onLogin}>Log in</button>
-          <a className="ops-btn ops-btn-gold" href="#contact">Request a demo</a>
+          <button type="button" className="ops-btn ops-btn-gold" onClick={onLogin}>Log in</button>
           <button
             type="button"
             className="ops-nav-menu"
@@ -138,10 +137,9 @@ export function LandingPage({ onLogin }) {
       <main id="top">
         <section className="ops-hero">
           <div className="ops-hero-copy">
-            <p className="ops-kicker">Equipment operations</p>
-            <h1>Know exactly what your machine did today.</h1>
+            <h1>Equipment operations for the people on the machine and the people who answer for it.</h1>
             <p className="ops-lede">
-              OPS gives you one verified record of every machine shift — from pre-start and hour meter readings to running time, downtime, diesel, problems, expenses and sign-off.
+              Know exactly what your machine did today. OPS gives you one verified record of every machine shift — from pre-start and hour meter readings to running time, downtime, diesel, problems, expenses and sign-off.
             </p>
             <div className="ops-hero-actions">
               <a className="ops-btn ops-btn-gold" href="#contact">Request a demo</a>
@@ -604,12 +602,12 @@ export function LandingPage({ onLogin }) {
       <footer className="ops-foot">
         <div>
           <span className="ops-brand">OPS</span>
-          <p>Equipment operations for the people on the machine — and the people accountable for it.</p>
+          <p>Equipment operations for the people on the machine and the people who answer for it.</p>
         </div>
         <nav aria-label="Footer">
           {NAV.map((item) => <a key={item.href} href={item.href}>{item.label}</a>)}
           <a href="#contact">Request a demo</a>
-          <button type="button" onClick={onLogin}>Log in</button>
+          <button type="button" className="ops-btn ops-btn-gold" onClick={onLogin}>Log in</button>
         </nav>
       </footer>
     </div>
