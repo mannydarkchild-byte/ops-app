@@ -7,48 +7,54 @@ const CREATABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES
 
 export { CREATABLE_ROLES };
 
-/** Create auth user + profile (admin only). Restores admin session after signUp. */
+/**
+ * Create auth user + profile via Edge Function (service_role server-side).
+ * Requires deployed function `admin-create-user` and Dashboard Auth public sign-ups OFF.
+ */
 export async function adminCreateUser({ email, password, name, role, siteId, machineId, phone, shiftBand }) {
   if (!CREATABLE_ROLES.includes(role)) throw new Error("Invalid role for new user");
   if (!email?.trim() || !password || password.length < 6) throw new Error("Email and password (6+ chars) required");
 
-  const { data: { session: adminSession } } = await supabase.auth.getSession();
-  if (!adminSession) throw new Error("Admin session required");
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Admin session required");
 
-  const { data, error } = await supabase.auth.signUp({
-    email: email.trim(),
-    password,
-    options: {
-      data: { name: name.trim(), role },
+  const { data, error } = await supabase.functions.invoke("admin-create-user", {
+    body: {
+      email: email.trim(),
+      password,
+      name: name.trim(),
+      role,
+      siteId: siteId || null,
+      machineId: machineId || null,
+      phone: phone?.trim() || null,
+      shiftBand: shiftBand || "any",
     },
   });
-  if (error) throw error;
-  if (!data.user?.id) throw new Error("User was not created — check if email already exists");
+
+  if (error) {
+    const detail = error.message || "Could not create user";
+    throw new Error(
+      /Failed to send|FunctionsFetchError|not found|404/i.test(detail)
+        ? "User create function is not deployed. Deploy supabase/functions/admin-create-user and disable public Auth sign-ups."
+        : detail
+    );
+  }
+
+  if (data?.error) throw new Error(data.error);
+  if (!data?.user?.id || !data?.profile) throw new Error("User was not created — check if email already exists");
 
   const profile = {
-    id: data.user.id,
-    email: email.trim(),
-    name: name.trim(),
-    role,
-    site_id: siteId || null,
-    machine_id: role === ROLES.OPERATOR ? machineId || null : null,
-    phone: phone?.trim() || null,
-    shift_band: shiftBand || "any",
-    active: true,
-    updated_at: nowISO(),
+    ...data.profile,
+    updated_at: data.profile.updated_at || nowISO(),
   };
-
-  const { error: profileErr } = await supabase.from("profiles").update(profile).eq("id", data.user.id);
-  if (profileErr) throw profileErr;
 
   await saveLocal("profiles", { ...profile, created_at: nowISO(), _sync_status: "synced" }, { enqueue: false });
 
-  await supabase.auth.setSession({
-    access_token: adminSession.access_token,
-    refresh_token: adminSession.refresh_token,
-  });
-
-  return { user: data.user, profile, needsEmailConfirm: !data.session };
+  return {
+    user: data.user,
+    profile,
+    needsEmailConfirm: Boolean(data.needsEmailConfirm),
+  };
 }
 
 /** Soft-remove — cannot delete auth.users from client */

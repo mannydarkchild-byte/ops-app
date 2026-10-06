@@ -1,0 +1,6 @@
+# Minimal Supabase config for local CLI / Edge Function deploy.
+# Auth sign-ups must be disabled in the Dashboard for production
+# (Authentication → Providers → Email → disable "Enable sign ups").
+
+[functions.admin-create-user]
+verify_jwt = true
