@@ -1,5 +1,5 @@
 import { ISSUE, SHIFT } from "./constants.js";
-import { fmtDate } from "./utils.js";
+import { fmtDate, money } from "./utils.js";
 import { shiftBillableHours } from "./shiftMetrics.js";
 
 const TYPE_FILTERS = {
@@ -163,7 +163,7 @@ export function buildAdminActivityLog({
       site: siteName(ex.site_id),
       operator: ex.operator_name,
       machine: machineName(ex.machine_id),
-      detail: `${ex.category} · R${Number(ex.amount || 0).toFixed(2)}`,
+      detail: `${ex.category} · ${money(ex.amount)}`,
     });
   }
 

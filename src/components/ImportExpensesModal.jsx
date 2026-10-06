@@ -67,7 +67,7 @@ export function ImportExpensesModal({ onClose, user, machine, machines = [], sit
   return (
     <Modal title="Upload bank recon" color="yellow" onClose={onClose}>
       <p className="font-body text-sm text-[#F2F0EA]/75 mb-4 leading-relaxed">
-        Upload an Excel or CSV bank recon. One row of headings must include Date, and Amount or Debit. Category and Machine columns are used when they are there. Money coming in is left out.
+        Upload an Excel or CSV recon. Headings can be Date, Description, Amount, and Comments, as on the screener recon. Money coming in is left out.
       </p>
       <button
         type="button"

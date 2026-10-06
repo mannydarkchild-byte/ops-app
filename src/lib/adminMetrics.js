@@ -1,5 +1,5 @@
 import { ISSUE, MAINTENANCE_STATUS, ROLES, SHIFT } from "./constants.js";
-import { getBillingPeriod, inPeriod, money, shiftBillableValue } from "./utils.js";
+import { getBillingPeriod, inPeriod, isLiveShift, money, shiftBillableValue } from "./utils.js";
 import { formatDurationMinutes, shiftBillableHours } from "./shiftMetrics.js";
 
 export function computeAdminDashboard({
@@ -40,8 +40,12 @@ export function computeAdminDashboard({
   const pendingVerify = shifts.filter(
     (s) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(s.shift_status)
   );
-  const runningShifts = shifts.filter((s) => s.shift_status === SHIFT.RUNNING);
-  const openStops = events.filter((e) => e.type === "STOP" && e.status === "open");
+  const runningShifts = shifts.filter((s) => s.shift_status === SHIFT.RUNNING && isLiveShift(s));
+  const openStops = events.filter((e) => {
+    if (e.type !== "STOP" || e.status !== "open") return false;
+    const shift = e.shift_id ? shifts.find((s) => s.id === e.shift_id) : null;
+    return shift ? isLiveShift(shift) : false;
+  });
 
   const openIssues = issues.filter((i) => i.status !== ISSUE.RESOLVED);
   const criticalIssues = openIssues.filter((i) => i.priority === "Critical");
@@ -160,12 +164,11 @@ export function computeAdminDashboard({
     },
     fleet: machines.filter((m) => m.active !== false).map((m) => {
       const running = runningShifts.some((s) => s.machine_id === m.id);
-      const stopped = openStops.some((e) => e.machine_id === m.id);
       const stop = openStops.find((e) => e.machine_id === m.id);
       return {
         id: m.id,
         name: m.name,
-        status: running ? "running" : stopped ? "stopped" : "idle",
+        status: stop ? "stopped" : running ? "running" : "idle",
         stopReason: stop?.reason,
       };
     }),

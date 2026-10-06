@@ -13,20 +13,53 @@ function norm(value) {
 
 function excelDate(value) {
   if (value == null || value === "") return null;
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return correctYear(value);
   if (typeof value === "number") {
     const parsed = XLSX.SSF.parse_date_code(value);
     if (!parsed) return null;
-    return new Date(parsed.y, parsed.m - 1, parsed.d, 12, 0, 0);
+    return correctYear(new Date(parsed.y, parsed.m - 1, parsed.d, 12, 0, 0));
   }
-  const text = String(value).trim();
+  const text = String(value).trim().replace(/(\d)([A-Za-z])/g, "$1 $2");
   const dmy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (dmy) {
     const year = dmy[3].length === 2 ? 2000 + Number(dmy[3]) : Number(dmy[3]);
-    return new Date(year, Number(dmy[2]) - 1, Number(dmy[1]), 12, 0, 0);
+    return correctYear(new Date(year, Number(dmy[2]) - 1, Number(dmy[1]), 12, 0, 0));
+  }
+  const named = text.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (named) {
+    const month = monthIndex(named[2]);
+    if (month == null) return null;
+    return correctYear(new Date(Number(named[3]), month, Number(named[1]), 12, 0, 0));
   }
   const parsed = new Date(text);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return Number.isNaN(parsed.getTime()) ? null : correctYear(parsed);
+}
+
+/** A typed 3026 in this recon is 2026. Keep the calendar day in local time. */
+function correctYear(date) {
+  const year = date.getFullYear();
+  if (year >= 3000 && year < 4000) date.setFullYear(year - 1000);
+  return date;
+}
+
+function localISODate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function monthIndex(name) {
+  const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+  const n = name.toLowerCase();
+  const exact = months.indexOf(n);
+  if (exact >= 0) return exact;
+  const short = months.findIndex((month) => month.startsWith(n.slice(0, 3)));
+  return short >= 0 ? short : null;
+}
+
+function cleanText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
 function moneyNumber(value) {
@@ -40,15 +73,15 @@ function moneyNumber(value) {
 function guessCategory(description) {
   const text = description.toLowerCase();
   const rules = [
-    ["Fuel", ["fuel", "diesel", "engen", "shell", "bp ", "sasol", "petrol"]],
-    ["Parts", ["part", "bearing", "filter", "spares"]],
+    ["Fuel", ["fuel", "diesel", "engen", "shell", "bp ", "sasol", "petrol", "filling"]],
+    ["Parts", ["part", "bearing", "filter", "spares", "mesh", "roller", "starter"]],
     ["Hydraulic Oil", ["hydraulic"]],
     ["Engine Oil", ["engine oil", "lubricant"]],
     ["Belts", ["belt"]],
     ["Bolts & Nuts", ["bolt", "fastener"]],
-    ["Consumables", ["grease", "consumable"]],
-    ["Labour", ["salary", "wage", "labour", "labor"]],
-    ["Transport", ["transport", "courier", "delivery", "uber", "fuel levy"]],
+    ["Consumables", ["grease", "consumable", "ppe"]],
+    ["Labour", ["salary", "wage", "labour", "labor", "mechanic"]],
+    ["Transport", ["transport", "courier", "delivery", "uber", "fuel levy", "lowbed", "tap n go"]],
     ["Tools", ["tool"]],
   ];
   for (const [category, words] of rules) {
@@ -64,6 +97,7 @@ function classifyHeader(header) {
   if (n === "dr" || n.includes("debit") || n.includes("money out") || n.includes("paid out") || DEBIT_HEADERS.includes(n)) return "debit";
   if (n === "cr" || n.includes("credit") || n.includes("money in") || n.includes("paid in") || CREDIT_HEADERS.includes(n)) return "credit";
   if (n.includes("categor")) return "category";
+  if (n.includes("comment") || n === "note" || n === "notes" || n.includes("remark")) return "note";
   if (n === "machine" || n.includes("machine") || n === "asset" || n === "plant") return "machine";
   if (n.includes("description") || n.includes("narrative") || n.includes("detail") || n.includes("particular") || DESC_HEADERS.includes(n)) return "desc";
   if (n === "amount" || n.includes("amount") || n === "value" || n === "rand" || AMOUNT_HEADERS.includes(n)) return "amount";
@@ -109,12 +143,15 @@ function parseSheet(sheet, sheetName) {
   let skipped = 0;
   for (const line of rows.slice(headerAt + 1)) {
     const date = excelDate(line[map.date]);
-    const description = map.desc != null ? String(line[map.desc] || "").trim() : "";
+    const description = cleanText(map.desc != null ? line[map.desc] : "");
+    const note = cleanText(map.note != null ? line[map.note] : "");
     const debit = map.debit != null ? moneyNumber(line[map.debit]) : null;
     const credit = map.credit != null ? moneyNumber(line[map.credit]) : null;
     const amount = map.amount != null ? moneyNumber(line[map.amount]) : null;
-    const categoryCell = map.category != null ? String(line[map.category] || "").trim() : "";
-    const machineName = map.machine != null ? String(line[map.machine] || "").trim() : "";
+    const categoryCell = map.category != null ? cleanText(line[map.category]) : "";
+    const machineName = map.machine != null ? cleanText(line[map.machine]) : "";
+
+    if (norm(line[map.date]) === "date" || norm(description) === "total") continue;
 
     let spend = null;
     if (debit != null && debit !== 0) spend = Math.abs(debit);
@@ -126,12 +163,13 @@ function parseSheet(sheet, sheetName) {
       continue;
     }
 
+    const detail = [description, note].filter(Boolean).join(" — ") || "Bank payment";
     const named = EXPENSE_CATEGORIES.find((c) => c.toLowerCase() === categoryCell.toLowerCase());
-    const guessed = guessCategory(description);
+    const guessed = guessCategory(detail);
     parsed.push({
-      date: date.toISOString().slice(0, 10),
-      description: description || "Bank payment",
-      vendor: description.split(/\s+/).slice(0, 4).join(" ").slice(0, 60),
+      date: localISODate(date),
+      description: detail,
+      vendor: (description || note).split(/\s+/).slice(0, 4).join(" ").slice(0, 60),
       amount: Math.round(spend * 100) / 100,
       category: named || (EXPENSE_CATEGORIES.includes(guessed) ? guessed : "Other"),
       machineName,

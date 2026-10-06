@@ -16,7 +16,7 @@ import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
 import { formatDurationMinutes, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 
-import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, money, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
+import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
 
 import { formatSyncErrorMessage } from "../lib/labels.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
@@ -160,11 +160,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const fleetStatus = useMemo(() => siteMachines.map((machine) => {
 
-    const runningShift = shifts.find((s) => s.machine_id === machine.id && getShiftStatus(s) === SHIFT.RUNNING);
+    const runningShift = shifts.find((s) => s.machine_id === machine.id && getShiftStatus(s) === SHIFT.RUNNING && isLiveShift(s)) || null;
 
-    const openStop = events.find((e) => e.machine_id === machine.id && e.type === "STOP" && e.status === "open");
+    const openStop = runningShift
+      ? events.find((e) => e.shift_id === runningShift.id && e.type === "STOP" && e.status === "open")
+      : null;
 
-    const activeSession = workSessions.find((s) => s.status === "active" && (
+    const activeSession = workSessions.find((s) => s.status === "active" && isLiveSince(s.clock_in) && (
       s.machine_id === machine.id || (runningShift && s.operator_id === runningShift.operator_id)
     ));
 
@@ -800,7 +802,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
             <div className="grid grid-cols-2 gap-3">
             <Kpi
               label="On site now"
-              value={String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id).length + openShiftsToClose.length)}
+              value={String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length + fleetStatus.filter((f) => f.runningShift).length)}
               sub="Clocked in or still running"
               color="#F5C518"
             />
@@ -892,12 +894,12 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
               <p className="font-logo text-sm text-[#F5C518] mb-2">Who is clocked in</p>
-              {workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id).length === 0
+              {workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length === 0
                 && !fleetStatus.some((f) => f.runningShift) ? (
                 <p className="font-body text-sm text-[#F2F0EA]/70">No operator is clocked in on this site. Ask them to tap Update on their phone, then tap Update here.</p>
               ) : (
                 <ul className="space-y-2">
-                  {workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id).map((s) => (
+                  {workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).map((s) => (
                     <li key={s.id} className="font-body text-sm text-[#F2F0EA]">
                       {s.operator_name || "Operator"} · clocked in {s.clock_in ? new Date(s.clock_in).toLocaleTimeString() : ""}
                     </li>

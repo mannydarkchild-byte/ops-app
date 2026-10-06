@@ -2,7 +2,39 @@ import { ISSUE, PRESTART_INSPECTION_ITEMS, PRIMARY_MACHINE_CODE, ROLES, SHIFT } 
 import { shiftBillableHours } from "./shiftMetrics.js";
 
 export const nowISO = () => new Date().toISOString();
-export const money = (n) => `R${Number(n || 0).toFixed(2)}`;
+
+/** Rand amounts with a thousands comma, e.g. R3,934,545.86 */
+export const money = (n) => {
+  const num = Number(n);
+  const value = Number.isFinite(num) ? num : 0;
+  const sign = value < 0 ? "-" : "";
+  const [whole, frac] = Math.abs(value).toFixed(2).split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${sign}R${grouped}.${frac}`;
+};
+
+/**
+ * A clock-in or shift start counts as live when it is still today,
+ * or it began within the last 16 hours (a shift that crossed midnight).
+ * Older RUNNING rows stay available to close, but they are not current status.
+ */
+export function isLiveSince(iso, now = new Date()) {
+  const started = new Date(iso || 0).getTime();
+  const nowMs = now instanceof Date ? now.getTime() : Number(now);
+  if (!Number.isFinite(started) || started <= 0 || !Number.isFinite(nowMs)) return false;
+  const age = nowMs - started;
+  if (age < -2 * 60 * 1000) return false;
+  if (age < 16 * 60 * 60 * 1000) return true;
+  const startDay = new Date(started);
+  const today = new Date(nowMs);
+  return startDay.getFullYear() === today.getFullYear()
+    && startDay.getMonth() === today.getMonth()
+    && startDay.getDate() === today.getDate();
+}
+
+export function isLiveShift(shift, now = new Date()) {
+  return isLiveSince(shift?.started_at, now);
+}
 export const hoursBetween = (start) => start ? Math.max(0, (Date.now() - new Date(start).getTime()) / 3600000) : 0;
 export const makeId = (prefix = "ID") => `${prefix}-${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`}`;
 export const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));

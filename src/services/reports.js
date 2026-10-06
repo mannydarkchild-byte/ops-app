@@ -746,7 +746,7 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
         <div class="header-meta">
           <span>${esc(site?.name || "Site")}</span>
           <span>${esc(machine?.name || machine?.id || "Machine")}</span>
-          <span>R${Number(machine?.billable_rate || 0).toFixed(0)}/h</span>
+          <span>${money(machine?.billable_rate)}/h</span>
         </div>
       </div>
     </div>

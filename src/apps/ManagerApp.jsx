@@ -16,7 +16,7 @@ import { ownerForStopReason } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { formatDurationMinutes, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import {
-  fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, money, shiftBillableValue, dedupeShifts,
+  fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
 import { ManagerPartsPanel } from "../components/manager/ManagerPartsPanel.jsx";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
@@ -180,13 +180,13 @@ export function ManagerApp() {
   const fleetStatus = useMemo(() => {
     if (!primaryMachine) return null;
     const runningShift = shifts.find(
-      (s) => s.machine_id === primaryMachine.id && s.shift_status === SHIFT.RUNNING
-    );
-    const openStop = events.find(
-      (e) => e.machine_id === primaryMachine.id && e.type === "STOP" && e.status === "open"
-    );
+      (s) => s.machine_id === primaryMachine.id && s.shift_status === SHIFT.RUNNING && isLiveShift(s)
+    ) || null;
+    const openStop = runningShift
+      ? events.find((e) => e.shift_id === runningShift.id && e.type === "STOP" && e.status === "open")
+      : null;
     const activeSession = workSessions.find(
-      (s) => s.status === "active" && (
+      (s) => s.status === "active" && isLiveSince(s.clock_in) && (
         s.machine_id === primaryMachine.id
         || (runningShift && s.operator_id === runningShift.operator_id)
       )
@@ -378,7 +378,7 @@ export function ManagerApp() {
   );
 
   const headerContext = primaryMachine
-    ? `${activeSite?.name || "Site"} · ${primaryMachine.name} · R${primaryMachine.billable_rate}/h · ${billingPeriod.label}`
+    ? `${activeSite?.name || "Site"} · ${primaryMachine.name} · ${money(primaryMachine.billable_rate)}/h · ${billingPeriod.label}`
     : activeSite?.name;
 
   if (!primaryMachine) {
@@ -456,7 +456,7 @@ export function ManagerApp() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Kpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
               <Kpi label={HOUR_LABELS.machine} value={`${cycleStats.machineHours.toFixed(1)}h`} sub={`${HOUR_LABELS.machineHint} · ${cycleStats.shiftCount} signed`} color="#22C55E" />
-              <Kpi label={HOUR_LABELS.revenue} value={money(cycleStats.revenue)} sub={`R${primaryMachine.billable_rate}/h · ${HOUR_LABELS.revenueHint}`} color="#22C55E" />
+              <Kpi label={HOUR_LABELS.revenue} value={money(cycleStats.revenue)} sub={`${money(primaryMachine.billable_rate)}/h · ${HOUR_LABELS.revenueHint}`} color="#22C55E" />
               <Kpi label={HOUR_LABELS.expenses} value={money(cycleStats.expenseTotal)} sub={HOUR_LABELS.expensesHint} color="#F5C518" />
               <Kpi label={HOUR_LABELS.runtime} value={formatDurationMinutes(cycleStats.runtimeMin)} sub={HOUR_LABELS.runtimeHint} color="#00A4A6" />
               <Kpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(cycleStats.downtimeMin)} sub={HOUR_LABELS.downtimeHint} color="#EF4444" />
