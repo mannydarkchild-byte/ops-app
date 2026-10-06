@@ -4,6 +4,7 @@ import {
   EARTHMOVING_PRESTART_ITEMS,
   PRESTART_STATUS_OPTIONS,
   INSPECTION_GROUPS,
+  EARTHMOVING_INSPECTION_GROUPS,
   PRIMARY_MACHINE_CODE,
 } from "./constants.js";
 import { DEFAULT_STOP_REASONS, normalizeStopReasons } from "./stopReasons.js";
@@ -25,6 +26,7 @@ export function defaultSiteSettings(siteId) {
     earthmoving_prestart_items: [...EARTHMOVING_PRESTART_ITEMS],
     prestart_status_options: [...PRESTART_STATUS_OPTIONS],
     inspection_groups: JSON.parse(JSON.stringify(INSPECTION_GROUPS)),
+    earthmoving_inspection_groups: JSON.parse(JSON.stringify(EARTHMOVING_INSPECTION_GROUPS)),
     stop_reasons: DEFAULT_STOP_REASONS.map((r) => ({ ...r })),
     created_at: now,
     updated_at: now,
@@ -40,6 +42,9 @@ export function resolveSiteSettings(row) {
     earthmoving_prestart_items: row?.earthmoving_prestart_items?.length ? row.earthmoving_prestart_items : defaults.earthmoving_prestart_items,
     prestart_status_options: row?.prestart_status_options?.length ? row.prestart_status_options : defaults.prestart_status_options,
     inspection_groups: row?.inspection_groups?.length ? row.inspection_groups : defaults.inspection_groups,
+    earthmoving_inspection_groups: row?.earthmoving_inspection_groups?.length
+      ? row.earthmoving_inspection_groups
+      : defaults.earthmoving_inspection_groups,
     stop_reasons: normalizeStopReasons(row?.stop_reasons),
     billing_cycle_start_day: clampCycleDay(row?.billing_cycle_start_day),
   };
@@ -52,6 +57,18 @@ export function machineUsesEarthmovingPrestart(machine) {
     || /\bfel\b/.test(text)
     || /front[\s-]*end/.test(text)
     || /\bloader\b/.test(text);
+}
+
+/** Screen keeps the screen inspection. Excavator and loader share one list. */
+export function inspectionGroupsForMachine(settings, machine) {
+  if (machineUsesEarthmovingPrestart(machine)) {
+    return settings?.earthmoving_inspection_groups?.length
+      ? settings.earthmoving_inspection_groups
+      : JSON.parse(JSON.stringify(EARTHMOVING_INSPECTION_GROUPS));
+  }
+  return settings?.inspection_groups?.length
+    ? settings.inspection_groups
+    : JSON.parse(JSON.stringify(INSPECTION_GROUPS));
 }
 
 export function prestartItemsForMachine(settings, machine) {

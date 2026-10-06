@@ -62,12 +62,13 @@ export function MechanicInspectionWizard({
   );
 
   const categoryProgress = useMemo(() => {
-    return INSPECTION_GROUPS.map((group) => {
+    const source = groups?.length ? groups : INSPECTION_GROUPS;
+    return source.map((group) => {
       const names = group.items.map(([name]) => name);
       const done = names.filter((n) => results[n]).length;
       return { ...group, done, total: names.length };
     });
-  }, [results]);
+  }, [groups, results]);
 
   const attachPhoto = () => {
     if (!currentName) return;

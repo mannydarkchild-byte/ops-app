@@ -22,12 +22,14 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
   const [earthmovingText, setEarthmovingText] = useState("");
   const [statusText, setStatusText] = useState("");
   const [groupsText, setGroupsText] = useState("");
+  const [earthmovingGroupsText, setEarthmovingGroupsText] = useState("");
 
   const loadEditor = () => {
     setPrestartText((settings.prestart_items || []).join("\n"));
     setEarthmovingText((settings.earthmoving_prestart_items || []).join("\n"));
     setStatusText((settings.prestart_status_options || []).join(", "));
     setGroupsText(serializeGroups(settings.inspection_groups || []));
+    setEarthmovingGroupsText(serializeGroups(settings.earthmoving_inspection_groups || []));
   };
 
   useEffect(() => {
@@ -41,16 +43,19 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
       const earthmoving_prestart_items = earthmovingText.split("\n").map((l) => l.trim()).filter(Boolean);
       const prestart_status_options = statusText.split(",").map((l) => l.trim()).filter(Boolean);
       const inspection_groups = parseGroups(groupsText);
+      const earthmoving_inspection_groups = parseGroups(earthmovingGroupsText);
       if (!prestart_items.length) throw new Error("Screen pre-start needs at least one item");
       if (!earthmoving_prestart_items.length) throw new Error("Excavator and loader pre-start needs at least one item");
       if (!prestart_status_options.length) throw new Error("Status options cannot be empty");
-      if (!inspection_groups.length) throw new Error("Mechanic inspection needs at least one group");
+      if (!inspection_groups.length) throw new Error("Screen mechanic inspection needs at least one group");
+      if (!earthmoving_inspection_groups.length) throw new Error("Excavator and loader inspection needs at least one group");
 
       await updateSiteSettings(siteId, {
         prestart_items,
         earthmoving_prestart_items,
         prestart_status_options,
         inspection_groups,
+        earthmoving_inspection_groups,
       });
       await onSaved?.();
       showAlert?.("Saved", "Checklists updated for this site.");
@@ -118,12 +123,21 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
       {tab === "mechanic" && (
         <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 space-y-3">
           <p className="text-[10px] text-[#F2F0EA]/50">
-            Format: group lines start with ## Category. Item lines: Item name | Option1, Option2
+            Screen inspection. Group lines start with ## Category. Item lines: Item name | Option1, Option2
           </p>
           <textarea
             value={groupsText}
             onChange={(e) => setGroupsText(e.target.value)}
-            rows={16}
+            rows={12}
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm font-mono text-xs"
+          />
+          <p className="text-[10px] text-[#F2F0EA]/50">
+            Excavator and front end loader. One shared list. Same format. A machine uses this when its name or code says excavator, FEL, or loader.
+          </p>
+          <textarea
+            value={earthmovingGroupsText}
+            onChange={(e) => setEarthmovingGroupsText(e.target.value)}
+            rows={12}
             className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm font-mono text-xs"
           />
         </div>

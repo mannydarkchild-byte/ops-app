@@ -261,7 +261,7 @@ export const ALLOWED_COLUMNS = {
   maintenance_parts: ["id", "maintenance_job_id", "inventory_item_id", "part_name", "quantity", "notes", "created_at"],
   inventory_items: ["id", "site_id", "sku", "name", "category", "quantity_on_hand", "unit", "reorder_level", "created_at", "updated_at"],
   inventory_movements: ["id", "site_id", "inventory_item_id", "maintenance_job_id", "quantity_change", "reason", "performed_by", "performed_by_name", "created_at"],
-  site_settings: ["id", "site_id", "billing_cycle_start_day", "primary_machine_id", "prestart_items", "earthmoving_prestart_items", "prestart_status_options", "inspection_groups", "stop_reasons", "created_at", "updated_at"],
+  site_settings: ["id", "site_id", "billing_cycle_start_day", "primary_machine_id", "prestart_items", "earthmoving_prestart_items", "prestart_status_options", "inspection_groups", "earthmoving_inspection_groups", "stop_reasons", "created_at", "updated_at"],
 };
 
 /** Operator pre-start checklist (14 items) — before starting machine */
@@ -395,6 +395,58 @@ export const INSPECTION_GROUPS = [
     ["Safety Decals", ["Good", "Faded", "Missing"]],
     ["Unusual Sounds", ["None", "Observed"]],
     ["Unusual Vibration", ["None", "Observed"]],
+  ]},
+];
+
+/** Mechanic inspection for an excavator or front end loader. The screen keeps INSPECTION_GROUPS. */
+export const EARTHMOVING_INSPECTION_GROUPS = [
+  { category: "Engine", icon: "🔧", items: [
+    ["Engine oil", ["Good", "Low", "Critical"]],
+    ["Coolant", ["Good", "Low", "Critical"]],
+    ["Fuel system", ["Good", "Attention", "Fault"]],
+    ["Air filter", ["Good", "Dirty", "Blocked"]],
+    ["Belts", ["Good", "Worn", "Replace"]],
+    ["Engine leaks", ["None", "Minor", "Major"]],
+    ["Radiator / cooling", ["Good", "Attention", "Fault"]],
+  ]},
+  { category: "Hydraulics", icon: "💧", items: [
+    ["Hydraulic oil", ["Good", "Low", "Critical"]],
+    ["Hoses and pipes", ["Good", "Attention", "Fault"]],
+    ["Cylinders / rams", ["Good", "Attention", "Fault"]],
+    ["Hydraulic leaks", ["None", "Minor", "Major"]],
+    ["Pump", ["Good", "Attention", "Fault"]],
+  ]},
+  { category: "Bucket and linkage", icon: "⛏️", items: [
+    ["Bucket or blade", ["Good", "Worn", "Replace"]],
+    ["Teeth or cutting edge", ["Good", "Worn", "Replace"]],
+    ["Pins and bushings", ["Good", "Worn", "Replace"]],
+    ["Boom and arms", ["Good", "Attention", "Fault"]],
+    ["Quick hitch / coupler", ["Good", "Attention", "Fault"]],
+  ]},
+  { category: "Tracks, tyres and undercarriage", icon: "🏗️", items: [
+    ["Tracks or tyres", ["Good", "Worn", "Replace"]],
+    ["Track tension or tyre pressure", ["Good", "Attention", "Fault"]],
+    ["Rollers, idlers or wheel bearings", ["Good", "Worn", "Replace"]],
+    ["Sprockets or rims", ["Good", "Worn", "Replace"]],
+    ["Final drives or axles", ["Good", "Attention", "Fault"]],
+  ]},
+  { category: "Cab and controls", icon: "⚡", items: [
+    ["Seat and seat belt", ["Good", "Attention", "Fault"]],
+    ["Joysticks / controls", ["Working", "Faulty"]],
+    ["Gauges and warning lights", ["Working", "Faulty"]],
+    ["Horn", ["Working", "Faulty"]],
+    ["Lights and beacon", ["Working", "Faulty"]],
+    ["Reverse alarm", ["Working", "Faulty"]],
+    ["Mirrors and wipers", ["Good", "Attention", "Fault"]],
+    ["Emergency stop", ["Pass", "Fail"]],
+  ]},
+  { category: "Safety", icon: "🛡️", items: [
+    ["Fire extinguisher", ["Present", "Missing", "Expired"]],
+    ["Guards and covers", ["Good", "Attention", "Missing"]],
+    ["Steps and handrails", ["Good", "Attention", "Fault"]],
+    ["Structural cracks", ["None", "Found"]],
+    ["Loose bolts", ["None", "Found"]],
+    ["Safety decals", ["Good", "Faded", "Missing"]],
   ]},
 ];
 

@@ -10,6 +10,7 @@ import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
 import { ISSUE, MAINTENANCE_STATUS } from "../lib/constants.js";
 import { issueStatusLabel } from "../lib/issueTimeline.js";
+import { inspectionGroupsForMachine, machineUsesEarthmovingPrestart } from "../lib/siteConfig.js";
 import { fmtDate } from "../lib/utils.js";
 import { saveLocal } from "../lib/db.js";
 import { scheduleSync } from "../lib/sync/engine.js";
@@ -382,7 +383,11 @@ export function MechanicApp() {
 
       {inspectionFlow === "pick-machine" && (
         <Modal title="WHICH MACHINE?" color="blue" onClose={() => setInspectionFlow(null)}>
-          <p className="text-sm text-[#F2F0EA]/60 mb-4">Full walk-around — one item at a time on your phone.</p>
+          <p className="text-sm text-[#F2F0EA]/60 mb-4">
+            {machineUsesEarthmovingPrestart(inspectionMachine)
+              ? "Excavator and loader inspection. One item at a time."
+              : "Screen inspection. One item at a time."}
+          </p>
           <select
             value={inspectionMachineId}
             onChange={(e) => setInspectionMachineId(e.target.value)}
@@ -405,7 +410,7 @@ export function MechanicApp() {
       {inspectionFlow === "wizard" && (
         <MechanicInspectionWizard
           machineName={inspectionMachine?.name}
-          groups={siteConfig.inspection_groups}
+          groups={inspectionGroupsForMachine(siteConfig, inspectionMachine)}
           results={inspectionResults}
           remarks={inspectionRemarks}
           photos={inspectionPhotos}

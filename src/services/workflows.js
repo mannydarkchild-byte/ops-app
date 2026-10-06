@@ -6,7 +6,7 @@ import { SHIFT, ISSUE, ROLES, BREAKDOWN_STATUS, MAINTENANCE_STATUS, issueAreaReq
 import { canCloseIssue, getShiftStatus } from "../lib/utils.js";
 import { makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
-import { getInspectionConfigForSite, ensureSiteSettings, prestartItemsForMachine } from "../lib/siteConfig.js";
+import { ensureSiteSettings, prestartItemsForMachine, inspectionGroupsForMachine, getMechanicItemsFromGroups } from "../lib/siteConfig.js";
 import { reconcileMachineOpenState, fetchServerOpenShift } from "../lib/machineStatus.js";
 import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
 
@@ -213,7 +213,8 @@ export async function completeInspection(user, machine, site, { results, remarks
 }
 
 export async function completeMechanicInspection(user, machine, site, { results, remarks, photos }) {
-  const { items } = await getInspectionConfigForSite(site?.id);
+  const settings = await ensureSiteSettings(site?.id);
+  const items = getMechanicItemsFromGroups(inspectionGroupsForMachine(settings, machine));
   return saveInspectionBatch(user, machine, site, {
     items,
     results,
