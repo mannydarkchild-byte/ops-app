@@ -25,6 +25,7 @@ const TABLE_INDEXES = {
   inventory_items: "id, site_id, sku, category, updated_at",
   inventory_movements: "id, site_id, inventory_item_id, maintenance_job_id, created_at",
   site_settings: "id, site_id, updated_at",
+  shift_tonnages: "id, site_id, shift_date, shift_band, submitted_by, updated_at",
   sync_queue: "++queue_id, table, record_id, status, created_at",
   sync_meta: "key",
   media_blobs: "id, status, created_at",
@@ -44,6 +45,7 @@ export async function initDB() {
   db.version(2).stores(TABLE_INDEXES);
   db.version(3).stores(TABLE_INDEXES);
   db.version(4).stores(TABLE_INDEXES);
+  db.version(5).stores(TABLE_INDEXES);
 
   await db.open();
   return db;
