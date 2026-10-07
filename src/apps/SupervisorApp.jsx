@@ -29,6 +29,7 @@ import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.j
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
 import { Chip } from "../components/ui/Chip.jsx";
+import { MoreSubpage } from "../components/MoreSubpage.jsx";
 
 import * as wf from "../services/workflows.js";
 
@@ -1092,8 +1093,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
         {tab === "more" && showReports && (
+          <MoreSubpage title="Signed reports" onBack={() => setShowReports(false)}>
           <div className="space-y-3">
-            <button type="button" onClick={() => setShowReports(false)} className="ops-chip ops-chip-gold">← Back</button>
             <div className="grid grid-cols-2 gap-3">
               <Kpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
               <Kpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub={`${signedReports.length} shifts`} color="#22C55E" />
@@ -1121,11 +1122,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
               />
             ))}
           </div>
+          </MoreSubpage>
         )}
 
         {tab === "more" && showExpenses && (
-          <div className="space-y-3">
-            <button type="button" onClick={() => setShowExpenses(false)} className="ops-chip ops-chip-gold">← Back</button>
+          <MoreSubpage title="Expenses" onBack={() => setShowExpenses(false)}>
             <SiteExpensesPanel
               expenses={expenses}
               machines={siteMachines}
@@ -1133,7 +1134,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
               cycleStartDay={siteConfig.billing_cycle_start_day}
               scopeLabel={activeSite?.name || "This site"}
             />
-          </div>
+          </MoreSubpage>
         )}
 
         {tab === "more" && !showReports && !showExpenses && (

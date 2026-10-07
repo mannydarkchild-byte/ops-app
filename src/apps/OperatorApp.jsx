@@ -28,7 +28,6 @@ import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { FuelModal } from "../components/FuelModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { OperatorReportsModal, reportBucket } from "../components/OperatorReportsModal.jsx";
-import { OperatorWelcome } from "../components/OperatorWelcome.jsx";
 import { OperatorShiftTools } from "../components/OperatorShiftTools.jsx";
 import { OperatorQuickTools } from "../components/OperatorQuickTools.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
@@ -82,13 +81,6 @@ export function OperatorApp() {
   const [clockInSupervisorId, setClockInSupervisorId] = useState("");
   const [pickedMachineId, setPickedMachineId] = useState("");
   const [cabName, setCabName] = useState("");
-  const [dayReady, setDayReady] = useState(() => {
-    try {
-      return sessionStorage.getItem(`ops-day-ready:${user?.id || "me"}`) === "1";
-    } catch {
-      return false;
-    }
-  });
   const [navTab, setNavTab] = useState("today");
 
   const [alert, setAlert] = useState({ isOpen: false });
@@ -246,13 +238,6 @@ export function OperatorApp() {
   }, [workSession, siteSupervisors, suggestedSupervisor]);
 
   useEffect(() => {
-    if (!user?.id) return;
-    try {
-      if (sessionStorage.getItem(`ops-day-ready:${user.id}`) === "1") setDayReady(true);
-    } catch {}
-  }, [user?.id]);
-
-  useEffect(() => {
     if (!workSession && suggestedSupervisor?.id && !clockInSupervisorId) {
       setClockInSupervisorId(suggestedSupervisor.id);
     }
@@ -269,15 +254,6 @@ export function OperatorApp() {
     && machineRunForWork.operator_id === user?.id
     ? machineRunForWork
     : null;
-
-  const showWelcome = !workSession && !submittedShift && !correctionShift && !dayReady;
-
-  const startDay = () => {
-    try {
-      sessionStorage.setItem(`ops-day-ready:${user?.id || "me"}`, "1");
-    } catch {}
-    setDayReady(true);
-  };
 
   useEffect(() => {
     setCabName(usualOperatorName(workMachine?.id));
@@ -508,7 +484,7 @@ export function OperatorApp() {
   };
 
   const machineStatus = sessionShift && sessionDowntime ? "stopped" : sessionShift ? "running" : null;
-  const machineFab = navTab !== "today" || submittedShift || showWelcome || sheet || correctionShift
+  const machineFab = navTab !== "today" || submittedShift || sheet || correctionShift
     ? null
     : sessionShift && sessionDowntime
       ? "restart"
@@ -597,21 +573,9 @@ export function OperatorApp() {
           </div>
         )}
 
-        {showWelcome && (
-          <OperatorWelcome
-            name={user?.name}
-            siteName={activeSite?.name}
-            reportsAttention={reportsAttention}
-            onReady={startDay}
-            onMyReports={() => { setNavTab("more"); setSheet("reports"); }}
-          />
-        )}
+        <OperatorFlowGuide currentStep={currentStep} />
 
-        {!showWelcome && (
-          <OperatorFlowGuide currentStep={currentStep} />
-        )}
-
-        {workSession && workMachine && !showWelcome && (
+        {workSession && workMachine && (
           <button
             type="button"
             onClick={() => setPickedMachineId("")}
@@ -708,7 +672,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {!workSession && !showWelcome && (
+        {!workSession && (
           <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             <div className="operator-group">
               <p className="operator-group-label font-logo">Clock in</p>
@@ -735,7 +699,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {workSession && !workMachine && !showWelcome && (
+        {workSession && !workMachine && (
           <OperatorMachineBoard
             machines={siteMachines}
             shifts={shifts}
@@ -748,7 +712,7 @@ export function OperatorApp() {
           />
         )}
 
-        {workMachine && !submittedShift && !showWelcome && (
+        {workMachine && !submittedShift && (
           <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${

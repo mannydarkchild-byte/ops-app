@@ -24,6 +24,8 @@ import { openShiftDailyReport, printOperationsReport, printTimesheetReport } fro
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { Chip } from "../components/ui/Chip.jsx";
+import { MoreSubpage } from "../components/MoreSubpage.jsx";
+import { Button } from "../components/ui/Button.jsx";
 import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
 import * as wf from "../services/workflows.js";
@@ -494,37 +496,26 @@ export function ManagerApp() {
           />
         )}
 
-        {tab === "more" && moreView && (
-          <button type="button" onClick={() => setMoreView(null)} className="ops-chip ops-chip-gold mb-3">
-            ← Back
-          </button>
-        )}
-
         {tab === "more" && moreView === "parts" && (
-          <ManagerPartsPanel
-            siteId={user?.site_id}
-            inventoryItems={inventoryItems}
-            onSaved={refreshLocal}
-            showAlert={showAlert}
-          />
+          <MoreSubpage title="Parts catalog" onBack={() => setMoreView(null)}>
+            <ManagerPartsPanel
+              siteId={user?.site_id}
+              inventoryItems={inventoryItems}
+              onSaved={refreshLocal}
+              showAlert={showAlert}
+            />
+          </MoreSubpage>
         )}
 
         {tab === "more" && moreView === "expenses" && (
+          <MoreSubpage title="Expenses" onBack={() => setMoreView(null)}>
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setShowExpense(true)}
-              className="w-full bg-[#00A4A6] text-white py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
-            >
-              + LOG / BACKDATE EXPENSE
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowImportExpenses(true)}
-              className="w-full border border-[#F5C518]/50 text-[#F5C518] py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
-            >
-              UPLOAD BANK RECON
-            </button>
+            <Button type="button" variant="teal" size="lg" className="w-full" onClick={() => setShowExpense(true)}>
+              Log / backdate expense
+            </Button>
+            <Button type="button" variant="secondary" size="lg" className="w-full border-ops-gold/50 text-ops-gold" onClick={() => setShowImportExpenses(true)}>
+              Upload bank recon
+            </Button>
 
             <div className="flex flex-wrap gap-1">
               {EXPENSE_FILTERS.map((f) => (
@@ -605,6 +596,7 @@ export function ManagerApp() {
               </div>
             )}
           </div>
+          </MoreSubpage>
         )}
 
         {tab === "reports" && (

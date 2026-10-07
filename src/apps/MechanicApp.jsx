@@ -3,6 +3,7 @@ import { useOps } from "../context/OpsContext.jsx";
 import { useInspectionDraft } from "../hooks/useInspectionDraft.js";
 import { mechanicDraftKey } from "../lib/inspectionDraft.js";
 import { AppPage } from "../components/AppShell.jsx";
+import { Button } from "../components/ui/Button.jsx";
 import { RequestPartsModal } from "../components/RequestPartsModal.jsx";
 import { MechanicInspectionWizard } from "../components/MechanicInspectionWizard.jsx";
 import { IssueTimeline } from "../components/IssueTimeline.jsx";
@@ -273,13 +274,13 @@ export function MechanicApp() {
                   key={j.id}
                   type="button"
                   onClick={() => openJob(j)}
-                  className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 mb-2 active:border-[#F5C518]"
+                  className="ops-list-row mb-2"
                 >
-                  <p className="font-logo text-sm">{j.title}</p>
-                  <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">{machineName(j.machine_id)}</p>
-                  <p className="text-[10px] text-[#F2F0EA]/40 mt-1">
-                    {iss ? issueStatusLabel(iss.status) : j.status} · {fmtDate(j.started_at)}
-                  </p>
+                  <div className="ops-list-row-body">
+                    <p className="ops-list-row-title">{j.title}</p>
+                    <p className="ops-list-row-meta">{machineName(j.machine_id)} · {iss ? issueStatusLabel(iss.status) : j.status} · {fmtDate(j.started_at)}</p>
+                  </div>
+                  <span className="ops-list-row-chevron" aria-hidden>›</span>
                 </button>
               );
             })}
@@ -288,15 +289,17 @@ export function MechanicApp() {
 
         {tab === "inspections" && (
           <section className="space-y-3">
-            <button
+            <Button
               type="button"
+              variant="teal"
+              size="lg"
+              className="w-full"
               onClick={openNewInspection}
               disabled={siteMachines.length === 0}
-              className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold text-xs tracking-wider disabled:opacity-40"
             >
-              + START WALK-AROUND
-            </button>
-            <p className="text-[10px] text-[#F2F0EA]/40 text-center">One item per screen — tap answer, then Next</p>
+              Start walk-around
+            </Button>
+            <p className="text-sm text-ops-muted text-center">One item per screen — tap answer, then Next</p>
             {siteMachines.length === 0 && (
               <p className="text-sm text-[#F2F0EA]/40 text-center">No machines configured on this site.</p>
             )}
@@ -320,13 +323,15 @@ export function MechanicApp() {
                       {photoCount > 0 && <p className="text-[#22C55E]">{photoCount} photo{photoCount !== 1 ? "s" : ""}</p>}
                     </div>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="md"
+                    className="w-full"
                     onClick={() => handleViewInspectionReport(batch)}
-                    className="w-full border border-[#F5C518] text-[#F5C518] py-2.5 rounded-lg font-logo text-xs tracking-wider"
                   >
-                    VIEW REPORT
-                  </button>
+                    View report
+                  </Button>
                 </div>
               );
             })}
@@ -397,13 +402,9 @@ export function MechanicApp() {
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={startInspectionWizard}
-            className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold"
-          >
-            START INSPECTION
-          </button>
+          <Button type="button" variant="teal" size="lg" className="w-full" onClick={startInspectionWizard}>
+            Start inspection
+          </Button>
         </Modal>
       )}
 
