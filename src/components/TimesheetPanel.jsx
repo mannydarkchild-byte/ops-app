@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { summarizeTimesheet } from "../lib/timesheet.js";
+import { Chip } from "./ui/Chip.jsx";
+import { Button } from "./ui/Button.jsx";
 
 const FILTERS = [
   { id: "today", label: "Today" },
@@ -21,77 +23,69 @@ export function TimesheetPanel({
   const machineName = (id) => machines.find((m) => m.id === id)?.name;
 
   return (
-    <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-      <h3 className="font-logo text-[#F5C518] text-2xl mb-1">Timesheet</h3>
-      <p className="font-body text-[#F2F0EA]/70 mb-3">
-        Hours from clock-in to clock-out{periodLabel ? ` · ${periodLabel}` : ""}.
+    <div className="bg-ops-card border border-ops-border rounded-xl p-4">
+      <h3 className="font-ui text-xl font-semibold text-ops-gold mb-1">Timesheet</h3>
+      <p className="font-body text-ops-muted mb-3">
+        Hours from clock-in to clock-out{periodLabel ? ` · ${periodLabel}` : ""}. Rows below are view only.
       </p>
       <div className="flex flex-wrap gap-2 mb-4">
         {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => onFilter(f.id)}
-            className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] ${
-              filter === f.id ? "bg-[#F5C518] text-black" : "bg-[#0A0A0A] border border-[#2A2A2A]"
-            }`}
-          >
+          <Chip key={f.id} selected={filter === f.id} onClick={() => onFilter(f.id)}>
             {f.label}
-          </button>
+          </Chip>
         ))}
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-[#0A0A0A] rounded-xl p-4 text-center border border-[#2A2A2A]">
-          <p className="font-logo text-[#F2F0EA]/55">On site</p>
-          <p className="font-logo text-3xl text-[#F5C518] mt-1">{summary.hours.toFixed(1)}h</p>
+        <div className="ops-stat">
+          <p className="font-ui text-sm text-ops-muted">On site</p>
+          <p className="font-ui text-3xl font-bold text-ops-gold mt-1">{summary.hours.toFixed(1)}h</p>
         </div>
-        <div className="bg-[#0A0A0A] rounded-xl p-4 text-center border border-[#2A2A2A]">
-          <p className="font-logo text-[#F2F0EA]/55">Left early</p>
-          <p className="font-logo text-3xl text-[#F97316] mt-1">{summary.leftEarly}</p>
+        <div className="ops-stat">
+          <p className="font-ui text-sm text-ops-muted">Left early</p>
+          <p className="font-ui text-3xl font-bold text-ops-orange mt-1">{summary.leftEarly}</p>
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={onPreview}
-        className="w-full bg-[#F5C518] text-black py-3.5 rounded-xl font-logo font-bold tracking-wider mb-4"
-      >
-        OPEN TIMESHEET
-      </button>
+      <Button type="button" variant="primary" size="lg" className="w-full mb-4" onClick={onPreview}>
+        Open timesheet
+      </Button>
 
       {summary.byOperator.length > 0 && (
         <div className="mb-4 space-y-1.5">
           {summary.byOperator.map((op) => (
-            <div key={op.operator_id || op.operator_name} className="flex justify-between gap-3 text-sm">
-              <p className="font-body text-[#F2F0EA] truncate">{op.operator_name}</p>
-              <p className="font-logo text-[#F5C518] shrink-0">{op.hours.toFixed(1)}h</p>
+            <div key={op.operator_id || op.operator_name} className="flex justify-between gap-3 text-sm pointer-events-none">
+              <p className="font-body text-ops-text truncate">{op.operator_name}</p>
+              <p className="font-ui font-semibold text-ops-gold shrink-0">{op.hours.toFixed(1)}h</p>
             </div>
           ))}
         </div>
       )}
 
       {rows.length === 0 ? (
-        <p className="text-sm text-[#F2F0EA]/40 text-center py-4">No clock-in records for this period.</p>
+        <p className="text-sm text-ops-muted text-center py-4">No clock-in records for this period.</p>
       ) : (
         <div className="space-y-2">
           {rows.map((r) => (
-            <div key={r.id} className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg p-3">
+            <div
+              key={r.id}
+              className="rounded-lg border border-ops-border/70 bg-ops-elevated/30 px-3 py-2.5 pointer-events-none"
+            >
               <div className="flex justify-between gap-3">
-                <p className="font-logo text-sm text-[#F2F0EA] truncate">{r.operator_name || "Operator"}</p>
-                <p className="font-logo text-sm text-[#F5C518] shrink-0">{r.hours.toFixed(1)}h</p>
+                <p className="font-ui text-sm font-semibold text-ops-text truncate">{r.operator_name || "Operator"}</p>
+                <p className="font-ui text-sm font-semibold text-ops-gold shrink-0">{r.hours.toFixed(1)}h</p>
               </div>
-              <p className="font-body text-xs text-[#F2F0EA]/55 mt-1">
+              <p className="font-body text-xs text-ops-muted mt-1">
                 {r.dateLabel} · {r.inLabel} → {r.outLabel}
                 {machineName(r.machine_id) ? ` · ${machineName(r.machine_id)}` : ""}
               </p>
-              <p className={`font-logo text-[10px] mt-1 ${
-                r.status === "ended_early" ? "text-[#F97316]" : r.status === "active" ? "text-[#22C55E]" : "text-[#F2F0EA]/50"
+              <p className={`font-ui text-xs mt-1 ${
+                r.status === "ended_early" ? "text-ops-orange" : r.status === "active" ? "text-ops-green" : "text-ops-muted"
               }`}>
                 {r.statusLabel}
               </p>
               {r.notes && (
-                <p className="font-body text-xs text-[#F2F0EA]/45 mt-1">{r.notes}</p>
+                <p className="font-body text-xs text-ops-muted mt-1">{r.notes}</p>
               )}
             </div>
           ))}

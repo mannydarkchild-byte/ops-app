@@ -39,7 +39,7 @@ export function FuelModal({ onClose, currentMeter, user, machine, machines, site
     <Modal title="LOG DIESEL" color="yellow" onClose={onClose}>
       {options.length > 1 && (
         <FormSection step={1} title="Which machine?" description="Diesel is logged on that machine’s shift." accent="#F5C518">
-          <select value={machineId} onChange={(e) => setMachineId(e.target.value)} className="w-full bg-[#0A0A0A] border p-3 rounded text-[#F2F0EA]">
+          <select value={machineId} onChange={(e) => setMachineId(e.target.value)} className="ops-select">
             {options.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </FormSection>
@@ -52,7 +52,7 @@ export function FuelModal({ onClose, currentMeter, user, machine, machines, site
       <FormSection step={options.length > 1 ? 3 : 2} title="Hour meter at fill" description="Reading on the machine meter when fuel was added." accent="#F5C518">
         <input type="number" step="0.1" value={hourMeter} onChange={(e) => setHourMeter(e.target.value)} placeholder="Hour meter (h)"
           className="w-full bg-[#0A0A0A] border p-3 rounded text-[#F2F0EA] text-xl" />
-        <select value={tankLevel} onChange={(e) => setTankLevel(e.target.value)} className="w-full bg-[#0A0A0A] border p-3 rounded mt-2 text-[#F2F0EA]">
+        <select value={tankLevel} onChange={(e) => setTankLevel(e.target.value)} className="ops-select mt-2">
           {TANK_LEVELS.map((x) => <option key={x}>{x}</option>)}
         </select>
       </FormSection>

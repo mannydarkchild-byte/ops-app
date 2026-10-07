@@ -8,11 +8,9 @@ import { updateUserRole, updateProfileFields } from "../lib/auth.js";
 
 import { deactivateUser, reactivateUser } from "../services/users.js";
 
-import { getDB, clearSyncedTables } from "../lib/db.js";
+import { clearSyncedTables } from "../lib/db.js";
 
 import { pullBootstrap } from "../lib/sync/pull.js";
-
-import { ROLES } from "../lib/constants.js";
 
 import { computeAdminDashboard, formatAdminMetric } from "../lib/adminMetrics.js";
 
@@ -32,6 +30,9 @@ import { AdminActivityPanel } from "../components/admin/AdminActivityPanel.jsx";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
+import { EditUserSheet } from "../components/admin/EditUserSheet.jsx";
+import { MoreSubpage } from "../components/MoreSubpage.jsx";
+import { Button } from "../components/ui/Button.jsx";
 
 
 
@@ -41,10 +42,6 @@ const TABS = [
   { id: "sites", label: "Sites" },
   { id: "more", label: "More" },
 ];
-
-
-
-const MANAGEABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES.MANAGER, ROLES.ADMIN];
 
 
 
@@ -66,6 +63,7 @@ export function AdminApp() {
 
   const [alert, setAlert] = useState({ isOpen: false });
   const [moreView, setMoreView] = useState(null);
+  const [editUser, setEditUser] = useState(null);
 
   const showAlert = (title, message) => setAlert({ isOpen: true, title, message, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -309,10 +307,6 @@ export function AdminApp() {
                 ))}
               </div>
             </section>
-
-            <button type="button" onClick={() => syncNow()} className="w-full bg-[#00A4A6] text-white py-3 rounded-xl font-logo font-bold text-xs">
-              🔄 SYNC ALL DATA
-            </button>
           </div>
         )}
 
@@ -339,221 +333,105 @@ export function AdminApp() {
           />
         )}
 
-        {tab === "more" && moreView && moreView !== "pulse" && (
-          <button type="button" onClick={() => setMoreView(null)} className="mb-3 font-ui text-sm text-[#F5C518]">
-            Back
-          </button>
-        )}
-
         {tab === "more" && moreView === "pulse" && (
-          <div className="space-y-3">
-            <button type="button" onClick={() => setMoreView(null)} className="font-ui text-sm text-[#F5C518]">Back</button>
+          <MoreSubpage title="Machine pulse" onBack={() => setMoreView(null)}>
             <ProductivityPulseScreen embedded />
-          </div>
+          </MoreSubpage>
         )}
 
         {tab === "more" && moreView === "checklists" && (
-          <AdminChecklistsPanel
-            sites={sites}
-            siteSettings={siteSettings}
-            onSaved={refreshLocal}
-            showAlert={showAlert}
-          />
+          <MoreSubpage title="Checklists" onBack={() => setMoreView(null)}>
+            <AdminChecklistsPanel
+              sites={sites}
+              siteSettings={siteSettings}
+              onSaved={refreshLocal}
+              showAlert={showAlert}
+            />
+          </MoreSubpage>
         )}
 
         {tab === "more" && moreView === "expenses" && (
-          <SiteExpensesPanel
-            expenses={expenses}
-            machines={machines}
-            siteId={activeSite?.id}
-            cycleStartDay={getSettingsForSite(activeSite?.id).billing_cycle_start_day}
-            scopeLabel={activeSite?.name || "This site"}
-            canEdit
-            onSaved={refreshLocal}
-          />
+          <MoreSubpage title="Expenses" onBack={() => setMoreView(null)}>
+            <SiteExpensesPanel
+              expenses={expenses}
+              machines={machines}
+              siteId={activeSite?.id}
+              cycleStartDay={getSettingsForSite(activeSite?.id).billing_cycle_start_day}
+              scopeLabel={activeSite?.name || "This site"}
+              canEdit
+              onSaved={refreshLocal}
+            />
+          </MoreSubpage>
         )}
 
         {tab === "more" && moreView === "activity" && (
-          <AdminActivityPanel
-            events={events}
-            workSessions={workSessions}
-            shifts={shifts}
-            issues={issues}
-            fuelLogs={fuelLogs}
-            inspections={inspections}
-            expenses={expenses}
-            machines={machines}
-            sites={sites}
-          />
+          <MoreSubpage title="Activity" onBack={() => setMoreView(null)}>
+            <AdminActivityPanel
+              events={events}
+              workSessions={workSessions}
+              shifts={shifts}
+              issues={issues}
+              fuelLogs={fuelLogs}
+              inspections={inspections}
+              expenses={expenses}
+              machines={machines}
+              sites={sites}
+            />
+          </MoreSubpage>
         )}
 
         {tab === "users" && (
-
-          <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-
-            <div className="flex flex-wrap gap-2 mb-4">
-
-              <button type="button" onClick={() => setShowAddUser(true)}
-
-                className="flex-1 min-w-[140px] bg-[#22C55E] text-black py-3 rounded-xl font-logo font-bold text-xs tracking-wider">
-
-                + ADD USER
-
-              </button>
-
-              <button type="button" onClick={() => setShowInactive(!showInactive)}
-
-                className="px-4 py-3 rounded-xl font-logo text-xs border border-[#2A2A2A] text-[#F2F0EA]/70">
-
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="teal" size="md" className="flex-1 min-w-[140px]" onClick={() => setShowAddUser(true)}>
+                Add user
+              </Button>
+              <Button type="button" variant="secondary" size="md" onClick={() => setShowInactive(!showInactive)}>
                 {showInactive ? "Hide inactive" : "Show inactive"}
-
-              </button>
-
+              </Button>
             </div>
-
-
-
             {visibleProfiles.length === 0 ? (
-
-              <p className="text-sm text-[#F2F0EA]/40">No users. Sync when online or add a user.</p>
-
-            ) : visibleProfiles.map((p) => (
-
-              <div key={p.id} className={`py-3 border-b border-[#2A2A2A] last:border-0 space-y-2 ${p.active === false ? "opacity-50" : ""}`}>
-
-                <div className="flex justify-between items-start gap-2">
-
-                  <div className="min-w-0 flex-1">
-
-                    <p className="font-logo text-xs truncate">{p.name || p.email}</p>
-
-                    <p className="text-[9px] text-[#F2F0EA]/40 truncate">{p.email}</p>
-
-                    {p.active === false && <p className="text-[9px] text-[#EF4444] font-logo mt-1">INACTIVE</p>}
-
-                  </div>
-
-                  <select value={p.role || ROLES.OPERATOR} onChange={(e) => handleRoleChange(p.id, e.target.value)}
-
-                    disabled={p.active === false}
-
-                    className="bg-[#0A0A0A] border border-[#2A2A2A] p-1 rounded font-logo text-[10px]">
-
-                    {MANAGEABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-
-                  </select>
-
-                </div>
-
-                {p.active !== false && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      defaultValue={p.site_id || ""}
-                      onChange={(e) => updateProfileFields(p.id, { site_id: e.target.value || null }).then(() => refreshLocal())}
-                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]"
-                    >
-                      <option value="">No site</option>
-                      {sites.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                    {(p.role === ROLES.OPERATOR) && (
-                      <select
-                        defaultValue={p.machine_id || ""}
-                        onChange={(e) => updateProfileFields(p.id, { machine_id: e.target.value || null }).then(() => refreshLocal())}
-                        className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]"
-                      >
-                        <option value="">No default machine</option>
-                        {machines.filter((m) => m.site_id === p.site_id).map((m) => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                )}
-                {p.role === ROLES.OPERATOR && p.active !== false && (
-                  <p className="text-[10px] text-[#F2F0EA]/45">One login records every machine on this site. Each machine still gets its own shift and report.</p>
-                )}
-
-                {p.role === ROLES.SUPERVISOR && p.active !== false && (
-
-                  <div className="grid grid-cols-2 gap-2">
-
-                    <input type="tel" defaultValue={p.phone || ""} placeholder="WhatsApp phone"
-
-                      onBlur={(e) => updateProfileFields(p.id, { phone: e.target.value.trim() || null }).then(() => refreshLocal())}
-
-                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-body text-[10px] text-[#F2F0EA]" />
-
-                    <select defaultValue={p.shift_band || "any"}
-
-                      onChange={(e) => updateProfileFields(p.id, { shift_band: e.target.value }).then(() => refreshLocal())}
-
-                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]">
-
-                      <option value="day">Day shift</option>
-
-                      <option value="night">Night shift</option>
-
-                      <option value="any">All shifts</option>
-
-                    </select>
-
-                  </div>
-
-                )}
-
-                <div className="flex gap-2">
-
-                  {p.active !== false && p.id !== user?.id && (
-
-                    <button type="button" onClick={() => handleDeactivate(p)}
-
-                      className="text-[10px] font-logo text-[#EF4444] tracking-wider py-1">
-
-                      REMOVE USER
-
-                    </button>
-
-                  )}
-
-                  {p.active === false && (
-
-                    <button type="button" onClick={() => handleReactivate(p)}
-
-                      className="text-[10px] font-logo text-[#22C55E] tracking-wider py-1">
-
-                      REACTIVATE
-
-                    </button>
-
-                  )}
-
-                </div>
-
+              <p className="text-sm text-ops-muted">No users. Sync when online or add a user.</p>
+            ) : (
+              <div className="space-y-2">
+                {visibleProfiles.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setEditUser(p)}
+                    className={`ops-list-row ${p.active === false ? "opacity-50" : ""}`}
+                  >
+                    <div className="ops-list-row-body">
+                      <p className="ops-list-row-title">{p.name || p.email}</p>
+                      <p className="ops-list-row-meta">
+                        {(p.role || "operator")}
+                        {p.active === false ? " · inactive" : ""}
+                        {p.email ? ` · ${p.email}` : ""}
+                      </p>
+                    </div>
+                    <span className="ops-list-row-chevron" aria-hidden>›</span>
+                  </button>
+                ))}
               </div>
-
-            ))}
-
+            )}
           </div>
-
         )}
 
-
-
         {tab === "more" && moreView === "machines" && (
-          <AdminMachinesPanel
-            sites={sites}
-            machines={machines}
-            onSaved={refreshLocal}
-            showAlert={showAlert}
-          />
+          <MoreSubpage title="Machines" onBack={() => setMoreView(null)}>
+            <AdminMachinesPanel
+              sites={sites}
+              machines={machines}
+              onSaved={refreshLocal}
+              showAlert={showAlert}
+            />
+          </MoreSubpage>
         )}
 
 
 
         {tab === "more" && moreView === "sync" && (
-
+          <MoreSubpage title="Sync" onBack={() => setMoreView(null)}>
           <div className="space-y-4">
 
             <div className="grid grid-cols-3 gap-3">
@@ -594,11 +472,9 @@ export function AdminApp() {
 
             <div className="flex flex-wrap gap-2">
 
-              <button onClick={() => syncNow()} className="flex-1 bg-[#F5C518] text-black py-3 rounded-lg font-logo font-bold text-xs min-w-[120px]">FORCE SYNC</button>
-
-              <button onClick={handleFullRefresh} className="flex-1 bg-[#EF4444] text-white py-3 rounded-lg font-logo font-bold text-xs min-w-[120px]">FULL REFRESH</button>
-
-              <button onClick={exportJson} className="flex-1 bg-[#00A4A6] text-white py-3 rounded-lg font-logo font-bold text-xs min-w-[120px]">EXPORT JSON</button>
+              <Button onClick={() => syncNow()} variant="primary" size="md" className="flex-1 min-w-[120px]">Force sync</Button>
+              <Button onClick={handleFullRefresh} variant="danger" size="md" className="flex-1 min-w-[120px]">Full refresh</Button>
+              <Button onClick={exportJson} variant="teal" size="md" className="flex-1 min-w-[120px]">Export JSON</Button>
 
             </div>
 
@@ -613,7 +489,7 @@ export function AdminApp() {
             )}
 
           </div>
-
+          </MoreSubpage>
         )}
 
 
@@ -652,6 +528,24 @@ export function AdminApp() {
 
         />
 
+      )}
+
+      {editUser && (
+        <EditUserSheet
+          profile={editUser}
+          sites={sites}
+          machines={machines}
+          currentUserId={user?.id}
+          onClose={() => setEditUser(null)}
+          onSaveRole={async (id, role) => { await handleRoleChange(id, role); }}
+          onSaveFields={async (id, fields) => {
+            await updateProfileFields(id, fields);
+            await refreshLocal();
+            showAlert("Updated", "Saved.");
+          }}
+          onDeactivate={async (p) => { await handleDeactivate(p); setEditUser(null); }}
+          onReactivate={async (p) => { await handleReactivate(p); setEditUser(null); }}
+        />
       )}
 
     </AppPage>

@@ -21,6 +21,7 @@ export default {
           ink: "var(--ops-ink)",
           card: "var(--ops-card)",
           elevated: "var(--ops-elevated)",
+          inset: "var(--ops-inset)",
           border: "var(--ops-border)",
           gold: "#F5C518",
           teal: "#00A4A6",

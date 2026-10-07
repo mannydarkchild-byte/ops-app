@@ -71,7 +71,7 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
       <select
         value={siteId}
         onChange={(e) => setSiteId(e.target.value)}
-        className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl font-logo text-xs text-[#F2F0EA]"
+        className="ops-select"
       >
         {sites.map((s) => (
           <option key={s.id} value={s.id}>{s.name}</option>

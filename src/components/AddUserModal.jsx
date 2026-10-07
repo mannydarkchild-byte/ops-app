@@ -41,22 +41,22 @@ export function AddUserModal({ onClose, sites, machines, defaultSiteId, onDone }
     <Modal title="ADD USER" color="blue" onClose={onClose}>
       <FormSection step={1} title="Account" description="Login credentials for the new user." accent="#00A4A6">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name"
-          className="w-full bg-[#0A0A0A] border p-3 rounded mb-2 text-[#F2F0EA]" />
+          className="ops-select mb-2" />
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email"
-          className="w-full bg-[#0A0A0A] border p-3 rounded mb-2 text-[#F2F0EA]" />
+          className="ops-select mb-2" />
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password (min 6 characters)"
-          className="w-full bg-[#0A0A0A] border p-3 rounded text-[#F2F0EA]" />
+          className="ops-select" />
       </FormSection>
 
       <FormSection step={2} title="Role & site" description="What access this person has." accent="#00A4A6">
-        <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full bg-[#0A0A0A] border p-3 rounded mb-2 text-[#F2F0EA]">
+        <select value={role} onChange={(e) => setRole(e.target.value)} className="ops-select mb-2">
           {CREATABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
-        <select value={siteId} onChange={(e) => { setSiteId(e.target.value); setMachineId(""); }} className="w-full bg-[#0A0A0A] border p-3 rounded text-[#F2F0EA]">
+        <select value={siteId} onChange={(e) => { setSiteId(e.target.value); setMachineId(""); }} className="ops-select">
           {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         {role === ROLES.OPERATOR && (
-          <select value={machineId} onChange={(e) => setMachineId(e.target.value)} className="w-full bg-[#0A0A0A] border p-3 rounded mt-2 text-[#F2F0EA]">
+          <select value={machineId} onChange={(e) => setMachineId(e.target.value)} className="ops-select mt-2">
             <option value="">Default machine…</option>
             {siteMachines.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
@@ -64,8 +64,8 @@ export function AddUserModal({ onClose, sites, machines, defaultSiteId, onDone }
         {role === ROLES.SUPERVISOR && (
           <div className="grid grid-cols-2 gap-2 mt-2">
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="WhatsApp phone"
-              className="bg-[#0A0A0A] border p-3 rounded text-[#F2F0EA] text-sm" />
-            <select value={shiftBand} onChange={(e) => setShiftBand(e.target.value)} className="bg-[#0A0A0A] border p-3 rounded text-[#F2F0EA] text-sm">
+              className="ops-select !text-sm" />
+            <select value={shiftBand} onChange={(e) => setShiftBand(e.target.value)} className="ops-select !text-sm">
               <option value="day">Day shift</option>
               <option value="night">Night shift</option>
               <option value="any">All shifts</option>
