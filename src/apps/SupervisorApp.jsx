@@ -46,6 +46,7 @@ import { ShiftPhotoFix } from "../components/ShiftPhotoFix.jsx";
 
 const TABS = [
   { id: "live", label: "Live" },
+  { id: "pulse", label: "Pulse" },
   { id: "verify", label: "Sign off" },
   { id: "issues", label: "Problems" },
   { id: "reports", label: "Reports" },
@@ -112,7 +113,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const [alert, setAlert] = useState({ isOpen: false });
   const [kpiDetail, setKpiDetail] = useState(null);
   const [reportPreview, setReportPreview] = useState(null);
-  const [showPulse, setShowPulse] = useState(false);
   const [showExpenses, setShowExpenses] = useState(false);
   const [closeShift, setCloseShift] = useState(null);
   const [closeMeter, setCloseMeter] = useState("");
@@ -1222,12 +1222,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
 
-        {tab === "more" && showPulse && (
-          <div className="space-y-3">
-            <button type="button" onClick={() => setShowPulse(false)} className="font-ui text-sm text-[#F5C518]">Back</button>
-            <ProductivityPulseScreen embedded />
-          </div>
-        )}
+        {tab === "pulse" && <ProductivityPulseScreen embedded />}
 
         {tab === "more" && showExpenses && (
           <div className="space-y-3">
@@ -1244,11 +1239,10 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
           </div>
         )}
 
-        {tab === "more" && !showPulse && !showExpenses && (
+        {tab === "more" && !showExpenses && (
           <div className="space-y-4">
             <MoreMenu
               items={[
-                { label: "Machine pulse", onClick: () => setShowPulse(true) },
                 { label: "Expenses", onClick: () => setShowExpenses(true) },
               ]}
             />

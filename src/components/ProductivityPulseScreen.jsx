@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { StockChartSvg } from "./StockChart.jsx";
+import { MachineSelect } from "./DashboardKpi.jsx";
 import { buildPulseSnapshot } from "../lib/productivityPulse.js";
+import { refreshMachineActivity } from "../lib/machineStatus.js";
 import { getBillingPeriod, getPrimaryMachine } from "../lib/utils.js";
 import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 import { ownerForStopReason } from "../lib/stopReasons.js";
@@ -20,7 +22,7 @@ function toDateInputValue(d) {
  */
 export function ProductivityPulseScreen({ onClose, embedded = false }) {
   const {
-    user, activeSite, machines, shifts, events, getSettingsForSite, syncNow,
+    user, activeSite, machines, shifts, events, getSettingsForSite, syncNow, refreshLocal,
   } = useOps();
 
   const siteId = user?.site_id || activeSite?.id;
@@ -39,6 +41,32 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
   const [windowMode, setWindowMode] = useState("today");
   const [historyDay, setHistoryDay] = useState(() => toDateInputValue(new Date()));
   const [nowMs, setNowMs] = useState(Date.now());
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+  const refreshingRef = useRef(false);
+
+  const handleRefresh = async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    setRefreshError("");
+    setNowMs(Date.now());
+    try {
+      if (machine?.id && navigator.onLine) {
+        await refreshMachineActivity(machine.id);
+      } else if (!navigator.onLine) {
+        setRefreshError("Offline — showing what is already on this phone.");
+      }
+      await refreshLocal?.();
+      setNowMs(Date.now());
+      if (navigator.onLine) syncNow?.().catch(() => {});
+    } catch (e) {
+      setRefreshError(e?.message || "Could not refresh");
+    } finally {
+      refreshingRef.current = false;
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (windowMode !== "today") return undefined;
@@ -92,28 +120,23 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
         </div>
         <button
           type="button"
-          onClick={() => { setNowMs(Date.now()); syncNow?.(); }}
-          className="shrink-0 px-3 py-2 rounded-xl border border-[#2A2A2A] font-logo text-xs text-[#F2F0EA]/80"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="shrink-0 px-3 py-2 rounded-xl border border-[#2A2A2A] font-logo text-xs text-[#F5C518] disabled:opacity-60"
         >
-          Refresh
+          {refreshing ? "Refreshing…" : "Refresh"}
         </button>
       </div>
+      {refreshError && (
+        <p className="font-body text-xs text-[#EF4444] -mt-2">{refreshError}</p>
+      )}
 
-      {siteMachines.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {siteMachines.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setPickedId(m.id)}
-              className={`shrink-0 px-3 py-2 rounded-xl font-logo text-sm ${
-                machine?.id === m.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"
-              }`}
-            >
-              {m.name}
-            </button>
-          ))}
-        </div>
+      {siteMachines.length > 0 && (
+        <MachineSelect
+          machines={siteMachines}
+          value={machine?.id || ""}
+          onChange={setPickedId}
+        />
       )}
 
       <div className="flex gap-1">

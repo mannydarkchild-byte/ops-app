@@ -41,6 +41,57 @@ export async function hydrateOpenShiftsFromServer() {
   return remote;
 }
 
+/**
+ * Pulse Refresh. Incremental sync can skip rows once its watermark is ahead of them,
+ * so this reads the machine's recent shifts and stops straight from the server.
+ */
+export async function refreshMachineActivity(machineId) {
+  if (!navigator.onLine || !machineId) return { ok: false, reason: "offline" };
+
+  const { data: shiftRows, error: shiftError } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("machine_id", machineId)
+    .order("started_at", { ascending: false })
+    .limit(120);
+  if (shiftError) throw new Error(shiftError.message || "Could not load shifts");
+
+  const shifts = shiftRows || [];
+  for (const row of shifts) {
+    await mergeServerRow("shifts", row);
+  }
+
+  const { data: eventRows, error: eventError } = await supabase
+    .from("events")
+    .select("*")
+    .eq("machine_id", machineId)
+    .order("timestamp", { ascending: false })
+    .limit(400);
+  if (eventError) throw new Error(eventError.message || "Could not load stops");
+
+  const events = [...(eventRows || [])];
+  const seen = new Set(events.map((row) => row.id));
+  const shiftIds = shifts.slice(0, 40).map((row) => row.id).filter(Boolean);
+  if (shiftIds.length) {
+    const { data: byShift, error: byShiftError } = await supabase
+      .from("events")
+      .select("*")
+      .in("shift_id", shiftIds);
+    if (byShiftError) throw new Error(byShiftError.message || "Could not load shift activity");
+    for (const row of byShift || []) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      events.push(row);
+    }
+  }
+
+  for (const row of events) {
+    await mergeServerRow("events", row);
+  }
+
+  return { ok: true, shifts: shifts.length, events: events.length };
+}
+
 /** Keep a local RUNNING row until the server agrees it is closed. An empty server list often means the new shift has not uploaded yet. */
 async function localRunMustBeKept(shift) {
   const db = await ensureDB();

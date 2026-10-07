@@ -345,17 +345,18 @@ function TabGlyph({ id }) {
 }
 
 /**
- * Fixed bottom navigation. tabs: { id, label, badge? } — keep to five.
+ * Fixed bottom navigation. tabs: { id, label, badge? }.
+ * Supervisor uses six (Live, Pulse, Sign off, Problems, Reports, More).
  */
 export function AppTabBar({ tabs, activeTab, onTabChange }) {
   if (!tabs?.length) return null;
   return (
-    <nav className="ops-tabbar fixed bottom-0 inset-x-0 z-40 mobile-safe-bottom" aria-label="Main menu">
+    <nav className={`ops-tabbar fixed bottom-0 inset-x-0 z-40 mobile-safe-bottom${tabs.length > 5 ? " ops-tabbar-dense" : ""}`} aria-label="Main menu">
       <div
         className="max-w-5xl mx-auto grid"
-        style={{ gridTemplateColumns: `repeat(${Math.min(tabs.length, 5)}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${Math.min(tabs.length, 6)}, minmax(0, 1fr))` }}
       >
-        {tabs.slice(0, 5).map((t) => {
+        {tabs.slice(0, 6).map((t) => {
           const on = activeTab === t.id;
           return (
             <button

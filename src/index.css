@@ -701,6 +701,14 @@ html.theme-light .relative.z-20.bg-ops-black {
   border-top: 1px solid var(--ops-border);
 }
 
+.ops-tabbar-dense .ops-tab-label {
+  font-size: 10px;
+}
+
+.ops-tabbar-dense .ops-tab-icon {
+  width: 34px;
+}
+
 .ops-tab {
   position: relative;
   display: flex;
