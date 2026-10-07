@@ -6,7 +6,7 @@ import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinute
 import { buildStockSeries } from "../lib/productivityPulse.js";
 import { stockChartSvgHtml } from "../components/StockChart.jsx";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
-import { esc, fmtDate, fmtDateShort, inPeriod, money, shiftBillableValue } from "../lib/utils.js";
+import { esc, fmtDate, fmtDateShort, inPeriod, localDayKey, money, shiftBillableValue } from "../lib/utils.js";
 
 function shiftWindow(shift) {
   const start = new Date(shift.started_at).getTime();
@@ -333,7 +333,13 @@ async function resolveInspectionPhotoMap(items) {
   return map;
 }
 
-export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, logoUrl, prestartPhotoUrls = {}, siteSettings, profiles = [], workSessions = [] }) {
+function siteDispatchForShift(rows, shift) {
+  const day = localDayKey(shift?.started_at);
+  if (!day) return null;
+  return (rows || []).find((row) => String(row.dispatch_date || "").slice(0, 10) === day && (!shift?.site_id || row.site_id === shift.site_id)) || null;
+}
+
+export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, siteDispatch, logoUrl, prestartPhotoUrls = {}, siteSettings, profiles = [], workSessions = [] }) {
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = fuelLogs.filter((f) => f.shift_id === shift.id);
@@ -444,29 +450,28 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
       <div class="item"><div class="label">Verified</div><div class="value">${fmtDate(shift.verified_at || shift.ended_at)}</div></div>
     </div>
 
-    <section>
-      <h2 class="font-brand">Dispatch</h2>
-      ${shift.tonnes_dispatched == null && shift.trucks_dispatched == null && shift.tonnes_on_floor == null && !weighbridgePhotoUrl
-    ? `<p class="note">Dispatch was not recorded on this shift.</p>`
-    : `<div class="summary">
+    ${siteDispatch ? `<section>
+      <h2 class="font-brand">Site dispatch</h2>
+      <p class="note" style="margin-top:0">Recorded once for the site on this day, not on each machine sign-off.</p>
+      <div class="summary">
         <div class="summary-cell highlight">
           <div class="label">Tonnes dispatched</div>
-          <div class="value font-brand">${formatTonnes(shift.tonnes_dispatched)}</div>
-          <div class="sub">${shift.trucks_dispatched == null ? "Trucks not entered" : `${shift.trucks_dispatched} trucks`}</div>
+          <div class="value font-brand">${formatTonnes(siteDispatch.tonnes_dispatched)}</div>
+          <div class="sub">${siteDispatch.trucks_dispatched == null ? "" : `${siteDispatch.trucks_dispatched} trucks`}</div>
         </div>
         <div class="summary-cell">
           <div class="label">Trucks</div>
-          <div class="value font-brand">${shift.trucks_dispatched == null ? "—" : shift.trucks_dispatched}</div>
+          <div class="value font-brand">${siteDispatch.trucks_dispatched == null ? "—" : siteDispatch.trucks_dispatched}</div>
           <div class="sub">Weighbridge count</div>
         </div>
         <div class="summary-cell">
           <div class="label">On the floor</div>
-          <div class="value font-brand">${formatTonnes(shift.tonnes_on_floor)}</div>
-          <div class="sub">${shift.tonnes_on_floor == null ? "No estimate" : "Supervisor estimate"}</div>
+          <div class="value font-brand">${formatTonnes(siteDispatch.tonnes_on_floor)}</div>
+          <div class="sub">${siteDispatch.tonnes_on_floor == null ? "No estimate" : "Supervisor estimate"}</div>
         </div>
       </div>
-      ${weighbridgePhotoUrl ? `<img src="${esc(weighbridgePhotoUrl)}" alt="Weighbridge report" style="max-width:100%;max-height:320px;object-fit:contain;border-radius:12px;border:1px solid #E8E6E0"/>` : ""}`}
-    </section>
+      ${weighbridgePhotoUrl ? `<img src="${esc(weighbridgePhotoUrl)}" alt="Weighbridge report" style="max-width:100%;max-height:320px;object-fit:contain;border-radius:12px;border:1px solid #E8E6E0"/>` : ""}
+    </section>` : ""}
 
     <section>
       <h2 class="font-brand">How the machine ran</h2>
@@ -582,7 +587,7 @@ ${shiftFuel.length
 </body></html>`;
 }
 
-function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, siteSettings, profiles = [], workSessions = [] }) {
+function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, siteSettings, profiles = [], workSessions = [], siteDispatch = null }) {
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = (fuelLogs || []).filter((f) => f.shift_id === shift.id);
@@ -622,9 +627,9 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
         ["Billable basis", "8h shift minus Darkchild downtime"],
         ["Runtime (min)", Number(shift.runtime_minutes || 0)],
         ["Downtime (min)", Number(shift.downtime_minutes || 0)],
-        ["Tonnes dispatched", shift.tonnes_dispatched ?? ""],
-        ["Trucks", shift.trucks_dispatched ?? ""],
-        ["Tonnes on the floor", shift.tonnes_on_floor ?? ""],
+        ["Site tonnes dispatched", siteDispatch?.tonnes_dispatched ?? ""],
+        ["Site trucks", siteDispatch?.trucks_dispatched ?? ""],
+        ["Site tonnes on the floor", siteDispatch?.tonnes_on_floor ?? ""],
       ],
     },
     { name: "Events", rows: [["Time", "Event", "Detail", "Duration"], ...timeline] },
@@ -667,7 +672,7 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
   ];
 }
 
-export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [], siteSettings, profiles = [], workSessions = [] }) {
+export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [], siteSettings, profiles = [], workSessions = [], siteDispatch: siteDispatchRows = [] }) {
   const sigRef = firstMedia(shift.supervisor_signature_ref, shift.supervisor_signature);
   const prestartItems = shiftPrestart(inspections, shift);
   const prestartPhotoMap = await resolveInspectionPhotoMap(prestartItems);
@@ -675,7 +680,8 @@ export async function prepareShiftDailyReport(shift, { events = [], inspections 
     Object.entries(prestartPhotoMap).map(([id, { url }]) => [id, url])
   );
 
-  const weighbridgeRef = firstMedia(shift.weighbridge_photo_ref, shift.weighbridge_photo);
+  const dayDispatch = siteDispatchForShift(siteDispatchRows, shift);
+  const weighbridgeRef = firstMedia(dayDispatch?.weighbridge_photo_ref, dayDispatch?.weighbridge_photo);
   const [{ openingPhotoUrl, closingPhotoUrl }, signatureUrl, weighbridgePhotoUrl, logoUrl] = await Promise.all([
     resolveMeterPhotos(shift, events, hourReadings),
     embedMedia(sigRef),
@@ -685,13 +691,13 @@ export async function prepareShiftDailyReport(shift, { events = [], inspections 
 
   const names = shiftNameLines(shift, { profiles, workSessions });
   const html = generateShiftDailyReportHTML(shift, {
-    events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, logoUrl, prestartPhotoUrls, siteSettings, profiles, workSessions,
+    events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, siteDispatch: dayDispatch, logoUrl, prestartPhotoUrls, siteSettings, profiles, workSessions,
   });
 
   return {
     html,
     title: `Daily Report · ${machine?.name || names.machineOperator} · ${fmtDateShort(shift.started_at)}`,
-    sheets: buildDailyReportSheets(shift, { events, inspections, fuelLogs, machine, site, siteSettings, profiles, workSessions }),
+    sheets: buildDailyReportSheets(shift, { events, inspections, fuelLogs, machine, site, siteSettings, profiles, workSessions, siteDispatch: dayDispatch }),
   };
 }
 
@@ -764,9 +770,6 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
       <td>${shiftBillableHours(s, events, siteSettings).toFixed(1)}h</td>
       <td>${money(shiftBillableValue(s, machineList, events, siteSettings))}</td>
       <td>${esc(s.supervisor_signature_name || "—")}</td>
-      <td>${s.tonnes_dispatched == null ? "—" : formatTonnes(s.tonnes_dispatched)}</td>
-      <td>${s.trucks_dispatched == null ? "—" : s.trucks_dispatched}</td>
-      <td>${s.tonnes_on_floor == null ? "—" : formatTonnes(s.tonnes_on_floor)}</td>
     </tr>`)
     .join("");
 
@@ -842,9 +845,17 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
     ${pendingBillable > 0 ? `<div class="callout">⚠ ${pending.length} shift(s) pending supervisor verification (${pendingBillable.toFixed(1)}h billable)</div>` : ""}
 
     <section>
+      <h2>Site dispatch</h2>
+      <p class="note">One weighbridge entry per day for the site.</p>
+      <table><thead><tr><th>Date</th><th>Tonnes</th><th>Trucks</th><th>On the floor</th><th>Recorded by</th></tr></thead><tbody>
+${(data?.dispatches || []).filter((row) => inRange(row.dispatch_date)).map((row) => `<tr><td>${esc(String(row.dispatch_date || "").slice(0, 10))}</td><td>${formatTonnes(row.tonnes_dispatched)}</td><td>${row.trucks_dispatched ?? "—"}</td><td>${row.tonnes_on_floor == null ? "—" : formatTonnes(row.tonnes_on_floor)}</td><td>${esc(row.recorded_by_name || "—")}</td></tr>`).join("") || '<tr class="empty"><td colspan="5">No dispatch recorded in this period</td></tr>'}
+      </tbody></table>
+    </section>
+
+    <section>
       <h2>Verified shifts</h2>
-      <table><thead><tr><th>Operator</th><th>Date</th><th>Machine hours</th><th>Billable</th><th>Value</th><th>Signed by</th><th>Tonnes</th><th>Trucks</th><th>On the floor</th></tr></thead><tbody>
-${shiftRows || '<tr class="empty"><td colspan="9">No verified shifts in this period</td></tr>'}
+      <table><thead><tr><th>Operator</th><th>Date</th><th>Machine hours</th><th>Billable</th><th>Value</th><th>Signed by</th></tr></thead><tbody>
+${shiftRows || '<tr class="empty"><td colspan="6">No verified shifts in this period</td></tr>'}
       </tbody></table>
     </section>
 
@@ -1024,7 +1035,7 @@ export async function prepareOperationsReport(data, period, machine, site) {
     {
       name: "Shifts",
       rows: [
-        ["Operator", "Date", "Machine hours", "Billable hours", "Runtime min", "Downtime min", "Signed by", "Tonnes dispatched", "Trucks", "Tonnes on the floor"],
+        ["Operator", "Date", "Machine hours", "Billable hours", "Runtime min", "Downtime min", "Signed by"],
         ...periodShifts.map((s) => [
           s.operator_name || "",
           fmtDateShort(s.started_at),
@@ -1033,10 +1044,22 @@ export async function prepareOperationsReport(data, period, machine, site) {
           Number(s.runtime_minutes || 0),
           Number(s.downtime_minutes || 0),
           s.supervisor_signature_name || "",
-          s.tonnes_dispatched ?? "",
-          s.trucks_dispatched ?? "",
-          s.tonnes_on_floor ?? "",
         ]),
+      ],
+    },
+    {
+      name: "Dispatch",
+      rows: [
+        ["Date", "Tonnes dispatched", "Trucks", "Tonnes on the floor", "Recorded by"],
+        ...(data?.dispatches || [])
+          .filter((row) => inPeriod(row.dispatch_date, period))
+          .map((row) => [
+            String(row.dispatch_date || "").slice(0, 10),
+            row.tonnes_dispatched ?? "",
+            row.trucks_dispatched ?? "",
+            row.tonnes_on_floor ?? "",
+            row.recorded_by_name || "",
+          ]),
       ],
     },
   ];

@@ -11,7 +11,7 @@ export function ShiftDispatchFields({ tonnes, trucks, floorTonnes, photoPreview,
       <div>
         <p className="font-logo text-[10px] text-[#F5C518] tracking-wider mb-1">WEIGHBRIDGE REPORT</p>
         <p className="font-body text-sm text-[#F2F0EA]/70 mb-2">
-          Photograph the weighbridge report, then enter the total tonnes dispatched and the number of trucks.
+          One entry for the site on this day. Photograph the weighbridge report, then enter the total tonnes and trucks.
         </p>
         {photoPreview && (
           <img src={photoPreview} alt="Weighbridge report" className="w-full max-h-40 object-contain rounded-2xl bg-[#0A0A0A] mb-2" />

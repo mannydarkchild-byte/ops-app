@@ -52,7 +52,7 @@ export function ManagerApp() {
   const {
     user, shifts, events, expenses, fuelLogs, inspections, issues, issueMessages,
     workSessions, machines, profiles, submissions, hourReadings, activeSite, inventoryItems, syncNow, refreshLocal,
-    getSettingsForSite, siteSettings,
+    getSettingsForSite, siteSettings, siteDispatch,
   } = useOps();
 
   const [tab, setTab] = useState("overview");
@@ -335,8 +335,8 @@ export function ManagerApp() {
   }), [events, fuelLogs, issues, primaryMachine?.id]);
 
   const reportContext = useMemo(() => ({
-    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings, siteSettings: siteConfig, profiles, workSessions,
-  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings, siteConfig, profiles, workSessions]);
+    events, inspections, fuelLogs, site: activeSite, shifts, hourReadings, siteSettings: siteConfig, profiles, workSessions, siteDispatch,
+  }), [events, inspections, fuelLogs, activeSite, shifts, hourReadings, siteConfig, profiles, workSessions, siteDispatch]);
 
   const getReportPeriod = () => {
     const presets = getDatePresets(siteConfig.billing_cycle_start_day);
@@ -352,7 +352,8 @@ export function ManagerApp() {
     inspections: inspections.filter((i) => i.machine_id === primaryMachine?.id),
     submissions,
     siteSettings: siteConfig,
-  }), [warriorShifts, warriorActivity, expenses, inspections, submissions, primaryMachine?.id, siteConfig]);
+    dispatches: siteDispatch,
+  }), [warriorShifts, warriorActivity, expenses, inspections, submissions, primaryMachine?.id, siteConfig, siteDispatch]);
 
   const handleViewReport = async (shift) => {
     try {

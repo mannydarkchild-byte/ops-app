@@ -4,7 +4,7 @@ import { scheduleSync } from "../lib/sync/engine.js";
 import { supabase } from "../lib/supabase.js";
 import { SHIFT, ISSUE, ROLES, BREAKDOWN_STATUS, MAINTENANCE_STATUS, issueAreaRequiresMachine } from "../lib/constants.js";
 import { canCloseIssue, getShiftStatus } from "../lib/utils.js";
-import { makeId, nowISO } from "../lib/utils.js";
+import { localDayKey, makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
 import { ensureSiteSettings, prestartItemsForMachine, inspectionGroupsForMachine, getMechanicItemsFromGroups } from "../lib/siteConfig.js";
 import { fetchServerOpenShift } from "../lib/machineStatus.js";
@@ -1142,7 +1142,7 @@ export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, rea
 }
 
 function readDispatch(dispatch) {
-  if (!dispatch?.photoRef) throw new Error("Photograph the weighbridge report before signing off.");
+  if (!dispatch?.photoRef) throw new Error("Photograph the weighbridge report.");
   const tonnes = Number(dispatch.tonnes);
   const trucks = Number(dispatch.trucks);
   if (dispatch.tonnes === "" || dispatch.tonnes == null || !Number.isFinite(tonnes) || tonnes < 0) {
@@ -1164,12 +1164,36 @@ function readDispatch(dispatch) {
   };
 }
 
+/** One weighbridge entry for the site on a calendar day. Updating the same day replaces it. */
+export async function saveSiteDispatch(user, site, dispatch) {
+  if (!site?.id) throw new Error("No site");
+  const fields = readDispatch(dispatch);
+  const day = dispatch.date || localDayKey();
+  const now = nowISO();
+  const id = `DSP-${site.id}-${day}`;
+  const existing = (await readTable("site_dispatch")).find((row) => row.id === id) || null;
+  const row = {
+    ...(existing || {}),
+    id,
+    site_id: site.id,
+    dispatch_date: day,
+    ...fields,
+    recorded_by: user?.id || null,
+    recorded_by_name: user?.name || null,
+    created_at: existing?.created_at || now,
+    updated_at: now,
+    _sync_status: "pending",
+  };
+  await saveLocal("site_dispatch", row);
+  scheduleSync();
+  return row;
+}
+
 export async function verifyShift(shift, supervisor, options) {
   return withInflight(`verify:${shift?.id}`, () => verifyShiftOnce(shift, supervisor, options));
 }
 
-async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDataUrl, dispatch }) {
-  const dispatchFields = action === "verify" ? readDispatch(dispatch) : null;
+async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDataUrl }) {
   if (action === "verify" && getShiftStatus(shift) === SHIFT.VERIFIED) return shift;
   if (action === "verify" && !signatureDataUrl) {
     throw new Error("Supervisor signature is required to verify");
@@ -1184,25 +1208,6 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
   const token = shift.verification_token || crypto.randomUUID?.() || makeId("TOK");
 
   if (navigator.onLine) {
-    if (dispatchFields) {
-      const photoUrl = typeof dispatchFields.weighbridge_photo_ref === "string" && dispatchFields.weighbridge_photo_ref.startsWith("http")
-        ? dispatchFields.weighbridge_photo_ref
-        : null;
-      const { error: dispatchError } = await supabase.from("shifts").update({
-        tonnes_dispatched: dispatchFields.tonnes_dispatched,
-        trucks_dispatched: dispatchFields.trucks_dispatched,
-        tonnes_on_floor: dispatchFields.tonnes_on_floor,
-        ...(photoUrl ? { weighbridge_photo: photoUrl } : {}),
-        updated_at: now,
-      }).eq("id", shift.id);
-      if (dispatchError) {
-        if (/column/i.test(dispatchError.message || "")) {
-          throw new Error("Dispatch fields are not in the database yet. Run migration 022 in Supabase, then sign this shift off again.");
-        }
-        throw dispatchError;
-      }
-    }
-
     if (!shift.verification_token) {
       const { error: tokenError } = await supabase.from("shifts").update({
         verification_token: token,
@@ -1249,7 +1254,6 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
 
   const updated = {
     ...shift,
-    ...(dispatchFields || {}),
     shift_status: action === "verify" ? SHIFT.VERIFIED : SHIFT.CORRECTION_REQUIRED,
     verified_at: action === "verify" ? now : shift.verified_at,
     verified_by: action === "verify" ? supervisor.id : shift.verified_by,

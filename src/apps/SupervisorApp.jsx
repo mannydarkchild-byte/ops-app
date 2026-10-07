@@ -34,7 +34,7 @@ import * as wf from "../services/workflows.js";
 import { AlertModal, Modal } from "../components/ui/Modal.jsx";
 
 import { SignaturePad } from "../components/ui/SignaturePad.jsx";
-import { ShiftDispatchFields } from "../components/ShiftDispatchFields.jsx";
+import { SiteDispatchCard } from "../components/SiteDispatchCard.jsx";
 
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
@@ -66,7 +66,7 @@ const REPORT_FILTERS = [
 
 export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVerifyConsumed }) {
 
-  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, expenses, inspections, hourReadings, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
+  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, expenses, inspections, hourReadings, siteDispatch, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
 
   const siteConfig = useMemo(
     () => getSettingsForSite(user?.site_id || activeSite?.id),
@@ -82,11 +82,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const [verifyScope, setVerifyScope] = useState("mine");
 
   const [signature, setSignature] = useState(null);
-  const [dispatchTonnes, setDispatchTonnes] = useState("");
-  const [dispatchTrucks, setDispatchTrucks] = useState("");
-  const [floorTonnes, setFloorTonnes] = useState("");
-  const [weighbridgeRef, setWeighbridgeRef] = useState(null);
-  const [weighbridgePreview, setWeighbridgePreview] = useState(null);
 
   const [reportFilter, setReportFilter] = useState("cycle");
   const [timesheetFilter, setTimesheetFilter] = useState("cycle");
@@ -452,9 +447,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const reportContext = useMemo(() => ({
 
-    events, inspections, fuelLogs, expenses, site: activeSite, shifts, hourReadings, siteSettings: siteConfig, profiles, workSessions,
+    events, inspections, fuelLogs, expenses, site: activeSite, shifts, hourReadings, siteSettings: siteConfig, profiles, workSessions, siteDispatch,
 
-  }), [events, inspections, fuelLogs, expenses, activeSite, shifts, hourReadings, siteConfig, profiles, workSessions]);
+  }), [events, inspections, fuelLogs, expenses, activeSite, shifts, hourReadings, siteConfig, profiles, workSessions, siteDispatch]);
 
 
 
@@ -588,16 +583,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     setSignature(null);
 
-    setDispatchTonnes(shift.tonnes_dispatched != null ? String(shift.tonnes_dispatched) : "");
-
-    setDispatchTrucks(shift.trucks_dispatched != null ? String(shift.trucks_dispatched) : "");
-
-    setFloorTonnes(shift.tonnes_on_floor != null ? String(shift.tonnes_on_floor) : "");
-
-    setWeighbridgeRef(shift.weighbridge_photo_ref || null);
-
-    setWeighbridgePreview(null);
-
   };
 
 
@@ -696,17 +681,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
       if (navigator.onLine) {
 
-        await wf.verifyShift(verifyTarget, user, {
-          action,
-          reason: null,
-          signatureDataUrl: signature,
-          dispatch: {
-            tonnes: dispatchTonnes,
-            trucks: dispatchTrucks,
-            floorTonnes,
-            photoRef: weighbridgeRef,
-          },
-        });
+        await wf.verifyShift(verifyTarget, user, { action, reason: null, signatureDataUrl: signature });
 
         await syncNow();
 
@@ -725,16 +700,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
       setVerifyTarget(null);
 
       setSignature(null);
-
-      setDispatchTonnes("");
-
-      setDispatchTrucks("");
-
-      setFloorTonnes("");
-
-      setWeighbridgeRef(null);
-
-      setWeighbridgePreview(null);
 
       showAlert("Done", "Shift verified with your signature.", "success");
 
@@ -898,6 +863,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
         {tab === "live" && (
 
           <div className="space-y-4">
+
+            <SiteDispatchCard
+              records={siteDispatch}
+              siteId={activeSite?.id}
+              onSave={async (fields) => {
+                await wf.saveSiteDispatch(user, activeSite, fields);
+                await refreshLocal();
+              }}
+            />
 
             {openShiftsToClose.length > 0 && (
               <div className="border-2 border-[#F5C518] bg-[#2a2208] rounded-2xl p-4 space-y-3">
@@ -1137,8 +1111,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
                   </p>
 
                 )}
-
-                <p className="text-[11px] text-[#F2F0EA]/45 mt-3">Sign-off asks for the weighbridge photo, tonnes dispatched, and trucks. Floor tonnage is optional.</p>
 
                 <div className="grid grid-cols-1 gap-2 mt-4">
 
@@ -1502,24 +1474,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
           </p>
 
-          <ShiftDispatchFields
-            tonnes={dispatchTonnes}
-            trucks={dispatchTrucks}
-            floorTonnes={floorTonnes}
-            photoPreview={weighbridgePreview}
-            onTonnes={setDispatchTonnes}
-            onTrucks={setDispatchTrucks}
-            onFloor={setFloorTonnes}
-            onPhoto={(ref, data) => { setWeighbridgeRef(ref); setWeighbridgePreview(data || null); }}
-          />
-
           <SignaturePad onChange={setSignature} />
 
-          {(!weighbridgeRef || dispatchTonnes === "" || dispatchTrucks === "") && (
-            <p className="font-body text-xs text-[#F5C518]/90 mt-3">Photo, tonnes dispatched, and truck count are required before sign-off. The floor estimate can be left blank.</p>
-          )}
-
-          <button onClick={() => handleVerify("verify")} disabled={verifyBusy || !signature || !weighbridgeRef || dispatchTonnes === "" || dispatchTrucks === ""}
+          <button onClick={() => handleVerify("verify")} disabled={verifyBusy || !signature}
 
             className="w-full mt-4 bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40">
 

@@ -25,6 +25,7 @@ const TABLE_INDEXES = {
   inventory_items: "id, site_id, sku, category, updated_at",
   inventory_movements: "id, site_id, inventory_item_id, maintenance_job_id, created_at",
   site_settings: "id, site_id, updated_at",
+  site_dispatch: "id, site_id, dispatch_date, updated_at",
   sync_queue: "++queue_id, table, record_id, status, created_at",
   sync_meta: "key",
   media_blobs: "id, status, created_at",
@@ -33,7 +34,10 @@ const TABLE_INDEXES = {
 };
 
 const V1_STORES = Object.fromEntries(
-  Object.entries(TABLE_INDEXES).filter(([k]) => k !== "machine_status")
+  Object.entries(TABLE_INDEXES).filter(([k]) => k !== "machine_status" && k !== "site_dispatch")
+);
+const V4_STORES = Object.fromEntries(
+  Object.entries(TABLE_INDEXES).filter(([k]) => k !== "site_dispatch")
 );
 
 export async function initDB() {
@@ -41,9 +45,10 @@ export async function initDB() {
 
   db = new Dexie("OPS_MineOps");
   db.version(1).stores(V1_STORES);
-  db.version(2).stores(TABLE_INDEXES);
-  db.version(3).stores(TABLE_INDEXES);
-  db.version(4).stores(TABLE_INDEXES);
+  db.version(2).stores(V4_STORES);
+  db.version(3).stores(V4_STORES);
+  db.version(4).stores(V4_STORES);
+  db.version(5).stores(TABLE_INDEXES);
 
   await db.open();
   return db;

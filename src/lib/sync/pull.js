@@ -22,6 +22,7 @@ const SITE_SCOPED_TABLES = new Set([
   "inventory_items",
   "inventory_movements",
   "site_settings",
+  "site_dispatch",
 ]);
 
 const CREATED_AT_TABLES = new Set(["issue_messages", "shift_corrections", "maintenance_parts", "inventory_movements"]);

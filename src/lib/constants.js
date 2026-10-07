@@ -238,6 +238,7 @@ export const SYNC_TABLES = [
   "inventory_items",
   "inventory_movements",
   "site_settings",
+  "site_dispatch",
 ];
 
 /** Columns allowed to push per table (prevents leaking local-only fields) */
@@ -262,6 +263,7 @@ export const ALLOWED_COLUMNS = {
   inventory_items: ["id", "site_id", "sku", "name", "category", "quantity_on_hand", "unit", "reorder_level", "created_at", "updated_at"],
   inventory_movements: ["id", "site_id", "inventory_item_id", "maintenance_job_id", "quantity_change", "reason", "performed_by", "performed_by_name", "created_at"],
   site_settings: ["id", "site_id", "billing_cycle_start_day", "primary_machine_id", "prestart_items", "earthmoving_prestart_items", "prestart_status_options", "inspection_groups", "earthmoving_inspection_groups", "stop_reasons", "created_at", "updated_at"],
+  site_dispatch: ["id", "site_id", "dispatch_date", "tonnes_dispatched", "trucks_dispatched", "tonnes_on_floor", "weighbridge_photo", "recorded_by", "recorded_by_name", "created_at", "updated_at"],
 };
 
 /** Operator pre-start checklist (14 items) — before starting machine */
