@@ -15,6 +15,8 @@ import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
+import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
+import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
 
 import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, onSiteRecord, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
 
@@ -107,6 +109,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const [reasonModal, setReasonModal] = useState(null);
 
   const [alert, setAlert] = useState({ isOpen: false });
+  const [kpiDetail, setKpiDetail] = useState(null);
   const [reportPreview, setReportPreview] = useState(null);
   const [showPulse, setShowPulse] = useState(false);
   const [showExpenses, setShowExpenses] = useState(false);
@@ -310,7 +313,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const signedHours = useMemo(
 
-    () => signedReports.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0),
+    () => sumMeterHours(signedReports),
 
     [signedReports]
 
@@ -355,9 +358,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const dashboardShifts = useMemo(
 
-    () => shifts.filter(
+    () => shiftsStartedInPeriod(
 
-      (s) => onSiteRecord(s, user?.site_id, machines) && inPeriod(s.started_at, billingPeriod)
+      shifts.filter((s) => onSiteRecord(s, user?.site_id, machines)),
+
+      billingPeriod
 
     ),
 
@@ -369,7 +374,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const dashboardStats = useMemo(() => {
 
-    const machineHours = dashboardShifts.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0);
+    const machineHours = sumMeterHours(dashboardShifts);
+    const meterShiftCount = dashboardShifts.filter((shift) => shift.end_hour_meter != null && shift.start_hour_meter != null).length;
 
     const billableHours = dashboardShifts.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0);
 
@@ -407,6 +413,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
       shiftCount: dashboardShifts.length,
 
+      meterShiftCount,
+
     };
 
   }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, user?.site_id, billingPeriod]);
@@ -414,6 +422,30 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
   const machineName = (machineId) => machines.find((m) => m.id === machineId)?.name || machineId;
+
+  const dashboardDetails = useMemo(() => {
+    const scope = `All machines · ${billingPeriod.label}`;
+    const withScope = (detail) => ({ ...detail, scope });
+    const cycleFuel = (fuelLogs || []).filter((row) => onSiteRecord(row, user?.site_id, machines) && inPeriod(row.timestamp, billingPeriod));
+    const cycleExpenses = (expenses || []).filter((row) => onSiteRecord(row, user?.site_id, machines) && inPeriod(row.date || row.created_at, billingPeriod));
+    return {
+      billable: withScope(billableDetail(dashboardShifts, events, siteConfig, machineName)),
+      machine: withScope(machineHourDetail(dashboardShifts, machineName)),
+      revenue: withScope(revenueDetail(dashboardShifts, machines, events, siteConfig, machineName)),
+      expenses: withScope(expenseDetail(cycleExpenses, machineName)),
+      diesel: withScope(dieselDetail(cycleFuel, machineName)),
+      downtime: withScope(downtimeDetail(dashboardShifts, machineName)),
+    };
+  }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, user?.site_id, billingPeriod]);
+
+  const signedDetails = useMemo(() => {
+    const scope = `Signed shifts · ${reportPeriod?.label || "All time"}`;
+    const withScope = (detail) => ({ ...detail, scope });
+    return {
+      billable: withScope(billableDetail(signedReports, events, siteConfig, machineName)),
+      machine: withScope(machineHourDetail(signedReports, machineName)),
+    };
+  }, [signedReports, events, siteConfig, machines, reportPeriod]);
 
 
 
@@ -800,31 +832,70 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
         {tab === "live" && (
           <div className="space-y-3 mb-4">
             <div className="grid grid-cols-2 gap-3">
-            <Kpi
+            <DashboardKpi
               label="On site now"
-              value={String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length + fleetStatus.filter((f) => f.runningShift).length)}
-              sub="Clocked in or still running"
+              value={String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length)}
+              sub={`${fleetStatus.filter((f) => f.runningShift).length} machines running`}
               color="#F5C518"
+              onClick={() => setKpiDetail({
+                title: "On site now",
+                scope: activeSite?.name || "This site",
+                note: "People clocked in during this shift window. Machines still running are listed separately.",
+                total: String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length),
+                rows: [
+                  { id: "people", title: "Clocked in", detail: "People on site", value: String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length), emphasis: true },
+                  ...workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).map((s) => ({
+                    id: s.id,
+                    title: s.operator_name || "Person",
+                    detail: "Clocked in",
+                    value: s.clock_in ? new Date(s.clock_in).toLocaleTimeString() : "",
+                  })),
+                  { id: "machines", title: "Machines running", detail: "Not added into the people count", value: String(fleetStatus.filter((f) => f.runningShift).length), emphasis: true },
+                  ...fleetStatus.filter((f) => f.runningShift).map((f) => ({
+                    id: f.machine?.id || f.runningShift.id,
+                    title: f.machine?.name || "Machine",
+                    detail: f.runningShift.operator_name || "Running",
+                    value: "Running",
+                  })),
+                ],
+              })}
             />
-            <Kpi label="To sign off" value={String(myPendingVerify)} sub="Tap Sign Off" color="#22C55E" />
+            <DashboardKpi
+              label="To sign off"
+              value={String(myPendingVerify)}
+              sub="Assigned to you"
+              color="#22C55E"
+              onClick={() => setKpiDetail({
+                title: "To sign off",
+                scope: "Assigned to you",
+                note: "These shifts are waiting for your signature. The weighbridge is entered separately on Live.",
+                total: String(myPendingVerify),
+                rows: pendingShifts.filter((s) => s.assigned_supervisor_id === user?.id).map((s) => ({
+                  id: s.id,
+                  title: `${machineName(s.machine_id)} · ${s.operator_name || "Operator"}`,
+                  detail: s.started_at ? new Date(s.started_at).toLocaleString() : "",
+                  value: "Waiting",
+                })),
+              })}
+            />
             </div>
-            <p className="font-body text-xs text-[#F2F0EA]/50">This site · this cycle</p>
+            <p className="font-body text-xs text-[#F2F0EA]/50">All machines · {billingPeriod.label}</p>
             <div className="grid grid-cols-2 gap-3">
-            <Kpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
-            <Kpi label={HOUR_LABELS.machine} value={`${dashboardStats.machineHours.toFixed(1)}h`} sub={HOUR_LABELS.machineHint} color="#22C55E" />
-            <Kpi label={HOUR_LABELS.revenue} value={money(dashboardStats.revenue)} sub={HOUR_LABELS.revenueHint} color="#F5C518" />
-            <Kpi label={HOUR_LABELS.expenses} value={money(dashboardStats.expenseTotal)} sub={dashboardStats.earlierExpenses > 0 ? `${dashboardStats.earlierExpenses} earlier · open Expenses` : HOUR_LABELS.expensesHint} color="#F5C518" />
-            <Kpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : HOUR_LABELS.expensesHint} color="#F5C518" />
-            <Kpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub={`${HOUR_LABELS.runtime} ${formatDurationMinutes(dashboardStats.runtimeMin)}`} color="#EF4444" />
+            <DashboardKpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts started`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.billable)} />
+            <DashboardKpi label={HOUR_LABELS.machine} value={`${dashboardStats.machineHours.toFixed(1)}h`} sub={`All machines · ${dashboardStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.machine)} />
+            <DashboardKpi label={HOUR_LABELS.revenue} value={money(dashboardStats.revenue)} sub="Billable hours × each machine rate" color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.revenue)} />
+            <DashboardKpi label={HOUR_LABELS.expenses} value={money(dashboardStats.expenseTotal)} sub={dashboardStats.earlierExpenses > 0 ? `${dashboardStats.earlierExpenses} earlier · open Expenses` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.expenses)} />
+            <DashboardKpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.diesel)} />
+            <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Stopped time on shifts this cycle" color="#EF4444" onClick={() => setKpiDetail(dashboardDetails.downtime)} />
             </div>
           </div>
         )}
 
         {tab === "reports" && (
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <Kpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
-            <Kpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub={`${signedReports.length} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
-            <Kpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub={HOUR_LABELS.machineHint} color="#22C55E" />
+            <DashboardKpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
+            <DashboardKpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub="Signed shifts in this period" color="#22C55E" onClick={() => setKpiDetail(signedDetails.billable)} />
+            <DashboardKpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub="Signed shifts · closing meter" color="#22C55E" onClick={() => setKpiDetail(signedDetails.machine)} />
           </div>
         )}
 
@@ -1527,6 +1598,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
         </Modal>
       )}
 
+      <KpiDetailModal detail={kpiDetail} onClose={() => setKpiDetail(null)} />
+
       {reportPreview && (
         <ReportPreviewModal
           html={reportPreview.html}
@@ -1630,22 +1703,5 @@ function FleetMachineCard({ fleet, onCloseShift, workSessions = [], profiles = [
 
 
 
-function Kpi({ label, value, sub, color }) {
-
-  return (
-
-    <div className="rounded-2xl p-4 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
-
-      <p className="font-logo text-[#F2F0EA]/60">{label}</p>
-
-      <p className="font-logo text-xl mt-1" style={{ color }}>{value}</p>
-
-      <p className="font-body text-[#F2F0EA]/50 mt-1">{sub}</p>
-
-    </div>
-
-  );
-
-}
 
 

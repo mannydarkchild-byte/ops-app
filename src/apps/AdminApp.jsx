@@ -17,6 +17,7 @@ import { ROLES } from "../lib/constants.js";
 import { computeAdminDashboard, formatAdminMetric } from "../lib/adminMetrics.js";
 
 import { HOUR_LABELS } from "../lib/shiftMetrics.js";
+import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
 
 import { getBillingPeriod } from "../lib/utils.js";
 
@@ -65,6 +66,7 @@ export function AdminApp() {
   const [showInactive, setShowInactive] = useState(false);
 
   const [alert, setAlert] = useState({ isOpen: false });
+  const [kpiDetail, setKpiDetail] = useState(null);
   const [moreView, setMoreView] = useState(null);
 
   const showAlert = (title, message) => setAlert({ isOpen: true, title, message, onConfirm: () => setAlert({ isOpen: false }) });
@@ -233,19 +235,19 @@ export function AdminApp() {
 
         {tab === "dashboard" && (
           <div className="space-y-4">
-            <p className="font-body text-xs text-[#F2F0EA]/50">This site · this cycle</p>
+            <p className="font-body text-xs text-[#F2F0EA]/50">All machines · {dashboard.periodLabel}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label={HOUR_LABELS.billable} value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${dashboard.overview.cycleShiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
-              <Kpi label={HOUR_LABELS.machine} value={formatAdminMetric(dashboard.overview.machineHours, "hours")} sub={HOUR_LABELS.machineHint} color="#22C55E" />
-              <Kpi label={HOUR_LABELS.revenue} value={formatAdminMetric(dashboard.overview.revenue, "money")} sub={HOUR_LABELS.revenueHint} color="#F5C518" />
-              <Kpi label={HOUR_LABELS.expenses} value={formatAdminMetric(dashboard.overview.expenseTotal, "money")} sub={dashboard.overview.earlierExpenses > 0 ? `Net ${formatAdminMetric(dashboard.overview.net, "money")} · ${dashboard.overview.earlierExpenses} earlier` : `Net ${formatAdminMetric(dashboard.overview.net, "money")}`} color="#F97316" />
+              <DashboardKpi label={HOUR_LABELS.billable} value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${dashboard.overview.cycleShiftCount} shifts started`} color="#22C55E" onClick={() => setKpiDetail(dashboard.details.billable)} />
+              <DashboardKpi label={HOUR_LABELS.machine} value={formatAdminMetric(dashboard.overview.machineHours, "hours")} sub={`All machines · ${dashboard.overview.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(dashboard.details.machine)} />
+              <DashboardKpi label={HOUR_LABELS.revenue} value={formatAdminMetric(dashboard.overview.revenue, "money")} sub="Billable hours × each machine rate" color="#F5C518" onClick={() => setKpiDetail(dashboard.details.revenue)} />
+              <DashboardKpi label={HOUR_LABELS.expenses} value={formatAdminMetric(dashboard.overview.expenseTotal, "money")} sub={dashboard.overview.earlierExpenses > 0 ? `This cycle · ${dashboard.overview.earlierExpenses} earlier` : "This cycle"} color="#F97316" onClick={() => setKpiDetail(dashboard.details.expenses)} />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label="Pending sign-off" value={dashboard.overview.pendingVerify} sub="Shifts awaiting supervisor" color="#00A4A6" />
-              <Kpi label={HOUR_LABELS.downtime} value={formatAdminMetric(dashboard.overview.downtimeMin, "duration")} sub={`${HOUR_LABELS.runtime} ${formatAdminMetric(dashboard.overview.runtimeMin, "duration")}`} color="#F2F0EA" />
-              <Kpi label={HOUR_LABELS.diesel} value={formatAdminMetric(dashboard.overview.litres, "litres")} sub={dashboard.overview.machineHours > 0 ? `${(dashboard.overview.litres / dashboard.overview.machineHours).toFixed(2)} L per machine hour` : HOUR_LABELS.expensesHint} color="#F5C518" />
-              <Kpi label="Open problems" value={dashboard.overview.openIssues} sub={`${dashboard.overview.criticalIssues} critical`} color="#EF4444" />
+              <DashboardKpi label="Pending sign-off" value={dashboard.overview.pendingVerify} sub="Shifts awaiting supervisor" color="#00A4A6" />
+              <DashboardKpi label={HOUR_LABELS.downtime} value={formatAdminMetric(dashboard.overview.downtimeMin, "duration")} sub="Stopped time on shifts this cycle" color="#F2F0EA" onClick={() => setKpiDetail(dashboard.details.downtime)} />
+              <DashboardKpi label={HOUR_LABELS.diesel} value={formatAdminMetric(dashboard.overview.litres, "litres")} sub={dashboard.overview.machineHours > 0 ? `${(dashboard.overview.litres / dashboard.overview.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboard.details.diesel)} />
+              <DashboardKpi label="Open problems" value={dashboard.overview.openIssues} sub={`${dashboard.overview.criticalIssues} critical`} color="#EF4444" />
             </div>
             <p className="font-body text-xs text-[#F2F0EA]/40">Sync queue {dashboard.overview.syncPending}</p>
 
@@ -256,8 +258,6 @@ export function AdminApp() {
                   { label: "Active staff", value: dashboard.roles.operator.headcount },
                   { label: "Clocked in now", value: dashboard.roles.operator.clockedIn },
                   { label: "Verified shifts", value: dashboard.roles.operator.verifiedShifts },
-                  { label: HOUR_LABELS.billable, value: formatAdminMetric(dashboard.roles.operator.billableHours, "hours") },
-                  { label: HOUR_LABELS.machine, value: formatAdminMetric(dashboard.roles.operator.machineHours, "hours") },
                   { label: "Pre-starts", value: dashboard.roles.operator.prestartInspections },
                   { label: "Early clock-outs", value: dashboard.roles.operator.earlyClockOuts },
                   { label: "Top operator", value: `${dashboard.roles.operator.topName} (${dashboard.roles.operator.topShifts})` },
@@ -278,9 +278,6 @@ export function AdminApp() {
                 ]} />
                 <RoleCard title="Managers" icon="📊" metrics={[
                   { label: "Active staff", value: dashboard.roles.manager.headcount },
-                  { label: "Revenue", value: formatAdminMetric(dashboard.roles.manager.revenue, "money") },
-                  { label: "Expenses", value: formatAdminMetric(dashboard.roles.manager.expenses, "money") },
-                  { label: "Net", value: formatAdminMetric(dashboard.roles.manager.net, "money") },
                   { label: "Waiting for parts", value: dashboard.roles.manager.waitingParts },
                   { label: "Critical problems", value: dashboard.roles.manager.criticalIssues },
                 ]} />
@@ -617,6 +614,8 @@ export function AdminApp() {
         )}
 
 
+
+      <KpiDetailModal detail={kpiDetail} onClose={() => setKpiDetail(null)} />
 
       {showAddUser && (
 

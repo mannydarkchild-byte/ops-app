@@ -15,6 +15,8 @@ import { ISSUE, SHIFT } from "../lib/constants.js";
 import { ownerForStopReason } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
+import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
+import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
 import {
   fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
@@ -66,6 +68,7 @@ export function ManagerApp() {
   const [editingExpense, setEditingExpense] = useState(null);
   const [showImportExpenses, setShowImportExpenses] = useState(false);
   const [alert, setAlert] = useState({ isOpen: false });
+  const [kpiDetail, setKpiDetail] = useState(null);
   const [reportPreview, setReportPreview] = useState(null);
   const [moreView, setMoreView] = useState(null);
   const [showStopOwners, setShowStopOwners] = useState(false);
@@ -131,12 +134,13 @@ export function ManagerApp() {
   );
 
   const cycleShifts = useMemo(
-    () => warriorShifts.filter((s) => inPeriod(s.started_at, billingPeriod)),
+    () => shiftsStartedInPeriod(warriorShifts, billingPeriod),
     [warriorShifts, billingPeriod]
   );
 
   const cycleStats = useMemo(() => {
-    const machineHours = cycleShifts.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0);
+    const machineHours = sumMeterHours(cycleShifts);
+    const meterShiftCount = cycleShifts.filter((shift) => shift.end_hour_meter != null && shift.start_hour_meter != null).length;
     const billableHours = cycleShifts.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0);
     const revenue = cycleShifts.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
     const runtimeMin = cycleShifts.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0);
@@ -164,9 +168,13 @@ export function ManagerApp() {
     const utilDenom = machineHours + downtimeFromEvents / 60;
     const utilization = utilDenom > 0 ? (machineHours / utilDenom) * 100 : 0;
 
+    const machineName = (id) => machines.find((m) => m.id === id)?.name || primaryMachine?.name || "Machine";
+    const scope = `${primaryMachine?.name || "This machine"} · ${billingPeriod.label}`;
+    const withScope = (detail) => ({ ...detail, scope });
     return {
       hours: machineHours,
       machineHours,
+      meterShiftCount,
       billableHours,
       revenue,
       runtimeMin,
@@ -175,8 +183,26 @@ export function ManagerApp() {
       expenseTotal,
       utilization,
       shiftCount: cycleShifts.length,
+      details: {
+        billable: withScope(billableDetail(cycleShifts, events, siteConfig, machineName)),
+        machine: withScope(machineHourDetail(cycleShifts, machineName)),
+        revenue: withScope(revenueDetail(cycleShifts, machines, events, siteConfig, machineName)),
+        expenses: withScope(expenseDetail(warriorExpenses, machineName)),
+        diesel: withScope(dieselDetail(warriorFuel, machineName)),
+        downtime: withScope(downtimeDetail(cycleShifts, machineName)),
+        net: {
+          title: "Net",
+          scope,
+          note: "Revenue minus expenses for this machine in this cycle.",
+          total: money(revenue - expenseTotal),
+          rows: [
+            { id: "revenue", title: "Revenue", detail: "Billable hours × rate", value: money(revenue) },
+            { id: "expenses", title: "Expenses", detail: "Payments this cycle", value: money(expenseTotal) },
+          ],
+        },
+      },
     };
-  }, [cycleShifts, fuelLogs, expenses, events, primaryMachine?.id, machines, billingPeriod, siteConfig]);
+  }, [cycleShifts, fuelLogs, expenses, events, primaryMachine?.id, primaryMachine?.name, machines, billingPeriod, siteConfig]);
 
   const fleetStatus = useMemo(() => {
     if (!primaryMachine) return null;
@@ -454,20 +480,20 @@ export function ManagerApp() {
 
         {tab === "overview" && (
           <div className="space-y-4">
-            <p className="font-body text-xs text-[#F2F0EA]/50">This machine · this cycle</p>
+            <p className="font-body text-xs text-[#F2F0EA]/50">{primaryMachine?.name || "This machine"} · {billingPeriod.label}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
-              <Kpi label={HOUR_LABELS.machine} value={`${cycleStats.machineHours.toFixed(1)}h`} sub={`${HOUR_LABELS.machineHint} · ${cycleStats.shiftCount} signed`} color="#22C55E" />
-              <Kpi label={HOUR_LABELS.revenue} value={money(cycleStats.revenue)} sub={`${money(primaryMachine.billable_rate)}/h · ${HOUR_LABELS.revenueHint}`} color="#22C55E" />
-              <Kpi label={HOUR_LABELS.expenses} value={money(cycleStats.expenseTotal)} sub={HOUR_LABELS.expensesHint} color="#F5C518" />
-              <Kpi label={HOUR_LABELS.runtime} value={formatDurationMinutes(cycleStats.runtimeMin)} sub={HOUR_LABELS.runtimeHint} color="#00A4A6" />
-              <Kpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(cycleStats.downtimeMin)} sub={HOUR_LABELS.downtimeHint} color="#EF4444" />
-              <Kpi label={HOUR_LABELS.diesel} value={`${cycleStats.litres.toFixed(1)} L`} sub={cycleStats.machineHours > 0 ? `${(cycleStats.litres / cycleStats.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" />
-              <Kpi
+              <DashboardKpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts started · 8h minus Darkchild downtime`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.billable)} />
+              <DashboardKpi label={HOUR_LABELS.machine} value={`${cycleStats.machineHours.toFixed(1)}h`} sub={`${primaryMachine?.name || "This machine"} · ${cycleStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.machine)} />
+              <DashboardKpi label={HOUR_LABELS.revenue} value={money(cycleStats.revenue)} sub={`${money(primaryMachine?.billable_rate)}/h on ${primaryMachine?.name || "this machine"}`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.revenue)} />
+              <DashboardKpi label={HOUR_LABELS.expenses} value={money(cycleStats.expenseTotal)} sub={`${primaryMachine?.name || "This machine"} · this cycle`} color="#F5C518" onClick={() => setKpiDetail(cycleStats.details.expenses)} />
+              <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(cycleStats.downtimeMin)} sub="Stopped time on shifts this cycle" color="#EF4444" onClick={() => setKpiDetail(cycleStats.details.downtime)} />
+              <DashboardKpi label={HOUR_LABELS.diesel} value={`${cycleStats.litres.toFixed(1)} L`} sub={cycleStats.machineHours > 0 ? `${(cycleStats.litres / cycleStats.machineHours).toFixed(2)} L per machine hour` : `${primaryMachine?.name || "This machine"} · this cycle`} color="#F5C518" onClick={() => setKpiDetail(cycleStats.details.diesel)} />
+              <DashboardKpi
                 label={HOUR_LABELS.net}
                 value={money(cycleStats.revenue - cycleStats.expenseTotal)}
-                sub={HOUR_LABELS.netHint}
+                sub={`${primaryMachine?.name || "This machine"} · revenue minus expenses`}
                 color="#F2F0EA"
+                onClick={() => setKpiDetail(cycleStats.details.net)}
               />
             </div>
 
@@ -825,6 +851,7 @@ export function ManagerApp() {
           />
         </Modal>
       )}
+      <KpiDetailModal detail={kpiDetail} onClose={() => setKpiDetail(null)} />
     </AppPage>
   );
 }

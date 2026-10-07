@@ -1,6 +1,9 @@
 import { ISSUE, MAINTENANCE_STATUS, ROLES, SHIFT } from "./constants.js";
 import { getBillingPeriod, inPeriod, isLiveShift, money, onSiteRecord, shiftBillableValue } from "./utils.js";
 import { formatDurationMinutes, shiftBillableHours } from "./shiftMetrics.js";
+import {
+  billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours,
+} from "./dashboardBreakdown.js";
 
 export function computeAdminDashboard({
   profiles = [],
@@ -37,7 +40,7 @@ export function computeAdminDashboard({
   const verifiedShifts = shifts.filter(
     (s) => s.shift_status === SHIFT.VERIFIED && inPeriod(s.verified_at || s.ended_at, period)
   );
-  const cycleShifts = shifts.filter((s) => inPeriod(s.started_at, period));
+  const cycleShifts = shiftsStartedInPeriod(shifts, period);
   const pendingVerify = shifts.filter(
     (s) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(s.shift_status)
   );
@@ -55,7 +58,7 @@ export function computeAdminDashboard({
   const periodExpenses = expenses.filter((e) => inPeriod(e.date || e.created_at, period));
   const periodFuel = fuelLogs.filter((f) => inPeriod(f.timestamp, period));
 
-  const machineHours = cycleShifts.reduce((s, r) => s + Number(r.hours_worked || 0), 0);
+  const machineHours = sumMeterHours(cycleShifts);
   const billableHours = cycleShifts.reduce((s, r) => s + shiftBillableHours(r, events, siteSettings), 0);
   const revenue = cycleShifts.reduce((s, r) => s + shiftBillableValue(r, machines, events, siteSettings), 0);
   const expenseTotal = periodExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -88,6 +91,10 @@ export function computeAdminDashboard({
     (w) => w.status === "ended_early" && inPeriod(w.clock_out, period)
   ).length;
 
+  const machineName = (id) => machines.find((m) => m.id === id)?.name || "No machine";
+  const scope = `All machines · ${period.label}`;
+  const withScope = (detail) => ({ ...detail, scope });
+
   const operatorShiftCounts = {};
   for (const s of verifiedShifts) {
     operatorShiftCounts[s.operator_id] = (operatorShiftCounts[s.operator_id] || 0) + 1;
@@ -108,6 +115,7 @@ export function computeAdminDashboard({
       billableHours,
       machineHours,
       cycleShiftCount: cycleShifts.length,
+      meterShiftCount: cycleShifts.filter((shift) => shift.end_hour_meter != null && shift.start_hour_meter != null).length,
       revenue,
       expenseTotal,
       earlierExpenses: Math.max(0, expenses.length - periodExpenses.length),
@@ -130,8 +138,6 @@ export function computeAdminDashboard({
         headcount: byRole(ROLES.OPERATOR).length,
         clockedIn: activeOperators.size,
         verifiedShifts: verifiedShifts.length,
-        billableHours,
-        machineHours,
         topName: topOperatorProfile?.name || "—",
         topShifts: topOperator?.[1] || 0,
         prestartInspections: prestartCount,
@@ -157,12 +163,17 @@ export function computeAdminDashboard({
       manager: {
         label: "Managers",
         headcount: byRole(ROLES.MANAGER).length,
-        revenue,
-        expenses: expenseTotal,
-        net: revenue - expenseTotal,
         waitingParts: waitingParts.length,
         criticalIssues: criticalIssues.length,
       },
+    },
+    details: {
+      billable: withScope(billableDetail(cycleShifts, events, siteSettings, machineName)),
+      machine: withScope(machineHourDetail(cycleShifts, machineName)),
+      revenue: withScope(revenueDetail(cycleShifts, machines, events, siteSettings, machineName)),
+      expenses: withScope(expenseDetail(periodExpenses, machineName)),
+      diesel: withScope(dieselDetail(periodFuel, machineName)),
+      downtime: withScope(downtimeDetail(cycleShifts, machineName)),
     },
     fleet: machines.filter((m) => m.active !== false).map((m) => {
       const running = runningShifts.some((s) => s.machine_id === m.id);
