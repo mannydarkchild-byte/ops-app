@@ -21,8 +21,8 @@ function formatTonnes(n) {
   return num % 1 === 0 ? String(num) : num.toFixed(1);
 }
 
-/** Compact KPI strip for Home / Reports */
-export function TonnageSummaryKpis({ rows, periodLabel }) {
+/** Compact KPI strip for Home / Reports — tappable when callbacks are set. */
+export function TonnageSummaryKpis({ rows, periodLabel, onTonnesClick, onTrucksClick }) {
   const { tonnes, trucks, count } = useMemo(() => {
     let tonnes = 0;
     let trucks = 0;
@@ -33,18 +33,42 @@ export function TonnageSummaryKpis({ rows, periodLabel }) {
     return { tonnes, trucks, count: (rows || []).length };
   }, [rows]);
 
+  const Tile = ({ label, value, sub, color, onClick }) => {
+    const Tag = onClick ? "button" : "div";
+    return (
+      <Tag
+        type={onClick ? "button" : undefined}
+        onClick={onClick}
+        className={`bg-[#141414] border border-[#2A2A2A] rounded-xl p-3 text-left w-full ${onClick ? "cursor-pointer active:scale-[0.99]" : ""}`}
+        aria-label={onClick ? `${label}: ${value}. Tap for details.` : undefined}
+      >
+        <div className="flex justify-between items-start gap-2">
+          <p className="font-logo text-[10px] tracking-wider text-[#F2F0EA]/50">{label}</p>
+          {onClick ? <span className="font-logo text-sm text-[#F5C518] leading-none" aria-hidden>›</span> : null}
+        </div>
+        <p className="font-logo text-2xl mt-1" style={{ color }}>{value}</p>
+        <p className="font-body text-xs text-[#F2F0EA]/50 mt-1">{sub}</p>
+        {onClick ? <p className="font-ui text-[10px] text-[#F5C518]/80 mt-1">Tap for details</p> : null}
+      </Tag>
+    );
+  };
+
   return (
     <div className="grid grid-cols-2 gap-3">
-      <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3">
-        <p className="font-logo text-[10px] tracking-wider text-[#F2F0EA]/50">TONNES</p>
-        <p className="font-logo text-2xl text-[#F5C518] mt-1">{formatTonnes(tonnes)}</p>
-        <p className="font-body text-xs text-[#F2F0EA]/50 mt-1">{periodLabel || "Selected period"} · {count} entr{count === 1 ? "y" : "ies"}</p>
-      </div>
-      <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3">
-        <p className="font-logo text-[10px] tracking-wider text-[#F2F0EA]/50">TRUCKS LOADED</p>
-        <p className="font-logo text-2xl text-[#F2F0EA] mt-1">{trucks}</p>
-        <p className="font-body text-xs text-[#F2F0EA]/50 mt-1">Weighbridge · this site</p>
-      </div>
+      <Tile
+        label="TONNES"
+        value={formatTonnes(tonnes)}
+        sub={`${periodLabel || "Selected period"} · ${count} entr${count === 1 ? "y" : "ies"}`}
+        color="#F5C518"
+        onClick={onTonnesClick}
+      />
+      <Tile
+        label="TRUCKS LOADED"
+        value={trucks}
+        sub="Weighbridge · this site"
+        color="#F2F0EA"
+        onClick={onTrucksClick}
+      />
     </div>
   );
 }
