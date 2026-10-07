@@ -25,6 +25,7 @@ import { openShiftDailyReport, printOperationsReport, printTimesheetReport } fro
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
+import { TonnageSummaryKpis, WeighbridgeTonnagePanel } from "../components/WeighbridgeTonnagePanel.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
 import * as wf from "../services/workflows.js";
 
@@ -51,7 +52,7 @@ const EXPENSE_FILTERS = [
 export function ManagerApp() {
   const {
     user, shifts, events, expenses, fuelLogs, inspections, issues, issueMessages,
-    workSessions, machines, profiles, submissions, hourReadings, activeSite, inventoryItems, syncNow, refreshLocal,
+    workSessions, machines, profiles, submissions, hourReadings, shiftTonnages, activeSite, inventoryItems, syncNow, refreshLocal,
     getSettingsForSite, siteSettings,
   } = useOps();
 
@@ -177,6 +178,23 @@ export function ManagerApp() {
       shiftCount: cycleShifts.length,
     };
   }, [cycleShifts, fuelLogs, expenses, events, primaryMachine?.id, machines, billingPeriod, siteConfig]);
+
+  const siteTonnages = useMemo(
+    () => (shiftTonnages || []).filter((r) => r.site_id === (user?.site_id || activeSite?.id)),
+    [shiftTonnages, user?.site_id, activeSite?.id]
+  );
+
+  const cycleTonnages = useMemo(
+    () => siteTonnages.filter((r) => inPeriod(r.period_start || r.shift_date || r.created_at, billingPeriod)),
+    [siteTonnages, billingPeriod]
+  );
+
+  const reportTonnages = useMemo(() => {
+    const presets = getDatePresets(siteConfig.billing_cycle_start_day);
+    const p = presets.find((x) => x.id === reportPreset) || presets[4];
+    const period = p ? { start: p.start, end: p.end, label: p.label } : null;
+    return siteTonnages.filter((r) => !period || inPeriod(r.period_start || r.shift_date || r.created_at, period));
+  }, [siteTonnages, reportPreset, siteConfig.billing_cycle_start_day]);
 
   const fleetStatus = useMemo(() => {
     if (!primaryMachine) return null;
@@ -470,6 +488,11 @@ export function ManagerApp() {
               />
             </div>
 
+            <div>
+              <p className="font-body text-xs text-[#F2F0EA]/50 mb-2">This site · weighbridge</p>
+              <TonnageSummaryKpis rows={cycleTonnages} periodLabel={billingPeriod.label} />
+            </div>
+
             {fleetStatus && <WarriorStatusCard fleet={fleetStatus} workSessions={workSessions} profiles={profiles} />}
 
             {downtimeByReason.length > 0 && (
@@ -667,6 +690,21 @@ export function ManagerApp() {
 
         {tab === "reports" && (
           <div className="space-y-4">
+            <div>
+              <p className="font-body text-xs text-[#F2F0EA]/50 mb-2">This site · weighbridge</p>
+              <TonnageSummaryKpis rows={reportTonnages} periodLabel="Report period" />
+              <div className="mt-3">
+                <WeighbridgeTonnagePanel
+                  user={user}
+                  site={activeSite}
+                  rows={reportTonnages}
+                  onDone={refreshLocal}
+                  showForm={false}
+                  title="Weighbridge tonnage"
+                  emptyLabel="No weighbridge entries for this period."
+                />
+              </div>
+            </div>
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
               <h3 className="font-logo text-[#F5C518] text-sm mb-3">OPERATIONS REPORT</h3>
               <div className="flex flex-wrap gap-2 mb-4">

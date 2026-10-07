@@ -28,6 +28,7 @@ import { openShiftDailyReport, printTimesheetReport } from "../services/reports.
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
+import { TonnageSummaryKpis, WeighbridgeTonnagePanel } from "../components/WeighbridgeTonnagePanel.jsx";
 
 import * as wf from "../services/workflows.js";
 
@@ -65,7 +66,7 @@ const REPORT_FILTERS = [
 
 export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVerifyConsumed }) {
 
-  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, expenses, inspections, hourReadings, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
+  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, expenses, inspections, hourReadings, shiftTonnages, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
 
   const siteConfig = useMemo(
     () => getSettingsForSite(user?.site_id || activeSite?.id),
@@ -416,6 +417,21 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
     };
 
   }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, user?.site_id, billingPeriod]);
+
+  const siteTonnages = useMemo(
+    () => (shiftTonnages || []).filter((r) => r.site_id === user?.site_id),
+    [shiftTonnages, user?.site_id]
+  );
+
+  const cycleTonnages = useMemo(
+    () => siteTonnages.filter((r) => inPeriod(r.period_start || r.shift_date || r.created_at, billingPeriod)),
+    [siteTonnages, billingPeriod]
+  );
+
+  const reportTonnages = useMemo(
+    () => siteTonnages.filter((r) => !reportPeriod || inPeriod(r.period_start || r.shift_date || r.created_at, reportPeriod)),
+    [siteTonnages, reportPeriod]
+  );
 
 
 
@@ -823,6 +839,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
             <Kpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : HOUR_LABELS.expensesHint} color="#F5C518" />
             <Kpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub={`${HOUR_LABELS.runtime} ${formatDurationMinutes(dashboardStats.runtimeMin)}`} color="#EF4444" />
             </div>
+            <TonnageSummaryKpis rows={cycleTonnages} periodLabel="This cycle" />
           </div>
         )}
 
@@ -831,6 +848,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
             <Kpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
             <Kpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub={`${signedReports.length} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
             <Kpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub={HOUR_LABELS.machineHint} color="#22C55E" />
+            <div className="col-span-2">
+              <TonnageSummaryKpis rows={reportTonnages} periodLabel={reportPeriod?.label || "All time"} />
+            </div>
           </div>
         )}
 
@@ -940,6 +960,14 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
             </div>
 
 
+
+            <WeighbridgeTonnagePanel
+              user={user}
+              site={activeSite}
+              rows={cycleTonnages}
+              onDone={refreshLocal}
+              title="Weighbridge tonnage"
+            />
 
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
 
@@ -1181,6 +1209,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
         {tab === "reports" && (
           <div className="space-y-3">
+            <WeighbridgeTonnagePanel
+              user={user}
+              site={activeSite}
+              rows={reportTonnages}
+              onDone={refreshLocal}
+              showForm={false}
+              title="Weighbridge tonnage"
+              emptyLabel="No weighbridge entries for this period."
+            />
             {signedReports.length === 0 ? (
 
               <p className="text-sm text-[#F2F0EA]/40 text-center py-8">No signed reports for this period.</p>

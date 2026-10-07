@@ -773,6 +773,53 @@ export async function addExpense(user, machine, site, { category, amount, vendor
   return row;
 }
 
+/** Day = 06:00–18:00 local; night = 18:00–06:00 next calendar day. */
+function shiftPeriodBounds(shiftDate, shiftBand) {
+  const dateStr = String(shiftDate || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error("Pick a shift date");
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const start = new Date(y, m - 1, d, shiftBand === "night" ? 18 : 6, 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(end.getHours() + 12);
+  end.setMilliseconds(end.getMilliseconds() - 1);
+  return { period_start: start.toISOString(), period_end: end.toISOString() };
+}
+
+/** Supervisor weighbridge v1: photo + total tonnes + trucks loaded for the shift. */
+export async function addShiftTonnage(user, site, { shiftDate, shiftBand, totalTonnes, trucksLoaded, photoRef, notes }) {
+  if (!site?.id) throw new Error("Site is missing — contact admin to link your profile to a site");
+  if (!user?.id) throw new Error("You must be signed in");
+  const tonnes = Number(totalTonnes);
+  if (!Number.isFinite(tonnes) || tonnes <= 0) throw new Error("Enter total tonnes for the shift");
+  const trucks = Math.round(Number(trucksLoaded));
+  if (!Number.isFinite(trucks) || trucks < 0) throw new Error("Enter how many trucks were loaded");
+  if (!photoRef) throw new Error("Add a photo of the weighbridge report");
+  const band = shiftBand === "night" ? "night" : "day";
+  const dateStr = String(shiftDate || new Date().toISOString().slice(0, 10)).slice(0, 10);
+  const { period_start, period_end } = shiftPeriodBounds(dateStr, band);
+  const now = nowISO();
+  const row = {
+    id: makeId("TON"),
+    site_id: site.id,
+    shift_date: dateStr,
+    shift_band: band,
+    period_start,
+    period_end,
+    total_tonnes: tonnes,
+    trucks_loaded: trucks,
+    photo_ref: photoRef,
+    photo_url: null,
+    submitted_by: user.id,
+    submitted_by_name: user.name || user.email || "Supervisor",
+    notes: notes || null,
+    created_at: now,
+    updated_at: now,
+  };
+  await saveLocal("shift_tonnages", row);
+  scheduleSync();
+  return row;
+}
+
 export async function updateExpense(expense, { category, receiptRef } = {}) {
   if (!expense?.id) throw new Error("Missing expense");
   const now = nowISO();
