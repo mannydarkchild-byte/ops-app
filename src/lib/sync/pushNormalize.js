@@ -17,6 +17,7 @@ export function normalizeForSupabasePush(row, table) {
   setUrl("photo_dipstick", out.photo_dipstick_ref, out.photo_dipstick);
   setUrl("receipt_photo", out.receipt_ref, out.receipt_photo);
   setUrl("media_url", out.media_ref, out.media_url);
+  setUrl("photo_url", out.photo_ref, out.photo_url);
 
   if (table === "machine_hour_readings") {
     setUrl("photo_data", out.photo_ref, out.photo_data);

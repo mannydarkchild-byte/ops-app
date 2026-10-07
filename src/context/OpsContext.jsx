@@ -43,6 +43,7 @@ export function OpsProvider({ children }) {
   const [maintenanceJobs, setMaintenanceJobs] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [siteSettings, setSiteSettings] = useState([]);
+  const [shiftTonnages, setShiftTonnages] = useState([]);
   const [machineStatus, setMachineStatus] = useState(null);
   const [theme, setThemeState] = useState(() => readTheme());
 
@@ -52,7 +53,7 @@ export function OpsProvider({ children }) {
   const refreshLocal = useCallback(async () => {
     try {
       const [
-        s, m, p, sh, ev, ex, ins, iss, msgs, ws, fl, subs, hr, bd, mj, inv, settings,
+        s, m, p, sh, ev, ex, ins, iss, msgs, ws, fl, subs, hr, bd, mj, inv, settings, ton,
       ] = await Promise.all([
         readTable("sites"), readTable("machines"), readTable("profiles"),
         readTable("shifts"), readTable("events"), readTable("expenses"),
@@ -60,12 +61,14 @@ export function OpsProvider({ children }) {
         readTable("work_sessions"), readTable("fuel_logs"), readTable("shift_submissions"),
         readTable("machine_hour_readings"), readTable("breakdowns"),
         readTable("maintenance_jobs"), readTable("inventory_items"), readTable("site_settings"),
+        readTable("shift_tonnages"),
       ]);
       setSites(s); setMachines(m); setProfiles(p);
       setShifts(sh); setEvents(ev); setExpenses(ex); setInspections(ins);
       setIssues(iss); setIssueMessages(msgs); setWorkSessions(ws); setFuelLogs(fl);
       setSubmissions(subs); setHourReadings(hr); setBreakdowns(bd);
       setMaintenanceJobs(mj); setInventoryItems(inv); setSiteSettings(settings);
+      setShiftTonnages(ton);
       const pending = await getPendingCount();
       setSyncState((prev) => ({
         ...prev,
@@ -367,7 +370,7 @@ export function OpsProvider({ children }) {
     sites, machines, profiles, activeSite, activeMachine,
     shifts, events, expenses, inspections, issues, issueMessages,
     workSessions, fuelLogs, submissions, hourReadings, breakdowns,
-    maintenanceJobs, inventoryItems, siteSettings, siteSettingsMap, getSettingsForSite,
+    maintenanceJobs, inventoryItems, siteSettings, shiftTonnages, siteSettingsMap, getSettingsForSite,
     machineRun, workSession, downtime, hourMeter, machineStatus, machineBlocked,
     refreshLocal, persistAndSync, saveLocal,
     theme, setTheme, toggleTheme,

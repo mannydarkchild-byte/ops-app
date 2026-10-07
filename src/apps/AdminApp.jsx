@@ -12,13 +12,13 @@ import { getDB, clearSyncedTables } from "../lib/db.js";
 
 import { pullBootstrap } from "../lib/sync/pull.js";
 
-import { ROLES } from "../lib/constants.js";
+import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
 import { computeAdminDashboard, formatAdminMetric } from "../lib/adminMetrics.js";
 
 import { HOUR_LABELS } from "../lib/shiftMetrics.js";
 
-import { getBillingPeriod } from "../lib/utils.js";
+import { getBillingPeriod, inPeriod, onSiteRecord } from "../lib/utils.js";
 
 import { AlertModal } from "../components/ui/Modal.jsx";
 
@@ -31,6 +31,15 @@ import { AdminChecklistsPanel } from "../components/admin/AdminChecklistsPanel.j
 import { AdminActivityPanel } from "../components/admin/AdminActivityPanel.jsx";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
+import { KpiTile } from "../components/KpiTile.jsx";
+import { KpiDetailSheet } from "../components/KpiDetailSheet.jsx";
+import {
+  buildShiftListDetail,
+  buildExpenseDetail,
+  buildDieselDetail,
+  buildIssuesDetail,
+  buildPendingVerifyDetail,
+} from "../lib/kpiDetails.js";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
 
 
@@ -65,6 +74,7 @@ export function AdminApp() {
   const [showInactive, setShowInactive] = useState(false);
 
   const [alert, setAlert] = useState({ isOpen: false });
+  const [kpiDetail, setKpiDetail] = useState(null);
   const [moreView, setMoreView] = useState(null);
 
   const showAlert = (title, message) => setAlert({ isOpen: true, title, message, onConfirm: () => setAlert({ isOpen: false }) });
@@ -234,18 +244,121 @@ export function AdminApp() {
         {tab === "dashboard" && (
           <div className="space-y-4">
             <p className="font-body text-xs text-[#F2F0EA]/50">This site · this cycle</p>
+            <p className="font-body text-xs text-[#F2F0EA]/40">Tap a number for the breakdown</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label={HOUR_LABELS.billable} value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${dashboard.overview.cycleShiftCount} shifts · 8h each minus Darkchild downtime`} color="#22C55E" />
-              <Kpi label={HOUR_LABELS.machine} value={formatAdminMetric(dashboard.overview.machineHours, "hours")} sub={HOUR_LABELS.machineHint} color="#22C55E" />
-              <Kpi label={HOUR_LABELS.revenue} value={formatAdminMetric(dashboard.overview.revenue, "money")} sub={HOUR_LABELS.revenueHint} color="#F5C518" />
-              <Kpi label={HOUR_LABELS.expenses} value={formatAdminMetric(dashboard.overview.expenseTotal, "money")} sub={dashboard.overview.earlierExpenses > 0 ? `Net ${formatAdminMetric(dashboard.overview.net, "money")} · ${dashboard.overview.earlierExpenses} earlier` : `Net ${formatAdminMetric(dashboard.overview.net, "money")}`} color="#F97316" />
+              <Kpi
+                label={HOUR_LABELS.billable}
+                value={formatAdminMetric(dashboard.overview.billableHours, "hours")}
+                sub={`${dashboard.overview.cycleShiftCount} shifts · 8h each minus Darkchild downtime`}
+                color="#22C55E"
+                onClick={() => setKpiDetail({
+                  title: HOUR_LABELS.billable,
+                  summary: "This site · this cycle.",
+                  rows: buildShiftListDetail(
+                    (shifts || []).filter((s) => onSiteRecord(s, activeSite?.id, machines) && inPeriod(s.started_at, billingPeriod)),
+                    { machines, events, siteConfig: getSettingsForSite(activeSite?.id), mode: "billable" }
+                  ),
+                })}
+              />
+              <Kpi
+                label={HOUR_LABELS.machine}
+                value={formatAdminMetric(dashboard.overview.machineHours, "hours")}
+                sub={HOUR_LABELS.machineHint}
+                color="#22C55E"
+                onClick={() => setKpiDetail({
+                  title: HOUR_LABELS.machine,
+                  summary: "Machine hours this cycle.",
+                  rows: buildShiftListDetail(
+                    (shifts || []).filter((s) => onSiteRecord(s, activeSite?.id, machines) && inPeriod(s.started_at, billingPeriod)),
+                    { machines, events, siteConfig: getSettingsForSite(activeSite?.id), mode: "machine" }
+                  ),
+                })}
+              />
+              <Kpi
+                label={HOUR_LABELS.revenue}
+                value={formatAdminMetric(dashboard.overview.revenue, "money")}
+                sub={HOUR_LABELS.revenueHint}
+                color="#F5C518"
+                onClick={() => setKpiDetail({
+                  title: HOUR_LABELS.revenue,
+                  summary: "Billable value this cycle.",
+                  rows: buildShiftListDetail(
+                    (shifts || []).filter((s) => onSiteRecord(s, activeSite?.id, machines) && inPeriod(s.started_at, billingPeriod)),
+                    { machines, events, siteConfig: getSettingsForSite(activeSite?.id), mode: "revenue" }
+                  ),
+                })}
+              />
+              <Kpi
+                label={HOUR_LABELS.expenses}
+                value={formatAdminMetric(dashboard.overview.expenseTotal, "money")}
+                sub={dashboard.overview.earlierExpenses > 0 ? `Net ${formatAdminMetric(dashboard.overview.net, "money")} · ${dashboard.overview.earlierExpenses} earlier` : `Net ${formatAdminMetric(dashboard.overview.net, "money")}`}
+                color="#F97316"
+                onClick={() => setKpiDetail({
+                  title: HOUR_LABELS.expenses,
+                  summary: "Expenses this cycle.",
+                  rows: buildExpenseDetail(
+                    (expenses || []).filter((e) => onSiteRecord(e, activeSite?.id, machines) && inPeriod(e.date || e.created_at, billingPeriod))
+                  ),
+                })}
+              />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label="Pending sign-off" value={dashboard.overview.pendingVerify} sub="Shifts awaiting supervisor" color="#00A4A6" />
-              <Kpi label={HOUR_LABELS.downtime} value={formatAdminMetric(dashboard.overview.downtimeMin, "duration")} sub={`${HOUR_LABELS.runtime} ${formatAdminMetric(dashboard.overview.runtimeMin, "duration")}`} color="#F2F0EA" />
-              <Kpi label={HOUR_LABELS.diesel} value={formatAdminMetric(dashboard.overview.litres, "litres")} sub={dashboard.overview.machineHours > 0 ? `${(dashboard.overview.litres / dashboard.overview.machineHours).toFixed(2)} L per machine hour` : HOUR_LABELS.expensesHint} color="#F5C518" />
-              <Kpi label="Open problems" value={dashboard.overview.openIssues} sub={`${dashboard.overview.criticalIssues} critical`} color="#EF4444" />
+              <Kpi
+                label="Pending sign-off"
+                value={dashboard.overview.pendingVerify}
+                sub="Shifts awaiting supervisor"
+                color="#00A4A6"
+                onClick={() => setKpiDetail({
+                  title: "Pending sign-off",
+                  summary: "Shifts waiting for a supervisor signature.",
+                  rows: buildPendingVerifyDetail(
+                    (shifts || []).filter((s) => onSiteRecord(s, activeSite?.id, machines) && [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(s.shift_status)),
+                    machines
+                  ),
+                })}
+              />
+              <Kpi
+                label={HOUR_LABELS.downtime}
+                value={formatAdminMetric(dashboard.overview.downtimeMin, "duration")}
+                sub={`${HOUR_LABELS.runtime} ${formatAdminMetric(dashboard.overview.runtimeMin, "duration")}`}
+                color="#F2F0EA"
+                onClick={() => setKpiDetail({
+                  title: HOUR_LABELS.downtime,
+                  summary: "Downtime by shift this cycle.",
+                  rows: buildShiftListDetail(
+                    (shifts || []).filter((s) => onSiteRecord(s, activeSite?.id, machines) && inPeriod(s.started_at, billingPeriod)),
+                    { machines, events, siteConfig: getSettingsForSite(activeSite?.id), mode: "downtime" }
+                  ),
+                })}
+              />
+              <Kpi
+                label={HOUR_LABELS.diesel}
+                value={formatAdminMetric(dashboard.overview.litres, "litres")}
+                sub={dashboard.overview.machineHours > 0 ? `${(dashboard.overview.litres / dashboard.overview.machineHours).toFixed(2)} L per machine hour` : HOUR_LABELS.expensesHint}
+                color="#F5C518"
+                onClick={() => setKpiDetail({
+                  title: HOUR_LABELS.diesel,
+                  summary: "Fuel logs this cycle.",
+                  rows: buildDieselDetail(
+                    (fuelLogs || []).filter((f) => onSiteRecord(f, activeSite?.id, machines) && inPeriod(f.timestamp, billingPeriod)),
+                    machines
+                  ),
+                })}
+              />
+              <Kpi
+                label="Open problems"
+                value={dashboard.overview.openIssues}
+                sub={`${dashboard.overview.criticalIssues} critical`}
+                color="#EF4444"
+                onClick={() => setKpiDetail({
+                  title: "Open problems",
+                  summary: "Unresolved issues on this site.",
+                  rows: buildIssuesDetail(
+                    (issues || []).filter((i) => i.site_id === activeSite?.id && i.status !== ISSUE.RESOLVED)
+                  ),
+                })}
+              />
             </div>
             <p className="font-body text-xs text-[#F2F0EA]/40">Sync queue {dashboard.overview.syncPending}</p>
 
@@ -654,20 +767,26 @@ export function AdminApp() {
 
       )}
 
+      {kpiDetail && (
+        <KpiDetailSheet
+          title={kpiDetail.title}
+          summary={kpiDetail.summary}
+          rows={kpiDetail.rows || []}
+          empty={kpiDetail.empty}
+          onClose={() => setKpiDetail(null)}
+          actionLabel={kpiDetail.actionLabel}
+          onAction={kpiDetail.onAction}
+        />
+      )}
+
     </AppPage>
 
   );
 
 }
 
-function Kpi({ label, value, sub, color = "#F2F0EA" }) {
-  return (
-    <div className="rounded-xl p-3 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
-      <p className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider">{label}</p>
-      <p className="font-logo text-xl mt-1" style={{ color }}>{value}</p>
-      {sub && <p className="text-[10px] text-[#F2F0EA]/40 mt-1">{sub}</p>}
-    </div>
-  );
+function Kpi(props) {
+  return <KpiTile {...props} />;
 }
 
 function RoleCard({ title, icon, metrics }) {
