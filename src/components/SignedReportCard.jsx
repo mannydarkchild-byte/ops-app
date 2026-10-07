@@ -52,6 +52,12 @@ export function SignedReportCard({ shift, machineName, events, siteSettings, onV
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 mb-4 text-[10px] text-[#F2F0EA]/50">
         <span>Machine hours {Number(shift.hours_worked || 0).toFixed(1)}h · Meter {shift.start_hour_meter}h → {shift.end_hour_meter}h</span>
+        {shift.tonnes_dispatched != null && (
+          <span>
+            {Number(shift.tonnes_dispatched).toLocaleString("en-US")} t · {shift.trucks_dispatched ?? "—"} trucks
+            {shift.tonnes_on_floor != null ? ` · ${Number(shift.tonnes_on_floor).toLocaleString("en-US")} t on the floor` : ""}
+          </span>
+        )}
         {(shift.runtime_minutes > 0 || shift.downtime_minutes > 0) && (
           <span>Runtime {formatDurationMinutes(shift.runtime_minutes || 0)} · Downtime {formatDurationMinutes(shift.downtime_minutes || 0)}</span>
         )}

@@ -6,16 +6,18 @@ function isLocalRunning(shift) {
   return shift?.shift_status === SHIFT.RUNNING || shift?.status === SHIFT.RUNNING;
 }
 
+/** Every RUNNING row for this machine. `.shift` is the newest. An empty list means the server has none. */
 export async function fetchServerOpenShift(machineId) {
-  if (!navigator.onLine || !machineId) return { known: false, shift: null };
+  if (!navigator.onLine || !machineId) return { known: false, shift: null, shifts: [] };
   const { data, error } = await supabase
     .from("shifts")
-    .select("id, operator_id, operator_name, started_at, shift_status")
+    .select("*")
     .eq("machine_id", machineId)
     .eq("shift_status", SHIFT.RUNNING)
-    .limit(1);
-  if (error) return { known: false, shift: null };
-  return { known: true, shift: data?.[0] || null };
+    .order("started_at", { ascending: false });
+  if (error) return { known: false, shift: null, shifts: [] };
+  const shifts = data || [];
+  return { known: true, shift: shifts[0] || null, shifts };
 }
 
 /** All leftover RUNNING shifts on the server — Live tab uses this so close is visible. */

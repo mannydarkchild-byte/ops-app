@@ -7,7 +7,7 @@ import { canCloseIssue, getShiftStatus } from "../lib/utils.js";
 import { makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
 import { ensureSiteSettings, prestartItemsForMachine, inspectionGroupsForMachine, getMechanicItemsFromGroups } from "../lib/siteConfig.js";
-import { reconcileMachineOpenState, fetchServerOpenShift } from "../lib/machineStatus.js";
+import { fetchServerOpenShift } from "../lib/machineStatus.js";
 import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
 
 const actionInflight = new Map();
@@ -23,10 +23,14 @@ function withInflight(key, fn) {
   return job;
 }
 
+function samePerson(a, b) {
+  return !!a && !!b && String(a) === String(b);
+}
+
 function ownRunningShift(shifts, machineId, operatorId) {
   return (shifts || []).find((s) =>
     s.machine_id === machineId
-    && s.operator_id === operatorId
+    && samePerson(s.operator_id, operatorId)
     && getShiftStatus(s) === SHIFT.RUNNING
   ) || null;
 }
@@ -235,45 +239,34 @@ async function startMachineOnce(user, machine, site, { hourMeter, photoRef, veri
   if (!Number.isFinite(h) || h < 0) throw new Error("Enter a valid hour meter reading");
 
   const localBefore = await readTable("shifts");
-  const already = ownRunningShift(localBefore, machine.id, user.id);
+  const runningLocal = localBefore.filter(
+    (s) => s.machine_id === machine.id && getShiftStatus(s) === SHIFT.RUNNING
+  );
+  const already = ownRunningShift(runningLocal, machine.id, user.id) || runningLocal[0] || null;
   if (already) {
+    if (!samePerson(already.operator_id, user.id)) {
+      throw new Error(`${already.operator_name || "Another operator"} already has an open shift on ${machine.name || machine.id}. A supervisor must close it on the Live tab.`);
+    }
     return { run: already, lock: { accepted: true }, alreadyRunning: true };
   }
 
-  const remote = await reconcileMachineOpenState(machine.id);
-  if (remote.known && remote.shift && remote.shift.operator_id !== user.id) {
-    throw new Error(`${remote.shift.operator_name || "Another operator"} is already running ${machine.name || machine.id}`);
-  }
-
-  const existingShifts = await readTable("shifts");
-  const runningOnMachine = existingShifts.filter(
-    (s) => s.machine_id === machine.id && getShiftStatus(s) === SHIFT.RUNNING
-  );
-  const ownRun = ownRunningShift(runningOnMachine, machine.id, user.id)
-    || (remote.known && remote.shift?.operator_id === user.id ? remote.shift : null);
-  // Never open a second shift for the same operator on this machine.
-  if (ownRun) {
-    if (!existingShifts.some((s) => s.id === ownRun.id)) {
+  const remote = await fetchServerOpenShift(machine.id);
+  if (remote.known && remote.shifts?.length) {
+    const ownRemote = remote.shifts.find((row) => samePerson(row.operator_id, user.id)) || null;
+    const blocker = ownRemote || remote.shifts[0];
+    if (!samePerson(blocker.operator_id, user.id)) {
+      const when = blocker.started_at ? new Date(blocker.started_at).toLocaleString() : "earlier";
+      throw new Error(`${blocker.operator_name || "An operator"} did not end their shift (started ${when}). A supervisor must close it on the Live tab.`);
+    }
+    if (!localBefore.some((row) => row.id === blocker.id)) {
       await saveLocal("shifts", {
-        ...ownRun,
+        ...blocker,
         machine_id: machine.id,
         operator_id: user.id,
-        shift_status: getShiftStatus(ownRun) || SHIFT.RUNNING,
+        shift_status: SHIFT.RUNNING,
       });
     }
-    return { run: ownRun, lock: { accepted: true }, alreadyRunning: true };
-  }
-  for (const stale of runningOnMachine) {
-    if (stale.operator_id === user.id) {
-      return { run: stale, lock: { accepted: true }, alreadyRunning: true };
-    }
-    const liveOnServer = remote.known && remote.shift && remote.shift.id === stale.id;
-    if (liveOnServer) {
-      const who = stale.operator_name || "An operator";
-      const when = stale.started_at ? new Date(stale.started_at).toLocaleString() : "earlier";
-      throw new Error(`${who} did not end their shift (started ${when}). A supervisor must close it on the Live tab.`);
-    }
-    await dropLocalRecord("shifts", stale.id);
+    return { run: blocker, lock: { accepted: true }, alreadyRunning: true };
   }
 
   let baseline = Number(machine.start_hour_meter || 0);
@@ -386,9 +379,8 @@ async function restartMachineOnce(user, machine, site, machineRun, downtime, { n
     // Stop released the lock locally, but the server may still think this same shift is running.
     // That must not block restart — it is the same day, not a new start.
     const remote = await fetchServerOpenShift(machine.id);
-    const sameShift = remote.known && remote.shift
-      && remote.shift.id === machineRun.id
-      && remote.shift.operator_id === user.id;
+    const openRows = remote.shifts || (remote.shift ? [remote.shift] : []);
+    const sameShift = remote.known && openRows.some((row) => row.id === machineRun.id);
     if (sameShift || (remote.known && !remote.shift)) {
       try { await releaseMachineLock(machine.id); } catch {}
       lock = await acquireMachineLock(machine.id, machineRun.id, user.id);
@@ -1149,11 +1141,35 @@ export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, rea
   return patch;
 }
 
+function readDispatch(dispatch) {
+  if (!dispatch?.photoRef) throw new Error("Photograph the weighbridge report before signing off.");
+  const tonnes = Number(dispatch.tonnes);
+  const trucks = Number(dispatch.trucks);
+  if (dispatch.tonnes === "" || dispatch.tonnes == null || !Number.isFinite(tonnes) || tonnes < 0) {
+    throw new Error("Enter the total tonnes dispatched.");
+  }
+  if (dispatch.trucks === "" || dispatch.trucks == null || !Number.isInteger(trucks) || trucks < 0) {
+    throw new Error("Enter the number of trucks.");
+  }
+  const floorBlank = dispatch.floorTonnes === "" || dispatch.floorTonnes == null;
+  const floor = floorBlank ? null : Number(dispatch.floorTonnes);
+  if (!floorBlank && (!Number.isFinite(floor) || floor < 0)) {
+    throw new Error("Enter the floor estimate as a number, or leave it blank.");
+  }
+  return {
+    tonnes_dispatched: tonnes,
+    trucks_dispatched: trucks,
+    tonnes_on_floor: floor,
+    weighbridge_photo_ref: dispatch.photoRef,
+  };
+}
+
 export async function verifyShift(shift, supervisor, options) {
   return withInflight(`verify:${shift?.id}`, () => verifyShiftOnce(shift, supervisor, options));
 }
 
-async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDataUrl }) {
+async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDataUrl, dispatch }) {
+  const dispatchFields = action === "verify" ? readDispatch(dispatch) : null;
   if (action === "verify" && getShiftStatus(shift) === SHIFT.VERIFIED) return shift;
   if (action === "verify" && !signatureDataUrl) {
     throw new Error("Supervisor signature is required to verify");
@@ -1168,6 +1184,25 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
   const token = shift.verification_token || crypto.randomUUID?.() || makeId("TOK");
 
   if (navigator.onLine) {
+    if (dispatchFields) {
+      const photoUrl = typeof dispatchFields.weighbridge_photo_ref === "string" && dispatchFields.weighbridge_photo_ref.startsWith("http")
+        ? dispatchFields.weighbridge_photo_ref
+        : null;
+      const { error: dispatchError } = await supabase.from("shifts").update({
+        tonnes_dispatched: dispatchFields.tonnes_dispatched,
+        trucks_dispatched: dispatchFields.trucks_dispatched,
+        tonnes_on_floor: dispatchFields.tonnes_on_floor,
+        ...(photoUrl ? { weighbridge_photo: photoUrl } : {}),
+        updated_at: now,
+      }).eq("id", shift.id);
+      if (dispatchError) {
+        if (/column/i.test(dispatchError.message || "")) {
+          throw new Error("Dispatch fields are not in the database yet. Run migration 022 in Supabase, then sign this shift off again.");
+        }
+        throw dispatchError;
+      }
+    }
+
     if (!shift.verification_token) {
       const { error: tokenError } = await supabase.from("shifts").update({
         verification_token: token,
@@ -1214,6 +1249,7 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
 
   const updated = {
     ...shift,
+    ...(dispatchFields || {}),
     shift_status: action === "verify" ? SHIFT.VERIFIED : SHIFT.CORRECTION_REQUIRED,
     verified_at: action === "verify" ? now : shift.verified_at,
     verified_by: action === "verify" ? supervisor.id : shift.verified_by,

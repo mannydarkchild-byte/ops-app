@@ -34,6 +34,7 @@ import * as wf from "../services/workflows.js";
 import { AlertModal, Modal } from "../components/ui/Modal.jsx";
 
 import { SignaturePad } from "../components/ui/SignaturePad.jsx";
+import { ShiftDispatchFields } from "../components/ShiftDispatchFields.jsx";
 
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
@@ -81,6 +82,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const [verifyScope, setVerifyScope] = useState("mine");
 
   const [signature, setSignature] = useState(null);
+  const [dispatchTonnes, setDispatchTonnes] = useState("");
+  const [dispatchTrucks, setDispatchTrucks] = useState("");
+  const [floorTonnes, setFloorTonnes] = useState("");
+  const [weighbridgeRef, setWeighbridgeRef] = useState(null);
+  const [weighbridgePreview, setWeighbridgePreview] = useState(null);
 
   const [reportFilter, setReportFilter] = useState("cycle");
   const [timesheetFilter, setTimesheetFilter] = useState("cycle");
@@ -191,22 +197,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   }), [siteMachines, shifts, events, workSessions]);
 
   const openShiftsToClose = useMemo(() => {
-    const seen = new Set();
-    const rows = [];
-    for (const shift of shifts) {
-      if (getShiftStatus(shift) !== SHIFT.RUNNING) continue;
-      if (seen.has(shift.id)) continue;
-      seen.add(shift.id);
-      rows.push(shift);
-    }
-    return rows.sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0));
+    return dedupeShifts(shifts.filter((shift) => getShiftStatus(shift) === SHIFT.RUNNING))
+      .sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0));
   }, [shifts]);
 
 
 
-  const pendingShifts = shifts
+  const pendingShifts = dedupeShifts(shifts
 
-    .filter((r) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(getShiftStatus(r)) && r.site_id === user?.site_id)
+    .filter((r) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(getShiftStatus(r)) && r.site_id === user?.site_id))
 
     .sort((a, b) => {
 
@@ -589,6 +588,16 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     setSignature(null);
 
+    setDispatchTonnes(shift.tonnes_dispatched != null ? String(shift.tonnes_dispatched) : "");
+
+    setDispatchTrucks(shift.trucks_dispatched != null ? String(shift.trucks_dispatched) : "");
+
+    setFloorTonnes(shift.tonnes_on_floor != null ? String(shift.tonnes_on_floor) : "");
+
+    setWeighbridgeRef(shift.weighbridge_photo_ref || null);
+
+    setWeighbridgePreview(null);
+
   };
 
 
@@ -687,7 +696,17 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
       if (navigator.onLine) {
 
-        await wf.verifyShift(verifyTarget, user, { action, reason: null, signatureDataUrl: signature });
+        await wf.verifyShift(verifyTarget, user, {
+          action,
+          reason: null,
+          signatureDataUrl: signature,
+          dispatch: {
+            tonnes: dispatchTonnes,
+            trucks: dispatchTrucks,
+            floorTonnes,
+            photoRef: weighbridgeRef,
+          },
+        });
 
         await syncNow();
 
@@ -706,6 +725,16 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
       setVerifyTarget(null);
 
       setSignature(null);
+
+      setDispatchTonnes("");
+
+      setDispatchTrucks("");
+
+      setFloorTonnes("");
+
+      setWeighbridgeRef(null);
+
+      setWeighbridgePreview(null);
 
       showAlert("Done", "Shift verified with your signature.", "success");
 
@@ -1109,6 +1138,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
                 )}
 
+                <p className="text-[11px] text-[#F2F0EA]/45 mt-3">Sign-off asks for the weighbridge photo, tonnes dispatched, and trucks. Floor tonnage is optional.</p>
+
                 <div className="grid grid-cols-1 gap-2 mt-4">
 
                   <button onClick={() => openVerifyModal(r)} disabled={verifyBusy === r.id} className="w-full bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold">Sign off</button>
@@ -1471,9 +1502,24 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
           </p>
 
+          <ShiftDispatchFields
+            tonnes={dispatchTonnes}
+            trucks={dispatchTrucks}
+            floorTonnes={floorTonnes}
+            photoPreview={weighbridgePreview}
+            onTonnes={setDispatchTonnes}
+            onTrucks={setDispatchTrucks}
+            onFloor={setFloorTonnes}
+            onPhoto={(ref, data) => { setWeighbridgeRef(ref); setWeighbridgePreview(data || null); }}
+          />
+
           <SignaturePad onChange={setSignature} />
 
-          <button onClick={() => handleVerify("verify")} disabled={verifyBusy || !signature}
+          {(!weighbridgeRef || dispatchTonnes === "" || dispatchTrucks === "") && (
+            <p className="font-body text-xs text-[#F5C518]/90 mt-3">Photo, tonnes dispatched, and truck count are required before sign-off. The floor estimate can be left blank.</p>
+          )}
+
+          <button onClick={() => handleVerify("verify")} disabled={verifyBusy || !signature || !weighbridgeRef || dispatchTonnes === "" || dispatchTrucks === ""}
 
             className="w-full mt-4 bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40">
 

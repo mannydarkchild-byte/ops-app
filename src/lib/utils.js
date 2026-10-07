@@ -192,16 +192,20 @@ export function dedupeShifts(shifts) {
     return n;
   };
   for (const shift of list) {
-    const twin = kept.find((k) =>
-      k.operator_id === shift.operator_id
-      && k.machine_id === shift.machine_id
-      && Math.abs(new Date(k.started_at || 0) - new Date(shift.started_at || 0)) < 5 * 60 * 1000
-    );
+    const twin = kept.find((k) => {
+      if (k.machine_id !== shift.machine_id) return false;
+      const bothRunning = getShiftStatus(k) === SHIFT.RUNNING && getShiftStatus(shift) === SHIFT.RUNNING;
+      if (bothRunning) return true;
+      return k.operator_id === shift.operator_id
+        && Math.abs(new Date(k.started_at || 0) - new Date(shift.started_at || 0)) < 5 * 60 * 1000;
+    });
     if (!twin) {
       kept.push(shift);
       continue;
     }
-    if (score(shift) > score(twin)) {
+    const bothRunning = getShiftStatus(twin) === SHIFT.RUNNING && getShiftStatus(shift) === SHIFT.RUNNING;
+    const shiftIsNewer = new Date(shift.started_at || 0) >= new Date(twin.started_at || 0);
+    if (bothRunning ? shiftIsNewer : score(shift) > score(twin)) {
       kept[kept.indexOf(twin)] = shift;
     }
   }

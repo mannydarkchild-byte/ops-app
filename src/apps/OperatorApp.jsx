@@ -363,11 +363,17 @@ export function OperatorApp() {
     }
     const openHere = (shifts || []).find((s) =>
       s.machine_id === workMachine?.id
-      && s.operator_id === user?.id
       && getShiftStatus(s) === SHIFT.RUNNING
     );
     if (openHere) {
-      showAlert("Already running", `${workMachine?.name || "This machine"} already has an open shift. Finish that one before starting another.`, "warning");
+      const mine = String(openHere.operator_id || "") === String(user?.id || "");
+      showAlert(
+        "Already running",
+        mine
+          ? `${workMachine?.name || "This machine"} already has an open shift. Finish that one before starting another.`
+          : `${openHere.operator_name || "Someone else"} already has an open shift on ${workMachine?.name || "this machine"}. A supervisor must close it first.`,
+        "warning"
+      );
       return;
     }
     setActionBusy("start");
@@ -382,7 +388,9 @@ export function OperatorApp() {
       });
       setStartHour(""); setStartPhotoRef(null); setStartPhotoPreview(null);
       await refreshLocal();
-      if (!result?.alreadyRunning) {
+      if (result?.alreadyRunning) {
+        showAlert("Already running", `${workMachine?.name || "This machine"} already has an open shift. Finish that one before starting another.`, "warning");
+      } else {
         showAlert("Machine running", `Started from ${startHour}h.`, "success");
       }
     } catch (e) { showAlert("Could not start", e.message, "error"); }
@@ -505,9 +513,11 @@ export function OperatorApp() {
       ? "restart"
       : sessionShift
         ? "stop"
-        : workSession && prestartDone && !blocked
-          ? "start"
-          : null;
+        : machineRunForWork
+          ? null
+          : workSession && prestartDone && !blocked
+            ? "start"
+            : null;
 
   return (
     <AppPage

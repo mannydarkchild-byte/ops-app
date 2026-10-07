@@ -12,15 +12,20 @@ export async function acquireMachineLock(machineId, shiftId, operatorId) {
   const db = getDB();
 
   const remoteOpen = await fetchServerOpenShift(machineId);
-  if (remoteOpen.known && remoteOpen.shift && remoteOpen.shift.operator_id !== operatorId) {
+  const openRows = remoteOpen.shifts || (remoteOpen.shift ? [remoteOpen.shift] : []);
+  const otherOpen = openRows.find((row) => row.id !== shiftId);
+  if (remoteOpen.known && otherOpen) {
+    const samePerson = String(otherOpen.operator_id || "") === String(operatorId || "");
     return {
       accepted: false,
-      reason: `${remoteOpen.shift.operator_name || "Another operator"} is already running this machine`,
-      operatorName: remoteOpen.shift.operator_name,
+      reason: samePerson
+        ? "This machine already has an open shift. Finish that one before starting another."
+        : `${otherOpen.operator_name || "Another operator"} is already running this machine`,
+      operatorName: otherOpen.operator_name,
     };
   }
   // Same operator restarting the same shift — server still shows running after a Stop. That is fine.
-  if (remoteOpen.known && remoteOpen.shift && remoteOpen.shift.id === shiftId && remoteOpen.shift.operator_id === operatorId) {
+  if (remoteOpen.known && remoteOpen.shift && remoteOpen.shift.id === shiftId && String(remoteOpen.shift.operator_id || "") === String(operatorId || "")) {
     const lock = {
       machine_id: machineId,
       shift_id: shiftId,
