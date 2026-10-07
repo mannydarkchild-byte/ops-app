@@ -773,6 +773,21 @@ export async function addExpense(user, machine, site, { category, amount, vendor
   return row;
 }
 
+export async function updateExpense(expense, { category, receiptRef } = {}) {
+  if (!expense?.id) throw new Error("Missing expense");
+  const now = nowISO();
+  const row = {
+    ...expense,
+    category: category || expense.category || "Other",
+    updated_at: now,
+    _sync_status: "pending",
+  };
+  if (receiptRef) row.receipt_ref = receiptRef;
+  await saveLocal("expenses", row);
+  scheduleSync();
+  return row;
+}
+
 export async function delegateIssue(supervisor, issue, assignee, note = "") {
   if (!assignee?.id) throw new Error("Select who to delegate to");
   if (![ROLES.OPERATOR, ROLES.MANAGER].includes(assignee.role)) {

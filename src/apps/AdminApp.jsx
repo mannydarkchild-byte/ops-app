@@ -358,6 +358,8 @@ export function AdminApp() {
               siteId={activeSite?.id}
               cycleStartDay={getSettingsForSite(activeSite?.id).billing_cycle_start_day}
               scopeLabel={activeSite?.name || "This site"}
+              canEdit
+              onSaved={refreshLocal}
             />
           </MoreSubpage>
         )}
