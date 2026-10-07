@@ -1,5 +1,25 @@
 import { Modal } from "./ui/Modal.jsx";
 
+export function MachineSelect({ machines, value, onChange }) {
+  return (
+    <label className="block">
+      <span className="font-logo text-[10px] tracking-wider text-[#F5C518]">MACHINE</span>
+      <div className="relative mt-1">
+        <select
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full appearance-none bg-[#0A0A0A] border border-[#2A2A2A] py-3 pl-3 pr-10 rounded-xl text-[#F2F0EA] font-logo"
+        >
+          {machines.map((machine) => (
+            <option key={machine.id} value={machine.id}>{machine.name}</option>
+          ))}
+        </select>
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#F5C518] text-lg" aria-hidden="true">▾</span>
+      </div>
+    </label>
+  );
+}
+
 export function DashboardKpi({ label, value, sub, color = "#F2F0EA", onClick }) {
   const className = "w-full text-left rounded-2xl p-4 border";
   const style = { background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" };

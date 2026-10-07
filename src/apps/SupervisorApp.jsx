@@ -16,7 +16,7 @@ import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
-import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
+import { DashboardKpi, KpiDetailModal, MachineSelect } from "../components/DashboardKpi.jsx";
 
 import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, onSiteRecord, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
 
@@ -86,6 +86,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const [signature, setSignature] = useState(null);
 
   const [reportFilter, setReportFilter] = useState("cycle");
+  const [focusMachineId, setFocusMachineId] = useState("");
   const [timesheetFilter, setTimesheetFilter] = useState("cycle");
 
   const [delegateIssueId, setDelegateIssueId] = useState(null);
@@ -140,6 +141,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     [machines, user?.site_id]
 
+  );
+
+  const selectedMachine = useMemo(
+    () => siteMachines.find((machine) => machine.id === focusMachineId) || siteMachines[0] || null,
+    [siteMachines, focusMachineId]
   );
 
 
@@ -299,6 +305,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
         s.site_id === user?.site_id &&
 
+        s.machine_id === selectedMachine?.id &&
+
         (s.supervisor_signature_ref || s.supervisor_signature_name || s.verified_at)
 
       )
@@ -307,7 +315,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
       .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0));
 
-  }, [shifts, user?.site_id, reportPeriod]);
+  }, [shifts, user?.site_id, reportPeriod, selectedMachine?.id]);
 
 
 
@@ -360,13 +368,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     () => shiftsStartedInPeriod(
 
-      shifts.filter((s) => onSiteRecord(s, user?.site_id, machines)),
+      shifts.filter((s) => s.machine_id === selectedMachine?.id),
 
       billingPeriod
 
     ),
 
-    [shifts, user?.site_id, machines, billingPeriod]
+    [shifts, selectedMachine?.id, billingPeriod]
 
   );
 
@@ -381,11 +389,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     const revenue = dashboardShifts.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
 
-    const litres = (fuelLogs || []).filter((f) => onSiteRecord(f, user?.site_id, machines) && inPeriod(f.timestamp, billingPeriod))
+    const litres = (fuelLogs || []).filter((f) => f.machine_id === selectedMachine?.id && inPeriod(f.timestamp, billingPeriod))
 
       .reduce((sum, f) => sum + Number(f.litres || 0), 0);
 
-    const siteExpenses = (expenses || []).filter((e) => onSiteRecord(e, user?.site_id, machines));
+    const siteExpenses = (expenses || []).filter((e) => e.machine_id === selectedMachine?.id);
 
     const cycleExpenses = siteExpenses.filter((e) => inPeriod(e.date || e.created_at, billingPeriod));
 
@@ -417,17 +425,17 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     };
 
-  }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, user?.site_id, billingPeriod]);
+  }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, selectedMachine?.id, billingPeriod]);
 
 
 
   const machineName = (machineId) => machines.find((m) => m.id === machineId)?.name || machineId;
 
   const dashboardDetails = useMemo(() => {
-    const scope = `All machines · ${billingPeriod.label}`;
+    const scope = `${selectedMachine?.name || "This machine"} · ${billingPeriod.label}`;
     const withScope = (detail) => ({ ...detail, scope });
-    const cycleFuel = (fuelLogs || []).filter((row) => onSiteRecord(row, user?.site_id, machines) && inPeriod(row.timestamp, billingPeriod));
-    const cycleExpenses = (expenses || []).filter((row) => onSiteRecord(row, user?.site_id, machines) && inPeriod(row.date || row.created_at, billingPeriod));
+    const cycleFuel = (fuelLogs || []).filter((row) => row.machine_id === selectedMachine?.id && inPeriod(row.timestamp, billingPeriod));
+    const cycleExpenses = (expenses || []).filter((row) => row.machine_id === selectedMachine?.id && inPeriod(row.date || row.created_at, billingPeriod));
     return {
       billable: withScope(billableDetail(dashboardShifts, events, siteConfig, machineName)),
       machine: withScope(machineHourDetail(dashboardShifts, machineName)),
@@ -436,16 +444,16 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
       diesel: withScope(dieselDetail(cycleFuel, machineName)),
       downtime: withScope(downtimeDetail(dashboardShifts, machineName)),
     };
-  }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, user?.site_id, billingPeriod]);
+  }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, selectedMachine?.id, selectedMachine?.name, billingPeriod]);
 
   const signedDetails = useMemo(() => {
-    const scope = `Signed shifts · ${reportPeriod?.label || "All time"}`;
+    const scope = `${selectedMachine?.name || "This machine"} · signed · ${reportPeriod?.label || "All time"}`;
     const withScope = (detail) => ({ ...detail, scope });
     return {
       billable: withScope(billableDetail(signedReports, events, siteConfig, machineName)),
       machine: withScope(machineHourDetail(signedReports, machineName)),
     };
-  }, [signedReports, events, siteConfig, machines, reportPeriod]);
+  }, [signedReports, events, siteConfig, machines, reportPeriod, selectedMachine?.name]);
 
 
 
@@ -879,23 +887,32 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
               })}
             />
             </div>
-            <p className="font-body text-xs text-[#F2F0EA]/50">All machines · {billingPeriod.label}</p>
+            {selectedMachine && (
+              <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
+            )}
+            <p className="font-body text-xs text-[#F2F0EA]/50">{selectedMachine?.name || "This machine"} · {billingPeriod.label}</p>
             <div className="grid grid-cols-2 gap-3">
-            <DashboardKpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts started`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.billable)} />
-            <DashboardKpi label={HOUR_LABELS.machine} value={`${dashboardStats.machineHours.toFixed(1)}h`} sub={`All machines · ${dashboardStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.machine)} />
-            <DashboardKpi label={HOUR_LABELS.revenue} value={money(dashboardStats.revenue)} sub="Billable hours × each machine rate" color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.revenue)} />
-            <DashboardKpi label={HOUR_LABELS.expenses} value={money(dashboardStats.expenseTotal)} sub={dashboardStats.earlierExpenses > 0 ? `${dashboardStats.earlierExpenses} earlier · open Expenses` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.expenses)} />
+            <DashboardKpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts on this machine`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.billable)} />
+            <DashboardKpi label={HOUR_LABELS.machine} value={`${dashboardStats.machineHours.toFixed(1)}h`} sub={`${dashboardStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.machine)} />
+            <DashboardKpi label={HOUR_LABELS.revenue} value={money(dashboardStats.revenue)} sub={selectedMachine ? `${money(selectedMachine.billable_rate)}/h` : "This machine"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.revenue)} />
+            <DashboardKpi label={HOUR_LABELS.expenses} value={money(dashboardStats.expenseTotal)} sub={dashboardStats.earlierExpenses > 0 ? `${dashboardStats.earlierExpenses} earlier` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.expenses)} />
             <DashboardKpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.diesel)} />
-            <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Stopped time on shifts this cycle" color="#EF4444" onClick={() => setKpiDetail(dashboardDetails.downtime)} />
+            <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Stopped time on this machine" color="#EF4444" onClick={() => setKpiDetail(dashboardDetails.downtime)} />
             </div>
+          </div>
+        )}
+
+        {tab === "reports" && selectedMachine && (
+          <div className="mb-4">
+            <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
           </div>
         )}
 
         {tab === "reports" && (
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <DashboardKpi label="Signed reports" value={String(signedReports.length)} sub={reportPeriod?.label || "All time"} color="#F2F0EA" />
-            <DashboardKpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub="Signed shifts in this period" color="#22C55E" onClick={() => setKpiDetail(signedDetails.billable)} />
-            <DashboardKpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub="Signed shifts · closing meter" color="#22C55E" onClick={() => setKpiDetail(signedDetails.machine)} />
+            <DashboardKpi label="Signed reports" value={String(signedReports.length)} sub={`${selectedMachine?.name || "This machine"} · ${reportPeriod?.label || "All time"}`} color="#F2F0EA" />
+            <DashboardKpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub="Signed shifts on this machine" color="#22C55E" onClick={() => setKpiDetail(signedDetails.billable)} />
+            <DashboardKpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub="Closing meter on this machine" color="#22C55E" onClick={() => setKpiDetail(signedDetails.machine)} />
           </div>
         )}
 

@@ -16,10 +16,11 @@ import { ROLES } from "../lib/constants.js";
 
 import { computeAdminDashboard, formatAdminMetric } from "../lib/adminMetrics.js";
 
-import { HOUR_LABELS } from "../lib/shiftMetrics.js";
-import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
+import { formatDurationMinutes, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
+import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
+import { DashboardKpi, KpiDetailModal, MachineSelect } from "../components/DashboardKpi.jsx";
 
-import { getBillingPeriod } from "../lib/utils.js";
+import { getBillingPeriod, inPeriod, money, shiftBillableValue } from "../lib/utils.js";
 
 import { AlertModal } from "../components/ui/Modal.jsx";
 
@@ -67,6 +68,7 @@ export function AdminApp() {
 
   const [alert, setAlert] = useState({ isOpen: false });
   const [kpiDetail, setKpiDetail] = useState(null);
+  const [focusMachineId, setFocusMachineId] = useState("");
   const [moreView, setMoreView] = useState(null);
 
   const showAlert = (title, message) => setAlert({ isOpen: true, title, message, onConfirm: () => setAlert({ isOpen: false }) });
@@ -75,6 +77,44 @@ export function AdminApp() {
     () => getBillingPeriod(new Date(), getSettingsForSite(activeSite?.id).billing_cycle_start_day),
     [getSettingsForSite, activeSite?.id]
   );
+
+  const siteMachines = useMemo(
+    () => machines.filter((machine) => (!activeSite?.id || machine.site_id === activeSite.id) && machine.active !== false),
+    [machines, activeSite?.id]
+  );
+  const selectedMachine = useMemo(
+    () => siteMachines.find((machine) => machine.id === focusMachineId) || siteMachines[0] || null,
+    [siteMachines, focusMachineId]
+  );
+  const machineDash = useMemo(() => {
+    const settings = getSettingsForSite(activeSite?.id);
+    const rows = shiftsStartedInPeriod(shifts.filter((shift) => shift.machine_id === selectedMachine?.id), billingPeriod);
+    const nameOf = (id) => machines.find((machine) => machine.id === id)?.name || selectedMachine?.name || "Machine";
+    const scope = `${selectedMachine?.name || "This machine"} · ${billingPeriod.label}`;
+    const withScope = (detail) => ({ ...detail, scope });
+    const cycleFuel = fuelLogs.filter((row) => row.machine_id === selectedMachine?.id && inPeriod(row.timestamp, billingPeriod));
+    const machineExpenses = expenses.filter((row) => row.machine_id === selectedMachine?.id);
+    const cycleExpenses = machineExpenses.filter((row) => inPeriod(row.date || row.created_at, billingPeriod));
+    return {
+      billableHours: rows.reduce((sum, shift) => sum + shiftBillableHours(shift, events, settings), 0),
+      machineHours: sumMeterHours(rows),
+      meterShiftCount: rows.filter((shift) => shift.end_hour_meter != null && shift.start_hour_meter != null).length,
+      shiftCount: rows.length,
+      revenue: rows.reduce((sum, shift) => sum + shiftBillableValue(shift, machines, events, settings), 0),
+      expenseTotal: cycleExpenses.reduce((sum, row) => sum + Number(row.amount || 0), 0),
+      earlierExpenses: Math.max(0, machineExpenses.length - cycleExpenses.length),
+      litres: cycleFuel.reduce((sum, row) => sum + Number(row.litres || 0), 0),
+      downtimeMin: rows.reduce((sum, shift) => sum + Number(shift.downtime_minutes || 0), 0),
+      details: {
+        billable: withScope(billableDetail(rows, events, settings, nameOf)),
+        machine: withScope(machineHourDetail(rows, nameOf)),
+        revenue: withScope(revenueDetail(rows, machines, events, settings, nameOf)),
+        expenses: withScope(expenseDetail(cycleExpenses, nameOf)),
+        diesel: withScope(dieselDetail(cycleFuel, nameOf)),
+        downtime: withScope(downtimeDetail(rows, nameOf)),
+      },
+    };
+  }, [shifts, events, expenses, fuelLogs, machines, selectedMachine?.id, selectedMachine?.name, billingPeriod, activeSite?.id, getSettingsForSite]);
 
   const dashboard = useMemo(
     () => computeAdminDashboard({
@@ -235,19 +275,22 @@ export function AdminApp() {
 
         {tab === "dashboard" && (
           <div className="space-y-4">
-            <p className="font-body text-xs text-[#F2F0EA]/50">All machines · {dashboard.periodLabel}</p>
+            {selectedMachine && (
+              <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
+            )}
+            <p className="font-body text-xs text-[#F2F0EA]/50">{selectedMachine?.name || "This machine"} · {dashboard.periodLabel}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <DashboardKpi label={HOUR_LABELS.billable} value={formatAdminMetric(dashboard.overview.billableHours, "hours")} sub={`${dashboard.overview.cycleShiftCount} shifts started`} color="#22C55E" onClick={() => setKpiDetail(dashboard.details.billable)} />
-              <DashboardKpi label={HOUR_LABELS.machine} value={formatAdminMetric(dashboard.overview.machineHours, "hours")} sub={`All machines · ${dashboard.overview.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(dashboard.details.machine)} />
-              <DashboardKpi label={HOUR_LABELS.revenue} value={formatAdminMetric(dashboard.overview.revenue, "money")} sub="Billable hours × each machine rate" color="#F5C518" onClick={() => setKpiDetail(dashboard.details.revenue)} />
-              <DashboardKpi label={HOUR_LABELS.expenses} value={formatAdminMetric(dashboard.overview.expenseTotal, "money")} sub={dashboard.overview.earlierExpenses > 0 ? `This cycle · ${dashboard.overview.earlierExpenses} earlier` : "This cycle"} color="#F97316" onClick={() => setKpiDetail(dashboard.details.expenses)} />
+              <DashboardKpi label={HOUR_LABELS.billable} value={formatAdminMetric(machineDash.billableHours, "hours")} sub={`${machineDash.shiftCount} shifts on this machine`} color="#22C55E" onClick={() => setKpiDetail(machineDash.details.billable)} />
+              <DashboardKpi label={HOUR_LABELS.machine} value={formatAdminMetric(machineDash.machineHours, "hours")} sub={`${machineDash.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(machineDash.details.machine)} />
+              <DashboardKpi label={HOUR_LABELS.revenue} value={formatAdminMetric(machineDash.revenue, "money")} sub={selectedMachine ? `${money(selectedMachine.billable_rate)}/h` : "This machine"} color="#F5C518" onClick={() => setKpiDetail(machineDash.details.revenue)} />
+              <DashboardKpi label={HOUR_LABELS.expenses} value={formatAdminMetric(machineDash.expenseTotal, "money")} sub={machineDash.earlierExpenses > 0 ? `This cycle · ${machineDash.earlierExpenses} earlier` : "This cycle"} color="#F97316" onClick={() => setKpiDetail(machineDash.details.expenses)} />
+              <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(machineDash.downtimeMin)} sub="Stopped time on this machine" color="#F2F0EA" onClick={() => setKpiDetail(machineDash.details.downtime)} />
+              <DashboardKpi label={HOUR_LABELS.diesel} value={formatAdminMetric(machineDash.litres, "litres")} sub={machineDash.machineHours > 0 ? `${(machineDash.litres / machineDash.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(machineDash.details.diesel)} />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <DashboardKpi label="Pending sign-off" value={dashboard.overview.pendingVerify} sub="Shifts awaiting supervisor" color="#00A4A6" />
-              <DashboardKpi label={HOUR_LABELS.downtime} value={formatAdminMetric(dashboard.overview.downtimeMin, "duration")} sub="Stopped time on shifts this cycle" color="#F2F0EA" onClick={() => setKpiDetail(dashboard.details.downtime)} />
-              <DashboardKpi label={HOUR_LABELS.diesel} value={formatAdminMetric(dashboard.overview.litres, "litres")} sub={dashboard.overview.machineHours > 0 ? `${(dashboard.overview.litres / dashboard.overview.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboard.details.diesel)} />
-              <DashboardKpi label="Open problems" value={dashboard.overview.openIssues} sub={`${dashboard.overview.criticalIssues} critical`} color="#EF4444" />
+              <DashboardKpi label="Pending sign-off" value={dashboard.overview.pendingVerify} sub="All machines · awaiting supervisor" color="#00A4A6" />
+              <DashboardKpi label="Open problems" value={dashboard.overview.openIssues} sub={`${dashboard.overview.criticalIssues} critical · all machines`} color="#EF4444" />
             </div>
             <p className="font-body text-xs text-[#F2F0EA]/40">Sync queue {dashboard.overview.syncPending}</p>
 
