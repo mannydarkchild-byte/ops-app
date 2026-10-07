@@ -8,11 +8,9 @@ import { updateUserRole, updateProfileFields } from "../lib/auth.js";
 
 import { deactivateUser, reactivateUser } from "../services/users.js";
 
-import { getDB, clearSyncedTables } from "../lib/db.js";
+import { clearSyncedTables } from "../lib/db.js";
 
 import { pullBootstrap } from "../lib/sync/pull.js";
-
-import { ROLES } from "../lib/constants.js";
 
 import { computeAdminDashboard, formatAdminMetric } from "../lib/adminMetrics.js";
 
@@ -44,10 +42,6 @@ const TABS = [
   { id: "sites", label: "Sites" },
   { id: "more", label: "More" },
 ];
-
-
-
-const MANAGEABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES.MANAGER, ROLES.ADMIN];
 
 
 
