@@ -876,9 +876,10 @@ export async function sendToMechanic(supervisor, issue, mechanic, machine, site,
 
   const now = nowISO();
   const machineId = machine?.id || issue.machine_id;
+  const siteId = site?.id || supervisor.site_id || issue.site_id || null;
   const breakdown = {
     id: makeId("BD"),
-    site_id: site?.id,
+    site_id: siteId,
     machine_id: machineId,
     reported_by: supervisor.id,
     reported_by_name: supervisor.name,
@@ -894,7 +895,7 @@ export async function sendToMechanic(supervisor, issue, mechanic, machine, site,
   };
   const job = {
     id: makeId("MJ"),
-    site_id: site?.id,
+    site_id: siteId,
     machine_id: machineId,
     breakdown_id: breakdown.id,
     mechanic_id: mechanic.id,
