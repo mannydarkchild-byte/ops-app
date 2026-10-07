@@ -220,6 +220,18 @@ select {
   border-radius: 0;
 }
 
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%23F5C518' d='M1 1.2h10L6 7z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 0.7rem;
+  padding-right: 2.25rem !important;
+}
+
+html.theme-light select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%238A5A00' d='M1 1.2h10L6 7z'/%3E%3C/svg%3E");
+}
+
 button {
   -webkit-appearance: none;
   appearance: none;

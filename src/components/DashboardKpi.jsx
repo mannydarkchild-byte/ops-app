@@ -8,13 +8,12 @@ export function MachineSelect({ machines, value, onChange }) {
         <select
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none bg-[#0A0A0A] border border-[#2A2A2A] py-3 pl-3 pr-10 rounded-xl text-[#F2F0EA] font-logo"
+          className="w-full bg-[#0A0A0A] border border-[#2A2A2A] py-3 pl-3 rounded-xl text-[#F2F0EA] font-logo"
         >
           {machines.map((machine) => (
             <option key={machine.id} value={machine.id}>{machine.name}</option>
           ))}
         </select>
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#F5C518] text-lg" aria-hidden="true">▾</span>
       </div>
     </label>
   );
