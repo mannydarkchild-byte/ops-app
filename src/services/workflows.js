@@ -3,7 +3,7 @@ import { acquireMachineLock, releaseMachineLock } from "../lib/machineLock.js";
 import { scheduleSync } from "../lib/sync/engine.js";
 import { supabase } from "../lib/supabase.js";
 import { SHIFT, ISSUE, ROLES, BREAKDOWN_STATUS, MAINTENANCE_STATUS, issueAreaRequiresMachine } from "../lib/constants.js";
-import { canCloseIssue, getShiftStatus } from "../lib/utils.js";
+import { canCloseIssue, getShiftStatus, sameOperatorId } from "../lib/utils.js";
 import { localDayKey, makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
 import { ensureSiteSettings, prestartItemsForMachine, inspectionGroupsForMachine, getMechanicItemsFromGroups } from "../lib/siteConfig.js";
@@ -24,7 +24,7 @@ function withInflight(key, fn) {
 }
 
 function samePerson(a, b) {
-  return !!a && !!b && String(a) === String(b);
+  return sameOperatorId(a, b);
 }
 
 function ownRunningShift(shifts, machineId, operatorId) {
@@ -376,20 +376,18 @@ async function restartMachineOnce(user, machine, site, machineRun, downtime, { n
 
   let lock = await acquireMachineLock(machine.id, machineRun.id, user.id);
   if (!lock.accepted) {
-    // Stop released the lock locally, but the server may still think this same shift is running.
-    // That must not block restart — it is the same day, not a new start.
+    // A stop leaves the shift RUNNING. Restart is the same person continuing that shift,
+    // not a second start. Only someone else's open shift should block it.
     const remote = await fetchServerOpenShift(machine.id);
     const openRows = remote.shifts || (remote.shift ? [remote.shift] : []);
-    const sameShift = remote.known && openRows.some((row) => row.id === machineRun.id);
-    if (sameShift || (remote.known && !remote.shift)) {
-      try { await releaseMachineLock(machine.id); } catch {}
-      lock = await acquireMachineLock(machine.id, machineRun.id, user.id);
-      if (!lock.accepted && sameShift) {
-        lock = { accepted: true, forced: true };
-      }
+    const foreign = openRows.find((row) => row.id !== machineRun.id && !samePerson(row.operator_id, user.id));
+    if (foreign) {
+      throw new Error(`${foreign.operator_name || "Another operator"} is already running this machine`);
     }
+    try { await releaseMachineLock(machine.id); } catch {}
+    lock = await acquireMachineLock(machine.id, machineRun.id, user.id);
+    if (!lock.accepted) lock = { accepted: true, forced: true };
   }
-  if (!lock.accepted) throw new Error(lock.reason || "Could not restart");
 
   const now = nowISO();
   const minutes = Math.max(0, Math.round((new Date(now) - new Date(downtime.stopped_at)) / 60000));

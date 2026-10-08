@@ -16,7 +16,7 @@ import { ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS, EARLY_C
 import { stopReasonGroups, ownerForStopReason } from "../lib/stopReasons.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
-import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus } from "../lib/utils.js";
+import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus, sameOperatorId } from "../lib/utils.js";
 import { prestartItemsForMachine } from "../lib/siteConfig.js";
 import { rememberUsualOperator, usualOperatorName } from "../lib/shiftPeople.js";
 import { OperatorMachineBoard } from "../components/OperatorMachineBoard.jsx";
@@ -251,13 +251,13 @@ export function OperatorApp() {
 
   const blockedByOther = machineRunForWork
     && machineRunForWork.operator_id
-    && machineRunForWork.operator_id !== user?.id
+    && !sameOperatorId(machineRunForWork.operator_id, user?.id)
     ? machineRunForWork
     : null;
   const blocked = !!blockedByOther && !sessionShift && !sessionDowntime;
   const staleOwnShift = machineRunForWork
     && !sessionShift
-    && machineRunForWork.operator_id === user?.id
+    && sameOperatorId(machineRunForWork.operator_id, user?.id)
     ? machineRunForWork
     : null;
 
@@ -366,7 +366,7 @@ export function OperatorApp() {
       && getShiftStatus(s) === SHIFT.RUNNING
     );
     if (openHere) {
-      const mine = String(openHere.operator_id || "") === String(user?.id || "");
+      const mine = sameOperatorId(openHere.operator_id, user?.id);
       showAlert(
         "Already running",
         mine

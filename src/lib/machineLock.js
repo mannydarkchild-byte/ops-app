@@ -3,6 +3,7 @@ import { supabase } from "./supabase.js";
 import { SHIFT } from "./constants.js";
 import { findOpenStopForShift } from "./shiftMetrics.js";
 import { fetchServerOpenShift } from "./machineStatus.js";
+import { sameOperatorId } from "./utils.js";
 
 /**
  * Offline-first machine lock.
@@ -14,18 +15,22 @@ export async function acquireMachineLock(machineId, shiftId, operatorId) {
   const remoteOpen = await fetchServerOpenShift(machineId);
   const openRows = remoteOpen.shifts || (remoteOpen.shift ? [remoteOpen.shift] : []);
   const otherOpen = openRows.find((row) => row.id !== shiftId);
-  if (remoteOpen.known && otherOpen) {
-    const samePerson = String(otherOpen.operator_id || "") === String(operatorId || "");
+  const resumingThisShift = openRows.some((row) => row.id === shiftId);
+  if (remoteOpen.known && otherOpen && !sameOperatorId(otherOpen.operator_id, operatorId)) {
     return {
       accepted: false,
-      reason: samePerson
-        ? "This machine already has an open shift. Finish that one before starting another."
-        : `${otherOpen.operator_name || "Another operator"} is already running this machine`,
+      reason: `${otherOpen.operator_name || "Another operator"} is already running this machine`,
       operatorName: otherOpen.operator_name,
     };
   }
+  if (remoteOpen.known && otherOpen && sameOperatorId(otherOpen.operator_id, operatorId) && !resumingThisShift) {
+    return {
+      accepted: false,
+      reason: "This machine already has an open shift. Finish that one before starting another.",
+    };
+  }
   // Same operator restarting the same shift — server still shows running after a Stop. That is fine.
-  if (remoteOpen.known && remoteOpen.shift && remoteOpen.shift.id === shiftId && String(remoteOpen.shift.operator_id || "") === String(operatorId || "")) {
+  if (remoteOpen.known && remoteOpen.shift && remoteOpen.shift.id === shiftId && sameOperatorId(remoteOpen.shift.operator_id, operatorId)) {
     const lock = {
       machine_id: machineId,
       shift_id: shiftId,
@@ -39,7 +44,7 @@ export async function acquireMachineLock(machineId, shiftId, operatorId) {
   }
 
   const existing = await db.machine_locks.get(machineId);
-  if (existing?.status === "locked" && existing.operator_id !== operatorId && existing.shift_id !== shiftId) {
+  if (existing?.status === "locked" && !sameOperatorId(existing.operator_id, operatorId) && existing.shift_id !== shiftId) {
     if (remoteOpen.known && remoteOpen.shift) {
       return { accepted: false, reason: "Machine running on another device" };
     }
@@ -66,12 +71,18 @@ export async function acquireMachineLock(machineId, shiftId, operatorId) {
       if (error) throw error;
       if (data === false) {
         const remote = await fetchServerOpenShift(machineId);
-        if (!remote.shift) {
+        const rows = remote.shifts || (remote.shift ? [remote.shift] : []);
+        const foreign = rows.find((row) => row.id !== shiftId && !sameOperatorId(row.operator_id, operatorId));
+        if (!foreign) {
           await supabase.rpc("stop_machine", { p_machine_id: machineId });
           const retry = await supabase.rpc("start_machine", { p_machine_id: machineId, p_shift_id: shiftId });
           if (!retry.error && retry.data !== false) {
             await db.machine_locks.update(machineId, { synced: true });
             return { accepted: true };
+          }
+          if (rows.some((row) => row.id === shiftId)) {
+            await db.machine_locks.update(machineId, { synced: true });
+            return { accepted: true, sameShift: true };
           }
         }
         await db.machine_locks.delete(machineId);

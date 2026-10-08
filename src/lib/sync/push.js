@@ -69,6 +69,11 @@ export async function pushOneQueueItem(item) {
     const shift = await db.shifts.get(resolved.shift_id);
     if (shift?.site_id) resolved.site_id = shift.site_id;
   }
+  if ((item.table === "breakdowns" || item.table === "maintenance_jobs") && !resolved.site_id) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const profile = session?.user?.id ? await db.profiles.get(session.user.id) : null;
+    if (profile?.site_id) resolved.site_id = profile.site_id;
+  }
   if (item.table === "events" && resolved.photo_ref && !resolved.photo_data) {
     if (typeof resolved.photo_ref === "string" && resolved.photo_ref.startsWith("http")) {
       resolved.photo_data = resolved.photo_ref;

@@ -3,6 +3,14 @@ import { shiftBillableHours } from "./shiftMetrics.js";
 
 export const nowISO = () => new Date().toISOString();
 
+/** Auth ids can differ by case. The same login must still count as the same person. */
+export function sameOperatorId(a, b) {
+  if (a == null || b == null) return false;
+  const left = String(a).trim().toLowerCase();
+  const right = String(b).trim().toLowerCase();
+  return left.length > 0 && left === right;
+}
+
 /** Rand amounts with a thousands comma, e.g. R3,934,545.86 */
 export const money = (n) => {
   const num = Number(n);
@@ -128,7 +136,7 @@ export function shiftBelongsToWorkSession(shift, workSession, userId) {
   if (!shift || !workSession || !userId) return false;
   const status = getShiftStatus(shift);
   if (status !== SHIFT.RUNNING) return false;
-  if (shift.operator_id !== userId) return false;
+  if (!sameOperatorId(shift.operator_id, userId)) return false;
   return new Date(shift.started_at).getTime() >= new Date(workSession.clock_in).getTime();
 }
 
