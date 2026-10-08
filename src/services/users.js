@@ -3,7 +3,7 @@ import { saveLocal, readTable } from "../lib/db.js";
 import { ROLES } from "../lib/constants.js";
 import { nowISO } from "../lib/utils.js";
 
-const CREATABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES.MANAGER, ROLES.DISPATCH];
+const CREATABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES.MANAGER, ROLES.DISPATCH, ROLES.STOREROOM];
 
 export { CREATABLE_ROLES };
 

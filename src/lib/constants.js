@@ -7,6 +7,7 @@ export const ROLES = {
   MANAGER: "manager",
   ADMIN: "admin",
   DISPATCH: "dispatch",
+  STOREROOM: "storeroom",
 };
 
 export const SHIFT = {

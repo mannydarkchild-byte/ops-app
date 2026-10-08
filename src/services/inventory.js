@@ -2,6 +2,27 @@ import { readTable, saveLocal } from "../lib/db.js";
 import { makeId } from "../lib/utils.js";
 import { scheduleSync } from "../lib/sync/engine.js";
 
+async function recordMovement(user, item, delta, reason) {
+  const now = new Date().toISOString();
+  const next = Math.round((Number(item.quantity_on_hand || 0) + delta) * 100) / 100;
+  if (next < 0) throw new Error("Not enough on hand");
+  const updated = { ...item, quantity_on_hand: next, updated_at: now, _sync_status: "pending" };
+  await saveLocal("inventory_items", updated);
+  await saveLocal("inventory_movements", {
+    id: makeId("MOV"),
+    site_id: item.site_id,
+    inventory_item_id: item.id,
+    quantity_change: delta,
+    reason: reason?.trim() || (delta > 0 ? "Received" : "Issued"),
+    performed_by: user?.id || null,
+    performed_by_name: user?.name || null,
+    created_at: now,
+    _sync_status: "pending",
+  });
+  scheduleSync();
+  return updated;
+}
+
 export async function createInventoryItem({ siteId, sku, name, category, unit, reorderLevel }) {
   const trimmedSku = sku?.trim().toUpperCase();
   const trimmedName = name?.trim();
@@ -48,4 +69,18 @@ export async function updateInventoryItem(itemId, fields) {
   await saveLocal("inventory_items", updated);
   scheduleSync();
   return updated;
+}
+
+/** Goods into the storeroom. */
+export async function receiveInventory(user, item, quantity, reason) {
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) throw new Error("Enter how many arrived");
+  return recordMovement(user, item, qty, reason || "Received");
+}
+
+/** Tools or parts leaving the storeroom. */
+export async function issueInventory(user, item, quantity, reason) {
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) throw new Error("Enter how many to issue");
+  return recordMovement(user, item, -qty, reason || "Issued");
 }

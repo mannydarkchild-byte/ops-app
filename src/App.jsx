@@ -7,6 +7,7 @@ import { SupervisorApp } from "./apps/SupervisorApp.jsx";
 import { ManagerApp } from "./apps/ManagerApp.jsx";
 import { AdminApp } from "./apps/AdminApp.jsx";
 import { DispatchApp } from "./apps/DispatchApp.jsx";
+import { StoreroomApp } from "./apps/StoreroomApp.jsx";
 import { LandingPage } from "./components/LandingPage.jsx";
 import { ROLES } from "./lib/constants.js";
 
@@ -119,6 +120,8 @@ function RoleRouter() {
       return <AdminApp />;
     case ROLES.DISPATCH:
       return <DispatchApp />;
+    case ROLES.STOREROOM:
+      return <StoreroomApp />;
     case ROLES.OPERATOR:
     default:
       return <OperatorApp />;

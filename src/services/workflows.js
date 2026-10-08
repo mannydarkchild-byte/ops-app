@@ -938,7 +938,7 @@ export async function requestParts(mechanic, issue, partsText) {
 }
 
 export async function markPartsOrdered(manager, issue, note = "") {
-  if (manager.role !== ROLES.MANAGER) throw new Error("Only the manager can mark parts ordered");
+  if (![ROLES.MANAGER, ROLES.STOREROOM, ROLES.ADMIN].includes(manager.role)) throw new Error("Only the storeroom can mark parts ordered");
   const now = nowISO();
   await saveLocal("issues", { ...issue, updated_at: now });
   await postIssueMessage(issue, manager, "parts_ordered", note?.trim() || "Parts ordered");
@@ -947,7 +947,7 @@ export async function markPartsOrdered(manager, issue, note = "") {
 }
 
 export async function markPartsOnSite(manager, issue, note = "") {
-  if (manager.role !== ROLES.MANAGER) throw new Error("Only the manager can mark parts on site");
+  if (![ROLES.MANAGER, ROLES.STOREROOM, ROLES.ADMIN].includes(manager.role)) throw new Error("Only the storeroom can issue parts");
   const now = nowISO();
   const updated = { ...issue, status: ISSUE.WITH_MECHANIC, updated_at: now };
   await saveLocal("issues", updated);

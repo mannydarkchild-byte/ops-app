@@ -21,7 +21,6 @@ import { DispatchKpis } from "../components/DispatchKpis.jsx";
 import {
   fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
-import { ManagerPartsPanel } from "../components/manager/ManagerPartsPanel.jsx";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
@@ -33,9 +32,10 @@ import * as wf from "../services/workflows.js";
 
 const TABS = [
   { id: "overview", label: "Home" },
+  { id: "expenses", label: "Expenses" },
   { id: "pulse", label: "Pulse" },
-  { id: "issues", label: "Problems" },
   { id: "reports", label: "Reports" },
+  { id: "issues", label: "Problems" },
   { id: "more", label: "More" },
 ];
 
@@ -54,7 +54,7 @@ const EXPENSE_FILTERS = [
 export function ManagerApp() {
   const {
     user, shifts, events, expenses, fuelLogs, inspections, issues, issueMessages,
-    workSessions, machines, profiles, submissions, hourReadings, activeSite, inventoryItems, syncNow, refreshLocal,
+    workSessions, machines, profiles, submissions, hourReadings, activeSite, syncNow, refreshLocal,
     getSettingsForSite, siteSettings, siteDispatch,
   } = useOps();
 
@@ -71,7 +71,6 @@ export function ManagerApp() {
   const [alert, setAlert] = useState({ isOpen: false });
   const [kpiDetail, setKpiDetail] = useState(null);
   const [reportPreview, setReportPreview] = useState(null);
-  const [moreView, setMoreView] = useState(null);
   const [showStopOwners, setShowStopOwners] = useState(false);
   const [focusMachineId, setFocusMachineId] = useState("");
   const showAlert = (title, message, type = "info") =>
@@ -427,7 +426,7 @@ export function ManagerApp() {
       showSite={false}
       tabs={tabItems}
       activeTab={tab}
-      onTabChange={(id) => { setTab(id); setMoreView(null); }}
+      onTabChange={setTab}
       onSync={syncNow}
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
@@ -436,9 +435,9 @@ export function ManagerApp() {
           <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-xl px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="font-logo text-[10px] text-[#EF4444] tracking-wider">NEEDS ATTENTION</span>
             {partsRequests.length > 0 && (
-              <button type="button" onClick={() => setTab("issues")} className="btn-link font-logo text-[10px] text-[#F97316] hover:underline">
-                {partsRequests.length} parts request{partsRequests.length !== 1 ? "s" : ""}
-              </button>
+              <span className="font-logo text-[10px] text-[#F97316]">
+                {partsRequests.length} parts request{partsRequests.length !== 1 ? "s" : ""} with the storeroom
+              </span>
             )}
             {assignedToMe.length > 0 && (
               <button type="button" onClick={() => setTab("issues")} className="btn-link font-logo text-[10px] text-[#F5C518] hover:underline">
@@ -544,7 +543,7 @@ export function ManagerApp() {
             </p>
             {partsRequests.length > 0 && (
               <p className="text-[10px] text-[#F97316] font-logo tracking-wider">
-                {partsRequests.length} waiting for parts — open a problem below to mark ordered / on site
+                {partsRequests.length} waiting for parts — the storeroom issues them
               </p>
             )}
             <IssueInboxModal
@@ -554,8 +553,6 @@ export function ManagerApp() {
               issues={warriorOpenIssues}
               issueMessages={issueMessages}
               onDone={refreshLocal}
-              onMarkPartsOrdered={(issue) => wf.markPartsOrdered(user, issue)}
-              onMarkPartsOnSite={(issue) => wf.markPartsOnSite(user, issue)}
               machines={machines}
             />
           </div>
@@ -563,33 +560,16 @@ export function ManagerApp() {
 
         {tab === "pulse" && <ProductivityPulseScreen embedded />}
 
-        {tab === "more" && !moreView && (
+        {tab === "more" && (
           <MoreMenu
             items={[
-              { label: "Parts", onClick: () => setMoreView("parts") },
-              { label: "Expenses", onClick: () => setMoreView("expenses") },
               { label: "Stop reasons and owners", onClick: () => setShowStopOwners(true) },
               { label: "Backdate hour reading", onClick: () => setShowBackdate(true) },
             ]}
           />
         )}
 
-        {tab === "more" && moreView && (
-          <button type="button" onClick={() => setMoreView(null)} className="mb-3 font-ui text-sm text-[#F5C518]">
-            Back
-          </button>
-        )}
-
-        {tab === "more" && moreView === "parts" && (
-          <ManagerPartsPanel
-            siteId={user?.site_id}
-            inventoryItems={inventoryItems}
-            onSaved={refreshLocal}
-            showAlert={showAlert}
-          />
-        )}
-
-        {tab === "more" && moreView === "expenses" && (
+        {tab === "expenses" && (
           <div className="space-y-3">
             <button
               type="button"
@@ -697,6 +677,7 @@ export function ManagerApp() {
 
         {tab === "reports" && (
           <div className="space-y-4">
+            <p className="font-body text-sm text-[#F2F0EA]/70">Money and hours for the selected machine, then the signed shift reports underneath.</p>
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
               <h3 className="font-logo text-[#F5C518] text-sm mb-3">OPERATIONS REPORT</h3>
               <div className="flex flex-wrap gap-2 mb-4">

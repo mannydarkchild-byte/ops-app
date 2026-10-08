@@ -11,6 +11,7 @@ const ROLE_COLORS = {
   manager: { dot: "bg-ops-orange", text: "text-ops-orange" },
   admin: { dot: "bg-ops-red", text: "text-ops-red" },
   dispatch: { dot: "bg-ops-gold", text: "text-ops-gold" },
+  storeroom: { dot: "bg-ops-teal", text: "text-ops-teal" },
 };
 
 const SYNC_META = {
@@ -318,6 +319,12 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
 
 function TabGlyph({ id }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
+  if (id === "stock" || id === "requests") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 8h16v12H4z" /><path d="M8 8V6a4 4 0 0 1 8 0v2" /></svg>;
+  }
+  if (id === "expenses") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M6 4h12v16H6z" /><path d="M9 8h6M9 12h6M9 16h4" /></svg>;
+  }
   if (id === "dispatch") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M3 7h13l5 5-5 5H3z" /><path d="M8 12h6" /></svg>;
   }

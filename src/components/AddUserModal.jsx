@@ -50,7 +50,7 @@ export function AddUserModal({ onClose, sites, machines, defaultSiteId, onDone }
 
       <FormSection step={2} title="Role & site" description="What access this person has." accent="#00A4A6">
         <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full bg-[#0A0A0A] border p-3 rounded mb-2 text-[#F2F0EA]">
-          {CREATABLE_ROLES.map((r) => <option key={r} value={r}>{r === "dispatch" ? "Dispatch" : r}</option>)}
+          {CREATABLE_ROLES.map((r) => <option key={r} value={r}>{r === "dispatch" ? "Dispatch" : r === "storeroom" ? "Storeroom" : r}</option>)}
         </select>
         <select value={siteId} onChange={(e) => { setSiteId(e.target.value); setMachineId(""); }} className="w-full bg-[#0A0A0A] border p-3 rounded text-[#F2F0EA]">
           {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

@@ -8,8 +8,6 @@ import { AppPage } from "../components/AppShell.jsx";
 
 import { ActivityFeed } from "../components/ActivityFeed.jsx";
 
-import { SignedReportCard } from "../components/SignedReportCard.jsx";
-
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 
 import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
@@ -30,6 +28,7 @@ import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { SupervisorReports } from "../components/SupervisorReports.jsx";
 import { dispatchDayReport } from "../lib/dispatchReport.js";
 import { DISPATCH_STATUS, dispatchStatus } from "../lib/dispatchMetrics.js";
 import { MoreMenu } from "../components/MoreMenu.jsx";
@@ -908,48 +907,30 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
           </div>
         )}
 
-        {tab === "reports" && selectedMachine && (
-          <div className="mb-4">
-            <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
-          </div>
-        )}
-
         {tab === "reports" && (
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <DashboardKpi label="Signed reports" value={String(signedReports.length)} sub={`${selectedMachine?.name || "This machine"} · ${reportPeriod?.label || "All time"}`} color="#F2F0EA" />
-            <DashboardKpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub="Signed shifts on this machine" color="#22C55E" onClick={() => setKpiDetail(signedDetails.billable)} />
-            <DashboardKpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub="Closing meter on this machine" color="#22C55E" onClick={() => setKpiDetail(signedDetails.machine)} />
-          </div>
-        )}
-
-
-
-        {tab === "reports" && (
-
-          <div className="flex flex-wrap gap-1 mb-4">
-
-            {REPORT_FILTERS.map((f) => (
-
-              <button
-
-                key={f.id}
-
-                type="button"
-
-                onClick={() => setReportFilter(f.id)}
-
-                className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${reportFilter === f.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}
-
-              >
-
-                {f.label}
-
-              </button>
-
-            ))}
-
-          </div>
-
+          <SupervisorReports
+            machines={siteMachines}
+            machineId={selectedMachine?.id}
+            onMachine={setFocusMachineId}
+            period={reportPeriod}
+            periodLabel={reportPeriod?.label || "All time"}
+            filter={reportFilter}
+            filters={REPORT_FILTERS}
+            onFilter={setReportFilter}
+            signedReports={signedReports}
+            signedBillable={signedBillable}
+            signedHours={signedHours}
+            signedDetails={signedDetails}
+            onOpenDetail={setKpiDetail}
+            dispatches={(siteDispatch || []).filter((row) => row.site_id === user?.site_id)}
+            machineName={machineName}
+            events={events}
+            siteConfig={siteConfig}
+            onView={handleViewReport}
+            onDownload={handleDownloadReport}
+            onShare={handleShareReport}
+            onOpenDispatch={async (row) => setReportPreview(await dispatchDayReport(row, activeSite))}
+          />
         )}
 
 
@@ -1293,39 +1274,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
           </div>
         )}
 
-        {tab === "reports" && (
-          <div className="space-y-3">
-            {signedReports.length === 0 ? (
-
-              <p className="text-sm text-[#F2F0EA]/40 text-center py-8">No signed reports for this period.</p>
-
-            ) : signedReports.map((r) => (
-
-              <SignedReportCard
-
-                key={r.id}
-
-                shift={r}
-
-                machineName={machineName(r.machine_id)}
-
-                events={events}
-
-                siteSettings={siteConfig}
-
-                onViewReport={handleViewReport}
-
-                onDownloadReport={handleDownloadReport}
-
-                onShareReport={handleShareReport}
-
-              />
-
-            ))}
-
-          </div>
-
-        )}
 
 
 

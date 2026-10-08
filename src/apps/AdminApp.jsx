@@ -47,7 +47,7 @@ const TABS = [
 
 
 
-const MANAGEABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES.MANAGER, ROLES.ADMIN, ROLES.DISPATCH];
+const MANAGEABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES.MANAGER, ROLES.ADMIN, ROLES.DISPATCH, ROLES.STOREROOM];
 
 
 
@@ -482,7 +482,7 @@ export function AdminApp() {
 
                     className="bg-[#0A0A0A] border border-[#2A2A2A] p-1 rounded font-logo text-[10px]">
 
-                    {MANAGEABLE_ROLES.map((r) => <option key={r} value={r}>{r === ROLES.DISPATCH ? "Dispatch" : r}</option>)}
+                    {MANAGEABLE_ROLES.map((r) => <option key={r} value={r}>{r === ROLES.DISPATCH ? "Dispatch" : r === ROLES.STOREROOM ? "Storeroom" : r}</option>)}
 
                   </select>
 
