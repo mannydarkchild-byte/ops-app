@@ -88,15 +88,35 @@ export function clampCycleDay(day) {
   return Math.min(28, Math.max(1, Math.round(n)));
 }
 
+/** One settings object per site. If sync left two rows, keep the filled-in values. */
+export function pickSiteSettings(rows, siteId) {
+  const matches = (rows || []).filter((row) => row?.site_id === siteId);
+  if (!matches.length) return resolveSiteSettings(defaultSiteSettings(siteId || "unknown"));
+  const sorted = [...matches].sort((a, b) => String(a.updated_at || "").localeCompare(String(b.updated_at || "")));
+  const merged = { site_id: siteId };
+  for (const row of sorted) {
+    for (const [key, value] of Object.entries(row)) {
+      if (value != null && value !== "") merged[key] = value;
+    }
+  }
+  return resolveSiteSettings(merged);
+}
+
+export function tonnesPerBucket(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function ensureSiteSettings(siteId) {
   if (!siteId) return resolveSiteSettings(defaultSiteSettings("unknown"));
   const all = await readTable("site_settings");
-  let row = all.find((s) => s.site_id === siteId);
-  if (!row) {
-    row = defaultSiteSettings(siteId);
+  const matches = all.filter((s) => s.site_id === siteId);
+  if (!matches.length) {
+    const row = defaultSiteSettings(siteId);
     await saveLocal("site_settings", { ...row, _sync_status: "synced" }, { enqueue: false });
+    return resolveSiteSettings(row);
   }
-  return resolveSiteSettings(row);
+  return pickSiteSettings(all, siteId);
 }
 
 export async function getPrestartConfigForSite(siteId) {

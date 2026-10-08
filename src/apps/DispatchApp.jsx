@@ -6,6 +6,7 @@ import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.j
 import { DispatchDayForm } from "../components/DispatchDayForm.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
+import { tonnesPerBucket } from "../lib/siteConfig.js";
 import { getSiteSupervisors, suggestSupervisor, localDayKey } from "../lib/utils.js";
 import { dispatchDayReport } from "../lib/dispatchReport.js";
 import { openWhatsApp } from "../lib/whatsapp.js";
@@ -31,8 +32,8 @@ export function DispatchApp() {
 
   const site = activeSite?.id ? activeSite : { id: siteId, name: "Site" };
   const factors = {
-    excavator_bucket_tonnes: siteConfig.excavator_bucket_tonnes,
-    fel_bucket_tonnes: siteConfig.fel_bucket_tonnes,
+    excavator_bucket_tonnes: tonnesPerBucket(siteConfig.excavator_bucket_tonnes),
+    fel_bucket_tonnes: tonnesPerBucket(siteConfig.fel_bucket_tonnes),
   };
 
   return (
@@ -49,8 +50,6 @@ export function DispatchApp() {
       {tab === "pulse" && <ProductivityPulseScreen embedded />}
       {tab === "reports" && <WorkHoursPanel />}
       {tab === "dispatch" && (
-        <div className="space-y-4">
-        <WorkHoursPanel variant="clock" />
         <DispatchDayForm
           records={siteDispatch}
           siteId={siteId}
@@ -71,7 +70,6 @@ export function DispatchApp() {
           }}
           onPreview={async (row) => setPreview(await dispatchDayReport({ ...row, dispatch_date: row.dispatch_date || localDayKey() }, site))}
         />
-        </div>
       )}
       {preview && (
         <ReportPreviewModal html={preview.html} title={preview.title} sheets={preview.sheets} onClose={() => setPreview(null)} />

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createSite, updateSite, updateSiteSettings } from "../../services/admin.js";
-import { resolveSiteSettings } from "../../lib/siteConfig.js";
+import { pickSiteSettings } from "../../lib/siteConfig.js";
 
 export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAlert }) {
   const [selectedId, setSelectedId] = useState(sites[0]?.id || "");
@@ -11,7 +11,7 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
 
   const selected = sites.find((s) => s.id === selectedId) || sites[0];
   const settings = useMemo(
-    () => resolveSiteSettings(siteSettings.find((s) => s.site_id === selected?.id)),
+    () => pickSiteSettings(siteSettings, selected?.id),
     [siteSettings, selected?.id]
   );
   const siteMachines = machines.filter((m) => m.site_id === selected?.id && m.active !== false);

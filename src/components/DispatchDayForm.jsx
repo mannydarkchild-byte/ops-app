@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { localDayKey } from "../lib/utils.js";
 import { bucketTonnes, DISPATCH_STATUS, dispatchStatus, previewFloor } from "../lib/dispatchMetrics.js";
 import { ShiftDispatchFields } from "./ShiftDispatchFields.jsx";
-import { SupervisorPicker } from "./SupervisorPicker.jsx";
 
 function dayRow(records, siteId, day) {
   return (records || []).find((row) => (!siteId || row.site_id === siteId) && String(row.dispatch_date).slice(0, 10) === day) || null;
@@ -70,7 +69,6 @@ export function DispatchDayForm({
   const dispatchedNow = tonnes === "" || tonnes == null || !Number.isFinite(Number(tonnes)) ? null : Number(tonnes);
   const floorPreview = previewFloor(records, siteId, date, felTonnes, dispatchedNow);
   const floor = floorPreview.closing;
-  const missingFactor = !Number(factors.excavator_bucket_tonnes) || !Number(factors.fel_bucket_tonnes);
 
   const run = async (key, fn) => {
     setBusy(key);
@@ -87,9 +85,11 @@ export function DispatchDayForm({
   return (
     <div className="space-y-4">
       <div>
-        <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">SITE DISPATCH</p>
+        <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">TODAY</p>
         <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">
-          One entry for the site on this day. Excavator buckets estimate tonnes screened. Tonnes on the floor are the previous stock, plus FEL bucket tonnes, minus the weighbridge tonnes dispatched.
+          {factors.excavator_bucket_tonnes && factors.fel_bucket_tonnes
+            ? `Excavator ${factors.excavator_bucket_tonnes} t a bucket · FEL ${factors.fel_bucket_tonnes} t a bucket.`
+            : "Bucket size is not on this phone yet. Tap Update after admin saves it."}
         </p>
       </div>
 
@@ -112,9 +112,6 @@ export function DispatchDayForm({
       )}
       {row?.supervisor_comment && status === DISPATCH_STATUS.DRAFT && (
         <p className="font-body text-sm text-[#F97316]">Sent back: {row.supervisor_comment}</p>
-      )}
-      {missingFactor && !locked && (
-        <p className="font-body text-sm text-[#F97316]">Admin still needs to set tonnes per excavator bucket and tonnes per FEL bucket. Counts can be saved, but the tonne estimates stay blank until then.</p>
       )}
 
       <div className="grid grid-cols-2 gap-2">
@@ -149,7 +146,19 @@ export function DispatchDayForm({
             onTrucks={setTrucks}
             onPhoto={(ref, data) => { setPhotoRef(ref); setPhotoPreview(data || null); }}
           />
-          <SupervisorPicker supervisors={supervisors} value={supervisorId} onChange={setSupervisorId} suggestedId={suggestedSupervisorId} title="WHO SIGNS THIS DAILY REPORT?" />
+          <label className="block">
+            <span className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider">SUPERVISOR</span>
+            <select
+              value={supervisorId}
+              onChange={(e) => setSupervisorId(e.target.value)}
+              className="mt-1 w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA]"
+            >
+              <option value="">Who signs this off</option>
+              {supervisors.map((person) => (
+                <option key={person.id} value={person.id}>{person.name}</option>
+              ))}
+            </select>
+          </label>
         </>
       )}
 

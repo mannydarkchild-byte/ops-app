@@ -37,27 +37,25 @@ export function ShiftDispatchFields({
     const pick = fromGallery ? pickGalleryPhoto : takePhoto;
     pick(({ ref, data }) => onPhoto(ref, data));
   };
-  const eachLabel = (n) => (Number(n) > 0 ? `${n} t each` : "Bucket size not set");
+  const eachLabel = (n) => (Number(n) > 0 ? `${n} t each` : "");
 
   return (
     <div className="space-y-3">
       <CountField
         label="EXCAVATOR BUCKETS"
-        hint={`Estimates tonnes screened. ${eachLabel(excavatorEach)}`}
+        hint={eachLabel(excavatorEach) ? `Screened · ${eachLabel(excavatorEach)}` : "Screened"}
         value={excavatorBuckets}
         onChange={onExcavator}
       />
       <CountField
         label="FEL BUCKETS"
-        hint={`Added to the floor stock. ${eachLabel(felEach)}`}
+        hint={eachLabel(felEach) ? `Onto the floor · ${eachLabel(felEach)}` : "Onto the floor"}
         value={felBuckets}
         onChange={onFel}
       />
       <div>
         <p className="font-logo text-[10px] text-[#F5C518] tracking-wider mb-1">WEIGHBRIDGE REPORT</p>
-        <p className="font-body text-sm text-[#F2F0EA]/70 mb-2">
-          Photograph the weighbridge report, then enter the tonnes and trucks it shows.
-        </p>
+        <p className="font-body text-sm text-[#F2F0EA]/70 mb-2">Photo of the weighbridge report, then the tonnes and trucks on it.</p>
         {photoPreview && (
           <img src={photoPreview} alt="Weighbridge report" className="w-full max-h-40 object-contain rounded-2xl bg-[#0A0A0A] mb-2" />
         )}
@@ -70,7 +68,7 @@ export function ShiftDispatchFields({
           </button>
         </div>
       </div>
-      <CountField label="TONNES DISPATCHED" hint="From the weighbridge. This comes off the floor." value={tonnes} onChange={onTonnes} step="0.01" placeholder="0.00" />
+      <CountField label="TONNES DISPATCHED" hint="Comes off the floor" value={tonnes} onChange={onTonnes} step="0.01" placeholder="0.00" />
       <CountField label="TRUCKS DISPATCHED" value={trucks} onChange={onTrucks} />
     </div>
   );

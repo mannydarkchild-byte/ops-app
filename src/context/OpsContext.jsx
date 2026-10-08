@@ -8,7 +8,7 @@ import { fetchMachineStatus, reconcileMachineOpenState } from "../lib/machineSta
 import { persistTheme, readTheme } from "../lib/theme.js";
 import { SHIFT } from "../lib/constants.js";
 import { seedLocalDefaults } from "../lib/seed.js";
-import { resolveSiteSettings, defaultSiteSettings } from "../lib/siteConfig.js";
+import { resolveSiteSettings, defaultSiteSettings, pickSiteSettings } from "../lib/siteConfig.js";
 
 const OpsContext = createContext(null);
 
@@ -129,10 +129,10 @@ export function OpsProvider({ children }) {
     };
   }, [machineStatus, user?.id, shifts, activeMachine?.id]);
 
-  const siteSettingsMap = useMemo(
-    () => Object.fromEntries(siteSettings.map((row) => [row.site_id, resolveSiteSettings(row)])),
-    [siteSettings]
-  );
+  const siteSettingsMap = useMemo(() => {
+    const ids = new Set((siteSettings || []).map((row) => row.site_id).filter(Boolean));
+    return Object.fromEntries([...ids].map((id) => [id, pickSiteSettings(siteSettings, id)]));
+  }, [siteSettings]);
 
   const getSettingsForSite = useCallback(
     (siteId) => siteSettingsMap[siteId] || resolveSiteSettings(defaultSiteSettings(siteId)),
