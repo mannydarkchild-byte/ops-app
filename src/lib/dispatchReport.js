@@ -61,7 +61,7 @@ export async function dispatchDayReport(row, site) {
     <div class="cell"><div class="label">WEIGHBRIDGE TONNES</div><div class="value">${esc(tonnesLabel(row?.tonnes_dispatched))}</div></div>
     <div class="cell"><div class="label">TRUCKS</div><div class="value">${row?.trucks_dispatched ?? "—"}</div></div>
     <div class="cell"><div class="label">SCREENED</div><div class="value">${esc(tonnesLabel(row?.tonnes_screened))}</div><div class="muted">${row?.excavator_buckets ?? "—"} excavator buckets${row?.excavator_bucket_tonnes ? ` × ${row.excavator_bucket_tonnes} t` : ""}</div></div>
-    <div class="cell"><div class="label">ON THE FLOOR</div><div class="value">${esc(tonnesLabel(row?.tonnes_on_floor))}</div><div class="muted">${row?.fel_buckets ?? "—"} FEL buckets${row?.fel_bucket_tonnes ? ` × ${row.fel_bucket_tonnes} t` : ""}</div></div>
+    <div class="cell"><div class="label">ON THE FLOOR</div><div class="value">${esc(tonnesLabel(row?.tonnes_on_floor))}</div><div class="muted">${row?.fel_buckets ?? "—"} FEL buckets${row?.fel_bucket_tonnes ? ` × ${row.fel_bucket_tonnes} t` : ""}, minus ${esc(tonnesLabel(row?.tonnes_dispatched))} dispatched</div></div>
   </div>
   ${photo ? `<img src="${photo}" alt="Weighbridge report"/>` : `<p class="muted">No weighbridge photo on this day.</p>`}
   ${row?.supervisor_comment ? `<p>Supervisor note: ${esc(row.supervisor_comment)}</p>` : ""}

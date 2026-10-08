@@ -20,6 +20,45 @@ export function bucketTonnes(buckets, factor) {
   return Math.round(count * each * 100) / 100;
 }
 
+function roundTonnes(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
+
+/** Closing stock: previous floor + FEL tonnes − weighbridge tonnes. */
+export function runningFloor(rows) {
+  const sorted = [...(rows || [])].sort((a, b) => dayKey(a.dispatch_date).localeCompare(dayKey(b.dispatch_date)));
+  let opening = 0;
+  return sorted.map((row) => {
+    const added = bucketTonnes(row.fel_buckets, row.fel_bucket_tonnes);
+    const removed = row.tonnes_dispatched == null || row.tonnes_dispatched === "" ? null : Number(row.tonnes_dispatched);
+    const canClose = added != null && Number.isFinite(removed);
+    const closing = canClose ? roundTonnes(opening + added - removed) : null;
+    const next = {
+      ...row,
+      floor_opening: opening,
+      floor_added: added,
+      floor_removed: Number.isFinite(removed) ? removed : null,
+      tonnes_on_floor: closing != null ? closing : row.tonnes_on_floor,
+    };
+    if (closing != null) opening = closing;
+    return next;
+  });
+}
+
+export function previewFloor(records, siteId, day, felTonnes, dispatchedTonnes) {
+  const prior = runningFloor(
+    (records || []).filter((row) => (!siteId || row.site_id === siteId) && dayKey(row.dispatch_date) < dayKey(day))
+  );
+  const last = [...prior].reverse().find((row) => row.floor_added != null && row.floor_removed != null);
+  const opening = last ? Number(last.tonnes_on_floor) || 0 : 0;
+  const added = felTonnes == null || !Number.isFinite(Number(felTonnes)) ? null : Number(felTonnes);
+  const removed = dispatchedTonnes == null || dispatchedTonnes === "" || !Number.isFinite(Number(dispatchedTonnes))
+    ? null
+    : Number(dispatchedTonnes);
+  const closing = added != null && removed != null ? roundTonnes(opening + added - removed) : null;
+  return { opening, added, removed, closing };
+}
+
 function dayKey(value) {
   return String(value || "").slice(0, 10);
 }
@@ -59,8 +98,8 @@ function dayDetail(row) {
 
 /** Site dispatch totals for a dashboard. Floor is the latest day, not a sum. */
 export function summarizeDispatch(records, siteId, period) {
-  const rows = (records || [])
-    .filter((row) => !siteId || row.site_id === siteId)
+  const balanced = runningFloor((records || []).filter((row) => !siteId || row.site_id === siteId));
+  const rows = balanced
     .filter((row) => dispatchInPeriod(row, period))
     .sort((a, b) => dayKey(a.dispatch_date).localeCompare(dayKey(b.dispatch_date)));
   const today = localDayKey();
@@ -116,12 +155,12 @@ export function summarizeDispatch(records, siteId, period) {
     floor: {
       title: "Tonnes on the floor",
       scope: latest ? dayKey(latest.dispatch_date) : "No entry",
-      note: "FEL buckets × the tonnes per bucket for the latest day in this cycle. Days are not added together.",
+      note: "Closing stock for the latest day: the previous floor, plus FEL bucket tonnes, minus weighbridge tonnes dispatched. Days are not added together.",
       total: tonnesLabel(floor),
       rows: [...rows].reverse().map((row) => ({
         id: row.id,
         title: dayKey(row.dispatch_date),
-        detail: `${row.fel_buckets ?? "—"} FEL buckets${row.fel_bucket_tonnes ? ` × ${row.fel_bucket_tonnes} t` : ""}`,
+        detail: `Opened ${tonnesLabel(row.floor_opening)} + ${tonnesLabel(row.floor_added)} FEL − ${tonnesLabel(row.floor_removed)} dispatched`,
         value: tonnesLabel(row.tonnes_on_floor),
         emphasis: row.id === latest?.id,
       })),

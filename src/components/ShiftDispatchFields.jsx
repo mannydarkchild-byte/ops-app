@@ -49,7 +49,7 @@ export function ShiftDispatchFields({
       />
       <CountField
         label="FEL BUCKETS"
-        hint={`Estimates tonnes on the floor. ${eachLabel(felEach)}`}
+        hint={`Added to the floor stock. ${eachLabel(felEach)}`}
         value={felBuckets}
         onChange={onFel}
       />
@@ -70,7 +70,7 @@ export function ShiftDispatchFields({
           </button>
         </div>
       </div>
-      <CountField label="TONNES DISPATCHED" hint="From the weighbridge" value={tonnes} onChange={onTonnes} step="0.01" placeholder="0.00" />
+      <CountField label="TONNES DISPATCHED" hint="From the weighbridge. This comes off the floor." value={tonnes} onChange={onTonnes} step="0.01" placeholder="0.00" />
       <CountField label="TRUCKS DISPATCHED" value={trucks} onChange={onTrucks} />
     </div>
   );

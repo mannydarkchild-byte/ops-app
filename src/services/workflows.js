@@ -8,7 +8,7 @@ import { localDayKey, makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
 import { ensureSiteSettings, prestartItemsForMachine, inspectionGroupsForMachine, getMechanicItemsFromGroups } from "../lib/siteConfig.js";
 import { fetchServerOpenShift } from "../lib/machineStatus.js";
-import { bucketTonnes, DISPATCH_STATUS, dispatchStatus } from "../lib/dispatchMetrics.js";
+import { bucketTonnes, DISPATCH_STATUS, dispatchStatus, previewFloor } from "../lib/dispatchMetrics.js";
 import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
 
 const actionInflight = new Map();
@@ -1172,7 +1172,7 @@ function readDispatch(dispatch, factors = {}, { requireComplete = false } = {}) 
     excavator_bucket_tonnes: excavatorEach,
     fel_bucket_tonnes: felEach,
     tonnes_screened: bucketTonnes(excavatorBuckets, excavatorEach),
-    tonnes_on_floor: bucketTonnes(felBuckets, felEach),
+    fel_tonnes: bucketTonnes(felBuckets, felEach),
     weighbridge_photo_ref: dispatch?.photoRef || null,
   };
 }
@@ -1181,6 +1181,9 @@ async function writeDispatchRow(user, site, dispatch, factors, { requireComplete
   if (!site?.id) throw new Error("No site");
   const fields = readDispatch(dispatch, factors, { requireComplete });
   const day = dispatch.date || localDayKey();
+  const balance = previewFloor(await readTable("site_dispatch"), site.id, day, fields.fel_tonnes, fields.tonnes_dispatched);
+  fields.tonnes_on_floor = balance.closing;
+  delete fields.fel_tonnes;
   const now = nowISO();
   const id = `DSP-${site.id}-${day}`;
   const existing = (await readTable("site_dispatch")).find((row) => row.id === id) || null;

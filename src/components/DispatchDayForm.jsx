@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { localDayKey } from "../lib/utils.js";
-import { bucketTonnes, DISPATCH_STATUS, dispatchStatus } from "../lib/dispatchMetrics.js";
+import { bucketTonnes, DISPATCH_STATUS, dispatchStatus, previewFloor } from "../lib/dispatchMetrics.js";
 import { ShiftDispatchFields } from "./ShiftDispatchFields.jsx";
 import { SupervisorPicker } from "./SupervisorPicker.jsx";
 
@@ -66,7 +66,10 @@ export function DispatchDayForm({
     photoRef,
   };
   const screened = bucketTonnes(excavatorBuckets, factors.excavator_bucket_tonnes);
-  const floor = bucketTonnes(felBuckets, factors.fel_bucket_tonnes);
+  const felTonnes = bucketTonnes(felBuckets, factors.fel_bucket_tonnes);
+  const dispatchedNow = tonnes === "" || tonnes == null || !Number.isFinite(Number(tonnes)) ? null : Number(tonnes);
+  const floorPreview = previewFloor(records, siteId, date, felTonnes, dispatchedNow);
+  const floor = floorPreview.closing;
   const missingFactor = !Number(factors.excavator_bucket_tonnes) || !Number(factors.fel_bucket_tonnes);
 
   const run = async (key, fn) => {
@@ -86,7 +89,7 @@ export function DispatchDayForm({
       <div>
         <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">SITE DISPATCH</p>
         <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">
-          One entry for the site on this day. Bucket counts estimate screened tonnes and tonnes on the floor. The weighbridge photo is the dispatched total.
+          One entry for the site on this day. Excavator buckets estimate tonnes screened. Tonnes on the floor are the previous stock, plus FEL bucket tonnes, minus the weighbridge tonnes dispatched.
         </p>
       </div>
 
@@ -122,6 +125,11 @@ export function DispatchDayForm({
         <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3">
           <p className="font-logo text-[10px] text-[#F2F0EA]/45">ON THE FLOOR</p>
           <p className="font-logo text-lg text-[#F2F0EA]">{floor == null ? "—" : `${floor.toLocaleString("en-US")} t`}</p>
+          <p className="font-body text-[10px] text-[#F2F0EA]/45 mt-1">
+            {`${floorPreview.opening.toLocaleString("en-US")} t opened`}
+            {floorPreview.added == null ? "" : ` + ${floorPreview.added.toLocaleString("en-US")} FEL`}
+            {floorPreview.removed == null ? "" : ` − ${floorPreview.removed.toLocaleString("en-US")} dispatched`}
+          </p>
         </div>
       </div>
 

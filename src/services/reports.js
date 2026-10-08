@@ -472,7 +472,7 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
         <div class="summary-cell">
           <div class="label">On the floor</div>
           <div class="value font-brand">${formatTonnes(siteDispatch.tonnes_on_floor)}</div>
-          <div class="sub">${siteDispatch.tonnes_on_floor == null ? "No estimate" : "FEL bucket estimate"}</div>
+          <div class="sub">${siteDispatch.tonnes_on_floor == null ? "No stock yet" : "Previous floor + FEL − dispatched"}</div>
         </div>
       </div>
       ${weighbridgePhotoUrl ? `<img src="${esc(weighbridgePhotoUrl)}" alt="Weighbridge report" style="max-width:100%;max-height:320px;object-fit:contain;border-radius:12px;border:1px solid #E8E6E0"/>` : ""}
