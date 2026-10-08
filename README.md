@@ -1,16 +1,32 @@
-# React + Vite
+# OPS (ops-app)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Field ops PWA — React + Vite + Supabase.
 
-Currently, two official plugins are available:
+## Local setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+cp .env.example .env
+# Fill VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from Supabase → Project Settings → API
+npm install
+npm run dev
+```
 
-## React Compiler
+## Vercel environment variables (required)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Vite bakes `VITE_*` into the client **at build time**. If these are missing on a Preview or Production deploy, the app used to boot into a blank black screen; it now shows a setup screen instead. Login still will not work until the vars are set and the deployment is rebuilt.
 
-## Expanding the Oxlint configuration
+In **Vercel → Project → Settings → Environment Variables**, set for **Production** and **Preview** (and Development if you use `vercel dev`):
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+| Name | Value |
+| --- | --- |
+| `VITE_SUPABASE_URL` | `https://YOUR-PROJECT-REF.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Supabase **anon/public** key (never the service role) |
+
+Then **Redeploy** the affected deployment (or push a new commit). Changing env alone does not update an already-built Preview.
+
+## Scripts
+
+- `npm run dev` — local Vite
+- `npm run build` — production build
+- `npm run lint` — Oxlint
+- `npm run preview` — serve `dist/`

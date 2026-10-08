@@ -9,7 +9,9 @@ import { AdminApp } from "./apps/AdminApp.jsx";
 import { DispatchApp } from "./apps/DispatchApp.jsx";
 import { StoreroomApp } from "./apps/StoreroomApp.jsx";
 import { LandingPage } from "./components/LandingPage.jsx";
+import { ConfigMissingScreen } from "./components/ConfigMissingScreen.jsx";
 import { ROLES } from "./lib/constants.js";
+import { supabaseConfigError } from "./lib/supabase.js";
 
 const VERIFY_ONCE_KEY = "ops_verify_once";
 
@@ -157,6 +159,14 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  if (supabaseConfigError) {
+    return (
+      <ErrorBoundary>
+        <ConfigMissingScreen error={supabaseConfigError} />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <OpsProvider>
