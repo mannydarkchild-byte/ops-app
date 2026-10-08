@@ -17,6 +17,7 @@ import { shiftNameLines } from "../lib/shiftPeople.js";
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
 import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
+import { DispatchKpis } from "../components/DispatchKpis.jsx";
 import {
   fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
@@ -496,6 +497,8 @@ export function ManagerApp() {
                 onClick={() => setKpiDetail(cycleStats.details.net)}
               />
             </div>
+
+            <DispatchKpis records={siteDispatch} siteId={user?.site_id || activeSite?.id} period={billingPeriod} onOpen={setKpiDetail} />
 
             {fleetStatus && <WarriorStatusCard fleet={fleetStatus} workSessions={workSessions} profiles={profiles} />}
 

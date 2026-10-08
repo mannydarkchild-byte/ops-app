@@ -17,6 +17,8 @@ import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
 import { DashboardKpi, KpiDetailModal, MachineSelect } from "../components/DashboardKpi.jsx";
+import { DispatchKpis } from "../components/DispatchKpis.jsx";
+import { DispatchSignoffList } from "../components/DispatchSignoffList.jsx";
 
 import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, onSiteRecord, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
 
@@ -28,6 +30,8 @@ import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { dispatchDayReport } from "../lib/dispatchReport.js";
+import { DISPATCH_STATUS, dispatchStatus } from "../lib/dispatchMetrics.js";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
 
@@ -36,7 +40,6 @@ import * as wf from "../services/workflows.js";
 import { AlertModal, Modal } from "../components/ui/Modal.jsx";
 
 import { SignaturePad } from "../components/ui/SignaturePad.jsx";
-import { SiteDispatchCard } from "../components/SiteDispatchCard.jsx";
 
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
@@ -113,6 +116,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const [alert, setAlert] = useState({ isOpen: false });
   const [kpiDetail, setKpiDetail] = useState(null);
   const [reportPreview, setReportPreview] = useState(null);
+  const [dispatchBusy, setDispatchBusy] = useState(null);
   const [showExpenses, setShowExpenses] = useState(false);
   const [closeShift, setCloseShift] = useState(null);
   const [closeMeter, setCloseMeter] = useState("");
@@ -260,6 +264,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
   const myPendingVerify = pendingShifts.filter((s) => s.assigned_supervisor_id === user?.id).length;
+  const dispatchWaiting = (siteDispatch || []).filter((row) => row.site_id === user?.site_id && row.assigned_supervisor_id === user?.id && dispatchStatus(row) === DISPATCH_STATUS.WAITING).length;
 
   const myAwaitingCorrection = awaitingCorrectionShifts.filter((s) => s.assigned_supervisor_id === user?.id).length;
 
@@ -758,9 +763,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const tabItems = useMemo(
     () => TABS.map((t) => ({
       ...t,
-      badge: t.id === "live" ? openShiftsToClose.length : t.id === "verify" ? myPendingVerify : t.id === "issues" ? openSiteIssues.length : 0,
+      badge: t.id === "live" ? openShiftsToClose.length : t.id === "verify" ? myPendingVerify + dispatchWaiting : t.id === "issues" ? openSiteIssues.length : 0,
     })),
-    [openShiftsToClose.length, myPendingVerify, openSiteIssues.length]
+    [openShiftsToClose.length, myPendingVerify, dispatchWaiting, openSiteIssues.length]
   );
 
   const beginCloseShift = (shift) => {
@@ -876,7 +881,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
               onClick={() => setKpiDetail({
                 title: "To sign off",
                 scope: "Assigned to you",
-                note: "These shifts are waiting for your signature. The weighbridge is entered separately on Live.",
+                note: "These shifts are waiting for your signature. The daily dispatch report is signed off in the same tab.",
                 total: String(myPendingVerify),
                 rows: pendingShifts.filter((s) => s.assigned_supervisor_id === user?.id).map((s) => ({
                   id: s.id,
@@ -899,6 +904,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
             <DashboardKpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.diesel)} />
             <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Stopped time on this machine" color="#EF4444" onClick={() => setKpiDetail(dashboardDetails.downtime)} />
             </div>
+            <DispatchKpis records={siteDispatch} siteId={user?.site_id} period={billingPeriod} onOpen={setKpiDetail} />
           </div>
         )}
 
@@ -951,15 +957,6 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
         {tab === "live" && (
 
           <div className="space-y-4">
-
-            <SiteDispatchCard
-              records={siteDispatch}
-              siteId={activeSite?.id}
-              onSave={async (fields) => {
-                await wf.saveSiteDispatch(user, activeSite, fields);
-                await refreshLocal();
-              }}
-            />
 
             {openShiftsToClose.length > 0 && (
               <div className="border-2 border-[#F5C518] bg-[#2a2208] rounded-2xl p-4 space-y-3">
@@ -1061,6 +1058,38 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
         {tab === "verify" && (
 
           <div className="space-y-3">
+
+            <DispatchSignoffList
+              rows={(siteDispatch || []).filter((row) => row.site_id === user?.site_id && row.assigned_supervisor_id === user?.id)}
+              busyId={dispatchBusy}
+              onPreview={async (row) => setReportPreview(await dispatchDayReport(row, activeSite))}
+              onSign={async (row) => {
+                setDispatchBusy(row.id);
+                try {
+                  await wf.signSiteDispatch(user, row);
+                  await refreshLocal();
+                  showAlert("Signed", `Dispatch for ${String(row.dispatch_date).slice(0, 10)} is signed off.`, "success");
+                } catch (e) {
+                  showAlert("Could not sign", e.message, "error");
+                } finally {
+                  setDispatchBusy(null);
+                }
+              }}
+              onReturn={async (row) => {
+                const note = window.prompt("What should Dispatch correct?");
+                if (note == null) return;
+                setDispatchBusy(row.id);
+                try {
+                  await wf.returnSiteDispatch(user, row, note);
+                  await refreshLocal();
+                  showAlert("Sent back", "Dispatch can edit that day again.", "success");
+                } catch (e) {
+                  showAlert("Could not send back", e.message, "error");
+                } finally {
+                  setDispatchBusy(null);
+                }
+              }}
+            />
 
             <div className="flex gap-1 mb-2">
 

@@ -19,6 +19,7 @@ import { computeAdminDashboard, formatAdminMetric } from "../lib/adminMetrics.js
 import { formatDurationMinutes, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
 import { DashboardKpi, KpiDetailModal, MachineSelect } from "../components/DashboardKpi.jsx";
+import { DispatchKpis } from "../components/DispatchKpis.jsx";
 
 import { getBillingPeriod, inPeriod, money, shiftBillableValue } from "../lib/utils.js";
 
@@ -46,7 +47,7 @@ const TABS = [
 
 
 
-const MANAGEABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES.MANAGER, ROLES.ADMIN];
+const MANAGEABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES.MANAGER, ROLES.ADMIN, ROLES.DISPATCH];
 
 
 
@@ -55,7 +56,7 @@ export function AdminApp() {
   const {
     user, profiles, machines, sites, activeSite, activeMachine, syncState, syncNow, refreshLocal,
     shifts, events, expenses, fuelLogs, issues, inspections, maintenanceJobs, breakdowns, workSessions,
-    siteSettings, getSettingsForSite,
+    siteSettings, siteDispatch, getSettingsForSite,
   } = useOps();
 
   const [tab, setTab] = useState("dashboard");
@@ -288,6 +289,8 @@ export function AdminApp() {
               <DashboardKpi label={HOUR_LABELS.diesel} value={formatAdminMetric(machineDash.litres, "litres")} sub={machineDash.machineHours > 0 ? `${(machineDash.litres / machineDash.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(machineDash.details.diesel)} />
             </div>
 
+            <DispatchKpis records={siteDispatch} siteId={activeSite?.id} period={billingPeriod} onOpen={setKpiDetail} />
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <DashboardKpi label="Pending sign-off" value={dashboard.overview.pendingVerify} sub="All machines · awaiting supervisor" color="#00A4A6" />
               <DashboardKpi label="Open problems" value={dashboard.overview.openIssues} sub={`${dashboard.overview.criticalIssues} critical · all machines`} color="#EF4444" />
@@ -479,7 +482,7 @@ export function AdminApp() {
 
                     className="bg-[#0A0A0A] border border-[#2A2A2A] p-1 rounded font-logo text-[10px]">
 
-                    {MANAGEABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                    {MANAGEABLE_ROLES.map((r) => <option key={r} value={r}>{r === ROLES.DISPATCH ? "Dispatch" : r}</option>)}
 
                   </select>
 

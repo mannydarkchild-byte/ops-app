@@ -8,6 +8,7 @@ import { localDayKey, makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
 import { ensureSiteSettings, prestartItemsForMachine, inspectionGroupsForMachine, getMechanicItemsFromGroups } from "../lib/siteConfig.js";
 import { fetchServerOpenShift } from "../lib/machineStatus.js";
+import { bucketTonnes, DISPATCH_STATUS, dispatchStatus } from "../lib/dispatchMetrics.js";
 import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
 
 const actionInflight = new Map();
@@ -1140,52 +1141,126 @@ export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, rea
   return patch;
 }
 
-function readDispatch(dispatch) {
-  if (!dispatch?.photoRef) throw new Error("Photograph the weighbridge report.");
-  const tonnes = Number(dispatch.tonnes);
-  const trucks = Number(dispatch.trucks);
-  if (dispatch.tonnes === "" || dispatch.tonnes == null || !Number.isFinite(tonnes) || tonnes < 0) {
-    throw new Error("Enter the total tonnes dispatched.");
+function wholeCount(value, label, required) {
+  if (value === "" || value == null) {
+    if (required) throw new Error(`Enter the ${label}.`);
+    return null;
   }
-  if (dispatch.trucks === "" || dispatch.trucks == null || !Number.isInteger(trucks) || trucks < 0) {
-    throw new Error("Enter the number of trucks.");
-  }
-  const floorBlank = dispatch.floorTonnes === "" || dispatch.floorTonnes == null;
-  const floor = floorBlank ? null : Number(dispatch.floorTonnes);
-  if (!floorBlank && (!Number.isFinite(floor) || floor < 0)) {
-    throw new Error("Enter the floor estimate as a number, or leave it blank.");
-  }
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0) throw new Error(`${label} must be a whole number.`);
+  return n;
+}
+
+function readDispatch(dispatch, factors = {}, { requireComplete = false } = {}) {
+  if (requireComplete && !dispatch?.photoRef) throw new Error("Photograph the weighbridge report.");
+  const tonnesBlank = dispatch?.tonnes === "" || dispatch?.tonnes == null;
+  const tonnes = tonnesBlank ? null : Number(dispatch.tonnes);
+  if (requireComplete && tonnesBlank) throw new Error("Enter the total tonnes dispatched.");
+  if (!tonnesBlank && (!Number.isFinite(tonnes) || tonnes < 0)) throw new Error("Enter the total tonnes dispatched.");
+  const trucks = wholeCount(dispatch?.trucks, "number of trucks", requireComplete);
+  const excavatorBuckets = wholeCount(dispatch?.excavatorBuckets, "excavator buckets", requireComplete);
+  const felBuckets = wholeCount(dispatch?.felBuckets, "FEL buckets", requireComplete);
+  const excavatorFactor = Number(factors.excavator_bucket_tonnes);
+  const felFactor = Number(factors.fel_bucket_tonnes);
+  const excavatorEach = Number.isFinite(excavatorFactor) && excavatorFactor > 0 ? excavatorFactor : null;
+  const felEach = Number.isFinite(felFactor) && felFactor > 0 ? felFactor : null;
   return {
     tonnes_dispatched: tonnes,
     trucks_dispatched: trucks,
-    tonnes_on_floor: floor,
-    weighbridge_photo_ref: dispatch.photoRef,
+    excavator_buckets: excavatorBuckets,
+    fel_buckets: felBuckets,
+    excavator_bucket_tonnes: excavatorEach,
+    fel_bucket_tonnes: felEach,
+    tonnes_screened: bucketTonnes(excavatorBuckets, excavatorEach),
+    tonnes_on_floor: bucketTonnes(felBuckets, felEach),
+    weighbridge_photo_ref: dispatch?.photoRef || null,
   };
 }
 
-/** One weighbridge entry for the site on a calendar day. Updating the same day replaces it. */
-export async function saveSiteDispatch(user, site, dispatch) {
+async function writeDispatchRow(user, site, dispatch, factors, { requireComplete = false, patch = {} } = {}) {
   if (!site?.id) throw new Error("No site");
-  const fields = readDispatch(dispatch);
+  const fields = readDispatch(dispatch, factors, { requireComplete });
   const day = dispatch.date || localDayKey();
   const now = nowISO();
   const id = `DSP-${site.id}-${day}`;
   const existing = (await readTable("site_dispatch")).find((row) => row.id === id) || null;
+  if (existing && dispatchStatus(existing) !== DISPATCH_STATUS.DRAFT) {
+    throw new Error("This day has been sent. The supervisor must send it back before it can change.");
+  }
   const row = {
     ...(existing || {}),
     id,
     site_id: site.id,
     dispatch_date: day,
     ...fields,
-    recorded_by: user?.id || null,
-    recorded_by_name: user?.name || null,
+    status: existing?.status || DISPATCH_STATUS.DRAFT,
+    recorded_by: user?.id || existing?.recorded_by || null,
+    recorded_by_name: user?.name || existing?.recorded_by_name || null,
     created_at: existing?.created_at || now,
     updated_at: now,
+    ...patch,
     _sync_status: "pending",
   };
   await saveLocal("site_dispatch", row);
   scheduleSync();
   return row;
+}
+
+/** Save the site's dispatch for one day. A sent or signed day stays locked. */
+export async function saveSiteDispatch(user, site, dispatch, factors) {
+  return writeDispatchRow(user, site, dispatch, factors);
+}
+
+/** Send the day's dispatch to a supervisor for sign-off. */
+export async function submitSiteDispatch(user, site, dispatch, factors, supervisor) {
+  if (!supervisor?.id) throw new Error("Choose the supervisor who will sign this off");
+  const now = nowISO();
+  return writeDispatchRow(user, site, dispatch, factors, {
+    requireComplete: true,
+    patch: {
+      status: DISPATCH_STATUS.WAITING,
+      assigned_supervisor_id: supervisor.id,
+      assigned_supervisor_name: supervisor.name,
+      submitted_at: now,
+      signed_at: null,
+      signed_by: null,
+      signed_by_name: null,
+      supervisor_comment: null,
+    },
+  });
+}
+
+export async function signSiteDispatch(user, row) {
+  if (dispatchStatus(row) !== DISPATCH_STATUS.WAITING) throw new Error("This report is not waiting for sign-off");
+  const now = nowISO();
+  const signed = {
+    ...row,
+    status: DISPATCH_STATUS.SIGNED,
+    signed_at: now,
+    signed_by: user?.id || null,
+    signed_by_name: user?.name || null,
+    updated_at: now,
+    _sync_status: "pending",
+  };
+  await saveLocal("site_dispatch", signed);
+  scheduleSync();
+  return signed;
+}
+
+export async function returnSiteDispatch(user, row, note = "") {
+  if (dispatchStatus(row) !== DISPATCH_STATUS.WAITING) throw new Error("This report is not waiting for sign-off");
+  const now = nowISO();
+  const returned = {
+    ...row,
+    status: DISPATCH_STATUS.DRAFT,
+    submitted_at: null,
+    supervisor_comment: note?.trim() || "Sent back",
+    updated_at: now,
+    _sync_status: "pending",
+  };
+  await saveLocal("site_dispatch", returned);
+  scheduleSync();
+  return returned;
 }
 
 export async function verifyShift(shift, supervisor, options) {

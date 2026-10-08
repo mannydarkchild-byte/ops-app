@@ -10,6 +10,7 @@ const ROLE_COLORS = {
   supervisor: { dot: "bg-ops-gold", text: "text-ops-gold" },
   manager: { dot: "bg-ops-orange", text: "text-ops-orange" },
   admin: { dot: "bg-ops-red", text: "text-ops-red" },
+  dispatch: { dot: "bg-ops-gold", text: "text-ops-gold" },
 };
 
 const SYNC_META = {
@@ -317,6 +318,9 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
 
 function TabGlyph({ id }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
+  if (id === "dispatch") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M3 7h13l5 5-5 5H3z" /><path d="M8 12h6" /></svg>;
+  }
   if (id === "pulse") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M3 12h4l2-6 4 12 2-6h6" /></svg>;
   }

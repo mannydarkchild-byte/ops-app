@@ -22,6 +22,8 @@ export function defaultSiteSettings(siteId) {
     site_id: siteId,
     billing_cycle_start_day: DEFAULT_BILLING_CYCLE_START_DAY,
     primary_machine_id: null,
+    excavator_bucket_tonnes: null,
+    fel_bucket_tonnes: null,
     prestart_items: [...PRESTART_INSPECTION_ITEMS],
     earthmoving_prestart_items: [...EARTHMOVING_PRESTART_ITEMS],
     prestart_status_options: [...PRESTART_STATUS_OPTIONS],

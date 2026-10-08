@@ -465,9 +465,14 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
           <div class="sub">Weighbridge count</div>
         </div>
         <div class="summary-cell">
+          <div class="label">Screened</div>
+          <div class="value font-brand">${formatTonnes(siteDispatch.tonnes_screened)}</div>
+          <div class="sub">${siteDispatch.excavator_buckets == null ? "No excavator buckets" : `${siteDispatch.excavator_buckets} excavator buckets`}</div>
+        </div>
+        <div class="summary-cell">
           <div class="label">On the floor</div>
           <div class="value font-brand">${formatTonnes(siteDispatch.tonnes_on_floor)}</div>
-          <div class="sub">${siteDispatch.tonnes_on_floor == null ? "No estimate" : "Supervisor estimate"}</div>
+          <div class="sub">${siteDispatch.tonnes_on_floor == null ? "No estimate" : "FEL bucket estimate"}</div>
         </div>
       </div>
       ${weighbridgePhotoUrl ? `<img src="${esc(weighbridgePhotoUrl)}" alt="Weighbridge report" style="max-width:100%;max-height:320px;object-fit:contain;border-radius:12px;border:1px solid #E8E6E0"/>` : ""}
@@ -629,7 +634,10 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
         ["Downtime (min)", Number(shift.downtime_minutes || 0)],
         ["Site tonnes dispatched", siteDispatch?.tonnes_dispatched ?? ""],
         ["Site trucks", siteDispatch?.trucks_dispatched ?? ""],
+        ["Site tonnes screened", siteDispatch?.tonnes_screened ?? ""],
+        ["Excavator buckets", siteDispatch?.excavator_buckets ?? ""],
         ["Site tonnes on the floor", siteDispatch?.tonnes_on_floor ?? ""],
+        ["FEL buckets", siteDispatch?.fel_buckets ?? ""],
       ],
     },
     { name: "Events", rows: [["Time", "Event", "Detail", "Duration"], ...timeline] },
@@ -847,8 +855,8 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
     <section>
       <h2>Site dispatch</h2>
       <p class="note">One weighbridge entry per day for the site.</p>
-      <table><thead><tr><th>Date</th><th>Tonnes</th><th>Trucks</th><th>On the floor</th><th>Recorded by</th></tr></thead><tbody>
-${(data?.dispatches || []).filter((row) => inRange(row.dispatch_date)).map((row) => `<tr><td>${esc(String(row.dispatch_date || "").slice(0, 10))}</td><td>${formatTonnes(row.tonnes_dispatched)}</td><td>${row.trucks_dispatched ?? "—"}</td><td>${row.tonnes_on_floor == null ? "—" : formatTonnes(row.tonnes_on_floor)}</td><td>${esc(row.recorded_by_name || "—")}</td></tr>`).join("") || '<tr class="empty"><td colspan="5">No dispatch recorded in this period</td></tr>'}
+      <table><thead><tr><th>Date</th><th>Tonnes</th><th>Trucks</th><th>Screened</th><th>Excavator buckets</th><th>On the floor</th><th>FEL buckets</th><th>Recorded by</th></tr></thead><tbody>
+${(data?.dispatches || []).filter((row) => inRange(row.dispatch_date)).map((row) => `<tr><td>${esc(String(row.dispatch_date || "").slice(0, 10))}</td><td>${formatTonnes(row.tonnes_dispatched)}</td><td>${row.trucks_dispatched ?? "—"}</td><td>${row.tonnes_screened == null ? "—" : formatTonnes(row.tonnes_screened)}</td><td>${row.excavator_buckets ?? "—"}</td><td>${row.tonnes_on_floor == null ? "—" : formatTonnes(row.tonnes_on_floor)}</td><td>${row.fel_buckets ?? "—"}</td><td>${esc(row.recorded_by_name || "—")}</td></tr>`).join("") || '<tr class="empty"><td colspan="8">No dispatch recorded in this period</td></tr>'}
       </tbody></table>
     </section>
 
@@ -1050,14 +1058,17 @@ export async function prepareOperationsReport(data, period, machine, site) {
     {
       name: "Dispatch",
       rows: [
-        ["Date", "Tonnes dispatched", "Trucks", "Tonnes on the floor", "Recorded by"],
+        ["Date", "Tonnes dispatched", "Trucks", "Tonnes screened", "Excavator buckets", "Tonnes on the floor", "FEL buckets", "Recorded by"],
         ...(data?.dispatches || [])
           .filter((row) => inPeriod(row.dispatch_date, period))
           .map((row) => [
             String(row.dispatch_date || "").slice(0, 10),
             row.tonnes_dispatched ?? "",
             row.trucks_dispatched ?? "",
+            row.tonnes_screened ?? "",
+            row.excavator_buckets ?? "",
             row.tonnes_on_floor ?? "",
+            row.fel_buckets ?? "",
             row.recorded_by_name || "",
           ]),
       ],

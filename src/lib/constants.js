@@ -6,6 +6,7 @@ export const ROLES = {
   SUPERVISOR: "supervisor",
   MANAGER: "manager",
   ADMIN: "admin",
+  DISPATCH: "dispatch",
 };
 
 export const SHIFT = {
@@ -262,8 +263,8 @@ export const ALLOWED_COLUMNS = {
   maintenance_parts: ["id", "maintenance_job_id", "inventory_item_id", "part_name", "quantity", "notes", "created_at"],
   inventory_items: ["id", "site_id", "sku", "name", "category", "quantity_on_hand", "unit", "reorder_level", "created_at", "updated_at"],
   inventory_movements: ["id", "site_id", "inventory_item_id", "maintenance_job_id", "quantity_change", "reason", "performed_by", "performed_by_name", "created_at"],
-  site_settings: ["id", "site_id", "billing_cycle_start_day", "primary_machine_id", "prestart_items", "earthmoving_prestart_items", "prestart_status_options", "inspection_groups", "earthmoving_inspection_groups", "stop_reasons", "created_at", "updated_at"],
-  site_dispatch: ["id", "site_id", "dispatch_date", "tonnes_dispatched", "trucks_dispatched", "tonnes_on_floor", "weighbridge_photo", "recorded_by", "recorded_by_name", "created_at", "updated_at"],
+  site_settings: ["id", "site_id", "billing_cycle_start_day", "primary_machine_id", "excavator_bucket_tonnes", "fel_bucket_tonnes", "prestart_items", "earthmoving_prestart_items", "prestart_status_options", "inspection_groups", "earthmoving_inspection_groups", "stop_reasons", "created_at", "updated_at"],
+  site_dispatch: ["id", "site_id", "dispatch_date", "tonnes_dispatched", "trucks_dispatched", "tonnes_on_floor", "tonnes_screened", "excavator_buckets", "fel_buckets", "excavator_bucket_tonnes", "fel_bucket_tonnes", "weighbridge_photo", "recorded_by", "recorded_by_name", "status", "assigned_supervisor_id", "assigned_supervisor_name", "submitted_at", "signed_at", "signed_by", "signed_by_name", "supervisor_comment", "created_at", "updated_at"],
 };
 
 /** Operator pre-start checklist (14 items) — before starting machine */

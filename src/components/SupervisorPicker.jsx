@@ -3,7 +3,7 @@ import { buildSupervisorVerifyWhatsApp, openWhatsApp } from "../lib/whatsapp.js"
 const BAND_LABEL = { day: "Day shift", night: "Night shift", any: "All shifts" };
 
 /** Large tap targets — pick supervisor on duty for this shift */
-export function SupervisorPicker({ supervisors, value, onChange, suggestedId = null }) {
+export function SupervisorPicker({ supervisors, value, onChange, suggestedId = null, title = "WHO IS SUPERVISING THIS SHIFT?" }) {
   if (!supervisors.length) {
     return (
       <p className="font-body text-sm text-ops-text py-2">
@@ -14,7 +14,7 @@ export function SupervisorPicker({ supervisors, value, onChange, suggestedId = n
 
   return (
     <div className="space-y-2">
-      <p className="font-logo text-xs text-[#F2F0EA]/90 tracking-wider mb-2">WHO IS SUPERVISING THIS SHIFT?</p>
+      <p className="font-logo text-xs text-[#F2F0EA]/90 tracking-wider mb-2">{title}</p>
       {supervisors.map((sup) => {
         const selected = value === sup.id;
         const suggested = sup.id === suggestedId;
