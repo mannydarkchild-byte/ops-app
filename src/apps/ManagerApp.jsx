@@ -25,6 +25,7 @@ import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
@@ -480,6 +481,7 @@ export function ManagerApp() {
 
         {tab === "overview" && (
           <div className="space-y-4">
+            <WorkHoursPanel variant="clock" />
             <p className="font-body text-xs text-[#F2F0EA]/50">{primaryMachine?.name || "This machine"} · {billingPeriod.label}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <DashboardKpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts started · 8h minus Darkchild downtime`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.billable)} />
@@ -677,6 +679,7 @@ export function ManagerApp() {
 
         {tab === "reports" && (
           <div className="space-y-4">
+            <WorkHoursPanel />
             <p className="font-body text-sm text-[#F2F0EA]/70">Money and hours for the selected machine, then the signed shift reports underneath.</p>
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
               <h3 className="font-logo text-[#F5C518] text-sm mb-3">OPERATIONS REPORT</h3>

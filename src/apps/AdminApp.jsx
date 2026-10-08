@@ -33,6 +33,7 @@ import { AdminMachinesPanel } from "../components/admin/AdminMachinesPanel.jsx";
 import { AdminChecklistsPanel } from "../components/admin/AdminChecklistsPanel.jsx";
 import { AdminActivityPanel } from "../components/admin/AdminActivityPanel.jsx";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
 
@@ -42,6 +43,8 @@ const TABS = [
   { id: "dashboard", label: "Home" },
   { id: "users", label: "People" },
   { id: "sites", label: "Sites" },
+  { id: "pulse", label: "Pulse" },
+  { id: "hours", label: "Hours" },
   { id: "more", label: "More" },
 ];
 
@@ -276,6 +279,7 @@ export function AdminApp() {
 
         {tab === "dashboard" && (
           <div className="space-y-4">
+            <WorkHoursPanel variant="clock" />
             {selectedMachine && (
               <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
             )}
@@ -369,10 +373,12 @@ export function AdminApp() {
           />
         )}
 
+        {tab === "pulse" && <ProductivityPulseScreen embedded />}
+        {tab === "hours" && <WorkHoursPanel />}
+
         {tab === "more" && !moreView && (
           <MoreMenu
             items={[
-              { label: "Machine pulse", onClick: () => setMoreView("pulse") },
               { label: "Machines", onClick: () => setMoreView("machines") },
               { label: "Checklists", onClick: () => setMoreView("checklists") },
               { label: "Expenses", onClick: () => setMoreView("expenses") },
@@ -382,17 +388,10 @@ export function AdminApp() {
           />
         )}
 
-        {tab === "more" && moreView && moreView !== "pulse" && (
+        {tab === "more" && moreView && (
           <button type="button" onClick={() => setMoreView(null)} className="mb-3 font-ui text-sm text-[#F5C518]">
             Back
           </button>
-        )}
-
-        {tab === "more" && moreView === "pulse" && (
-          <div className="space-y-3">
-            <button type="button" onClick={() => setMoreView(null)} className="font-ui text-sm text-[#F5C518]">Back</button>
-            <ProductivityPulseScreen embedded />
-          </div>
         )}
 
         {tab === "more" && moreView === "checklists" && (

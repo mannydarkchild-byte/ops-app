@@ -17,12 +17,14 @@ import { scheduleSync } from "../lib/sync/engine.js";
 import { openMechanicInspectionReport } from "../services/reports.js";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
   { id: "repairs", label: "Repairs" },
   { id: "inspections", label: "Inspections" },
   { id: "pulse", label: "Pulse" },
+  { id: "hours", label: "Hours" },
 ];
 
 export function MechanicApp() {
@@ -259,8 +261,10 @@ export function MechanicApp() {
     >
       <div className="space-y-4">
         {tab === "pulse" && <ProductivityPulseScreen embedded />}
+        {tab === "hours" && <WorkHoursPanel />}
         {tab === "repairs" && (
-          <section>
+          <section className="space-y-3">
+            <WorkHoursPanel variant="clock" />
             <h2 className="font-logo text-[#F5C518] text-lg tracking-wider mb-3">My repairs ({myJobs.length})</h2>
             {myJobs.length === 0 ? (
               <p className="text-sm text-[#F2F0EA]/40">

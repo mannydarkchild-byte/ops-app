@@ -28,6 +28,7 @@ import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { SupervisorReports } from "../components/SupervisorReports.jsx";
 import { dispatchDayReport } from "../lib/dispatchReport.js";
 import { DISPATCH_STATUS, dispatchStatus } from "../lib/dispatchMetrics.js";
@@ -843,6 +844,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
         {tab === "live" && (
           <div className="space-y-3 mb-4">
+            <WorkHoursPanel variant="clock" />
             <div className="grid grid-cols-2 gap-3">
             <DashboardKpi
               label="On site now"
@@ -1251,6 +1253,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
         {tab === "more" && !showExpenses && (
           <div className="space-y-4">
+            <WorkHoursPanel />
             <MoreMenu
               items={[
                 { label: "Expenses", onClick: () => setShowExpenses(true) },

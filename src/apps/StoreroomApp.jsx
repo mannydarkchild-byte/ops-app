@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { AppPage } from "../components/AppShell.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
+import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { ISSUE } from "../lib/constants.js";
 import { createInventoryItem, issueInventory, receiveInventory } from "../services/inventory.js";
 import * as wf from "../services/workflows.js";
@@ -9,6 +11,8 @@ import * as wf from "../services/workflows.js";
 const TABS = [
   { id: "stock", label: "Stock" },
   { id: "requests", label: "Requests" },
+  { id: "pulse", label: "Pulse" },
+  { id: "hours", label: "Hours" },
 ];
 
 function QtyRow({ item, busy, onReceive, onIssue }) {
@@ -97,8 +101,11 @@ export function StoreroomApp() {
       onSync={syncNow}
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
+      {tab === "hours" && <WorkHoursPanel />}
+      {tab === "pulse" && <ProductivityPulseScreen embedded />}
       {tab === "stock" && (
         <div className="space-y-4">
+          <WorkHoursPanel variant="clock" />
           <p className="font-body text-sm text-[#F2F0EA]/70">Receive goods in, and issue tools and parts out. Orange means the quantity is at or below the reorder level.</p>
           <button type="button" onClick={() => setShowAdd((v) => !v)} className="w-full py-3 rounded-full border border-[#22C55E] text-[#22C55E] font-logo">
             {showAdd ? "Close" : "Add a part"}

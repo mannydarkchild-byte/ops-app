@@ -4,7 +4,7 @@ import { ReportPreviewModal } from "./ReportPreviewModal.jsx";
 import { SHIFT } from "../lib/constants.js";
 import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod, dedupeShifts } from "../lib/utils.js";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
-import { downloadShiftDailyReport, openShiftDailyReport } from "../services/reports.js";
+import { downloadShiftDailyReport, openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { shiftBillableHours } from "../lib/shiftMetrics.js";
 import { OperatorShiftTools } from "./OperatorShiftTools.jsx";
@@ -157,6 +157,21 @@ export function OperatorReportsModal({
           <DashTile label="Signed off" value={String(dash.signed)} hint="Supervisor signed" color="#22C55E" />
           <DashTile label="Pending" value={String(dash.pending + dash.sentBack)} hint={dash.sentBack ? `${dash.sentBack} sent back` : "Waiting for supervisor"} color="#F5C518" />
         </div>
+        <button
+          type="button"
+          className="w-full mb-4 py-3 rounded-full border border-[#F5C518]/50 text-[#F5C518] font-logo"
+          onClick={async () => {
+            try {
+              const sessions = (workSessions || []).filter((row) => row.operator_id === user?.id && inPeriod(row.clock_in, period));
+              const doc = await printTimesheetReport(sessions, period, site, machines);
+              setPreview({ ...doc, title: `${user?.name || "My"} hours · ${period.label}` });
+            } catch (e) {
+              setError(e.message || "Could not open your hours");
+            }
+          }}
+        >
+          Open my hours report
+        </button>
 
         <div className="flex flex-wrap gap-2 mb-4">
           {FILTERS.map((f) => (
