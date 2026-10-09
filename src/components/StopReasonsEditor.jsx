@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { updateSiteSettings } from "../services/admin.js";
 import { resolveSiteSettings } from "../lib/siteConfig.js";
 import {
-  DEFAULT_STOP_OWNERS,
   parseStopReasonsText,
   serializeStopReasons,
 } from "../lib/stopReasons.js";
@@ -44,8 +43,7 @@ export function StopReasonsEditor({ siteId, siteSettingsRow, onSaved, showAlert 
     <div className="space-y-3">
       <p className="font-body text-xs text-[#F2F0EA]/55">
         One line per reason: <span className="text-[#F5C518]">Reason | Owner</span>.
-        Owners should be {Object.values(DEFAULT_STOP_OWNERS).join(", ")} — or any label your site agrees on.
-        Operators pick these when they stop the machine; Pulse and daily reports use the owner for downtime.
+        Darkchild owns mechanical, engine, hydraulic, and electrical stops. Berlington owns wear and consumables. Site owns feed, weather, and waiting.
       </p>
       <textarea
         value={text}

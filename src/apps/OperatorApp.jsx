@@ -407,7 +407,7 @@ export function OperatorApp() {
       setShowStop(false); setStopReason(""); setStopNote("");
       await refreshLocal();
       showAlert("Machine stopped", reason, "info");
-      const reportableStops = [...MECHANICAL_STOP_REASONS, "Strike", "Waiting for Material", "Waiting for Loader", "No Diesel", "Weather"];
+      const reportableStops = [...MECHANICAL_STOP_REASONS, "No diesel", "Strike", "Waiting for material", "Waiting for loader", "Weather"];
       if (reportableStops.includes(reason)) {
         setSuggestReport({
           area: stopReasonToIssueArea(reason),
@@ -768,7 +768,7 @@ export function OperatorApp() {
                   onComplete={handleInspection}
                   onReportProblem={({ item, remark }) => {
                     setReportPrefill({
-                      area: "Mechanical",
+                      area: "",
                       description: remark ? `${item} — ${remark}` : item,
                       priority: "High",
                     });
@@ -925,7 +925,7 @@ export function OperatorApp() {
       )}
       {showStop && (
         <Modal title="Stop machine" color="red" onClose={() => setShowStop(false)}>
-          <FormSection step={1} title="Stop reason" description="Why is the machine stopping? This points downtime to Darkchild or Berlington." accent="#EF4444">
+          <FormSection step={1} title="Stop reason" description="Darkchild fixes the machine. Berlington covers wear. The site covers feed, weather, and waiting." accent="#EF4444">
             <select value={stopReason} onChange={(e) => setStopReason(e.target.value)} className="w-full bg-[#0A0A0A] border p-4 rounded-xl text-[#F2F0EA] text-lg min-h-[60px]">
               <option value="">Select reason…</option>
               {stopGroups.map((group) => (

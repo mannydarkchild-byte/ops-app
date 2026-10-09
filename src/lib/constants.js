@@ -36,26 +36,35 @@ export const STOP_OWNERS = {
 };
 
 /**
- * Darkchild → engine & electrical.
- * Berlington → consumables (mesh, diesel, oil, belts).
- * Site → waiting, weather, safety, planned stops.
+ * Darkchild → mechanical, engine, hydraulic, electrical.
+ * Berlington → wear and consumables.
+ * Site → operations, production, and weather.
  */
 export const STOP_REASON_OWNER = {
-  "Engine Problem": STOP_OWNERS.DARKCHILD,
-  "Electrical Breakdown": STOP_OWNERS.DARKCHILD,
-  "Mechanical Breakdown": STOP_OWNERS.DARKCHILD,
-  "Track Problem": STOP_OWNERS.DARKCHILD,
-  "Hydraulic Breakdown": STOP_OWNERS.BERLINGTON,
-  "Screen Problem": STOP_OWNERS.BERLINGTON,
-  "Conveyor/Belt Problem": STOP_OWNERS.BERLINGTON,
-  "No Diesel": STOP_OWNERS.BERLINGTON,
-  "Waiting for Material": STOP_OWNERS.SITE,
-  "Waiting for Loader": STOP_OWNERS.SITE,
+  "Screenbox bearings or drive": STOP_OWNERS.DARKCHILD,
+  "Conveyor or feeder drive": STOP_OWNERS.DARKCHILD,
+  "Hydraulic system": STOP_OWNERS.DARKCHILD,
+  "Engine or cooling": STOP_OWNERS.DARKCHILD,
+  "Electrical or controls": STOP_OWNERS.DARKCHILD,
+  "Tracks or final drive": STOP_OWNERS.DARKCHILD,
+  "Worn or torn screen media": STOP_OWNERS.BERLINGTON,
+  "Worn belts, skirting, or scrapers": STOP_OWNERS.BERLINGTON,
+  "Worn rollers or impact bars": STOP_OWNERS.BERLINGTON,
+  "Worn tracks or undercarriage": STOP_OWNERS.BERLINGTON,
+  "Hopper, chute, or wear plate": STOP_OWNERS.BERLINGTON,
+  "No diesel": STOP_OWNERS.BERLINGTON,
+  "Feed rate or screen overflow": STOP_OWNERS.SITE,
+  "Product not to size": STOP_OWNERS.SITE,
+  "Build-up, wet, or sticky material": STOP_OWNERS.SITE,
+  "Belt off-centre": STOP_OWNERS.SITE,
+  Dust: STOP_OWNERS.SITE,
+  "Waiting for material": STOP_OWNERS.SITE,
+  "Waiting for loader": STOP_OWNERS.SITE,
   Weather: STOP_OWNERS.SITE,
-  "Planned Maintenance": STOP_OWNERS.SITE,
-  "Safety Stop": STOP_OWNERS.SITE,
   Cleaning: STOP_OWNERS.SITE,
-  "End of Operating Period": STOP_OWNERS.SITE,
+  "Safety stop": STOP_OWNERS.SITE,
+  "Planned maintenance": STOP_OWNERS.SITE,
+  "End of operating period": STOP_OWNERS.SITE,
   Strike: STOP_OWNERS.SITE,
   Other: STOP_OWNERS.SITE,
 };
@@ -66,29 +75,40 @@ export function stopReasonOwner(reason) {
 
 /** Stop reasons that should prompt "Also report a problem?" */
 export const MECHANICAL_STOP_REASONS = [
-  "Mechanical Breakdown", "Hydraulic Breakdown", "Electrical Breakdown",
-  "Engine Problem", "Screen Problem", "Conveyor/Belt Problem", "Track Problem",
+  "Screenbox bearings or drive", "Conveyor or feeder drive", "Hydraulic system",
+  "Engine or cooling", "Electrical or controls", "Tracks or final drive",
+  "Worn or torn screen media", "Worn belts, skirting, or scrapers",
+  "Worn rollers or impact bars", "Worn tracks or undercarriage",
+  "Hopper, chute, or wear plate",
 ];
 
 /** Grouped stop reasons for the operator picker (owner first). */
 export const STOP_REASON_GROUPS = [
   {
     owner: STOP_OWNERS.DARKCHILD,
-    hint: "Engine & electrical — Darkchild",
-    reasons: ["Engine Problem", "Electrical Breakdown", "Mechanical Breakdown", "Track Problem"],
+    hint: "Darkchild — mechanical, engine, hydraulic, electrical",
+    reasons: [
+      "Screenbox bearings or drive", "Conveyor or feeder drive", "Hydraulic system",
+      "Engine or cooling", "Electrical or controls", "Tracks or final drive",
+    ],
   },
   {
     owner: STOP_OWNERS.BERLINGTON,
-    hint: "Consumables — Berlington (mesh, diesel, oil, belts)",
-    reasons: ["Hydraulic Breakdown", "Screen Problem", "Conveyor/Belt Problem", "No Diesel"],
+    hint: "Berlington — wear and consumables",
+    reasons: [
+      "Worn or torn screen media", "Worn belts, skirting, or scrapers",
+      "Worn rollers or impact bars", "Worn tracks or undercarriage",
+      "Hopper, chute, or wear plate", "No diesel",
+    ],
   },
   {
     owner: STOP_OWNERS.SITE,
-    hint: "Site / operations",
+    hint: "Site — operations, production, weather",
     reasons: [
-      "Waiting for Material", "Waiting for Loader", "Weather",
-      "Planned Maintenance", "Safety Stop", "Cleaning",
-      "End of Operating Period", "Strike", "Other",
+      "Feed rate or screen overflow", "Product not to size",
+      "Build-up, wet, or sticky material", "Belt off-centre", "Dust",
+      "Waiting for material", "Waiting for loader", "Weather", "Cleaning",
+      "Safety stop", "Planned maintenance", "End of operating period", "Strike", "Other",
     ],
   },
 ];
@@ -141,22 +161,28 @@ export const EXPENSE_CATEGORIES = [
   "Bolts & Nuts", "Consumables", "Labour", "Transport", "Tools", "Other",
 ];
 
-/** Grouped problem types — not every issue is machine-related */
+/** Grouped problem types — owner first, then the Warrior 2100 fault. */
 export const ISSUE_AREA_GROUPS = [
   {
-    label: "Machine — mechanical",
-    areas: ["Mechanical", "Hydraulic", "Electrical", "Engine", "Screen", "Conveyor", "Tracks"],
-  },
-  {
-    label: "Machine — operations",
+    label: "Darkchild — mechanical, engine, hydraulic, electrical",
     areas: [
-      "Safety", "Planned maintenance", "No diesel / fuel",
-      "Waiting for material", "Waiting for loader",
+      "Screenbox bearings or drive", "Conveyor or feeder drive", "Hydraulic system",
+      "Engine or cooling", "Electrical or controls", "Tracks or final drive",
     ],
   },
   {
-    label: "Site & production",
+    label: "Berlington — wear and consumables",
     areas: [
+      "Screen media wear", "Belts, skirting, or scrapers", "Rollers or impact bars",
+      "Track and undercarriage wear", "Hopper, chute, or wear plate", "No diesel / fuel",
+    ],
+  },
+  {
+    label: "Site — operations, production, weather",
+    areas: [
+      "Feed rate or overflow", "Product not to size", "Build-up or wet material",
+      "Belt off-centre", "Dust", "Waiting for material", "Waiting for loader",
+      "Cleaning", "Safety", "Planned maintenance",
       "Strike / labour action", "Weather", "Access / roads",
       "Power / utilities", "Security", "Housekeeping / site",
     ],
@@ -322,22 +348,31 @@ export const EARLY_CLOCK_OUT_GUIDE = {
 };
 
 export const STOP_REASON_GUIDE = {
-  "Mechanical Breakdown": "The machine is broken. Stop it here, then report the problem if you have not already.",
-  "Hydraulic Breakdown": "Hydraulics have failed. Stop the machine and add what you see.",
-  "Electrical Breakdown": "Electrical fault. Stop the machine. Do not restart until it is safe.",
-  "Engine Problem": "Engine issue. Stop the machine and add details.",
-  "Screen Problem": "Screen needs attention. Stop if you cannot keep working safely.",
-  "Conveyor/Belt Problem": "Belt or conveyor is down. Stop and add what you see.",
-  "Track Problem": "Tracks need attention. Stop if the machine cannot move safely.",
-  "Waiting for Material": "Machine is fine. You are waiting for feed.",
-  "Waiting for Loader": "Machine is fine. You are waiting for the loader.",
-  "No Diesel": "No fuel. Stop the machine and tell the supervisor.",
-  Weather: "Weather has stopped work. The machine is not broken.",
-  "Planned Maintenance": "A planned stop. Restart when maintenance is done, or finish the day.",
-  "Safety Stop": "You stopped for safety. Do not restart until it is safe.",
-  Cleaning: "A short stop to clean. Restart when ready.",
-  "End of Operating Period": "Work time for the machine is over. Finish the day next.",
-  Strike: "Work has stopped on site.",
+  "Screenbox bearings or drive": "Noise, heat, or knock in the screenbox. Darkchild. Add what you hear or see.",
+  "Conveyor or feeder drive": "A drive, drum, or coupling has failed. Darkchild. Worn belts are Berlington.",
+  "Hydraulic system": "Leak, slow function, hot oil, or a pump, motor, or cylinder that will not move. Darkchild.",
+  "Engine or cooling": "Overheating, low power, filters, fuel, or oil pressure. Darkchild.",
+  "Electrical or controls": "Battery, wiring, switch, sensor, alarm, or remote. Darkchild.",
+  "Tracks or final drive": "The machine will not track, or a final drive has failed. Darkchild. Worn pads are Berlington.",
+  "Worn or torn screen media": "Mesh, punch plate, or panel is worn, torn, or loose. Berlington.",
+  "Worn belts, skirting, or scrapers": "Belt, splice, skirting, or scraper is worn through. Berlington.",
+  "Worn rollers or impact bars": "Rollers or impact bars are worn. A seized drive is Darkchild.",
+  "Worn tracks or undercarriage": "Worn pads, rollers, idlers, or sprockets. Berlington.",
+  "Hopper, chute, or wear plate": "Liners, hopper steel, or chutes are worn or holed. Berlington.",
+  "No diesel": "No fuel. Berlington. Tell the supervisor.",
+  "Feed rate or screen overflow": "Too much feed, or the decks are overflowing. The machine is not broken. Site.",
+  "Product not to size": "Wrong media, angle, or speed for this feed. Site, unless the media is worn.",
+  "Build-up, wet, or sticky material": "Material is packing up or blocking the plant. Site.",
+  "Belt off-centre": "The machine is not level, or the load is uneven. Site. A failed drive is Darkchild.",
+  Dust: "Dust has stopped work. Site.",
+  "Waiting for material": "Machine is fine. You are waiting for feed. Site.",
+  "Waiting for loader": "Machine is fine. You are waiting for the loader. Site.",
+  Weather: "Weather has stopped work. The machine is not broken. Site.",
+  Cleaning: "A short stop to clean. Restart when ready. Site.",
+  "Safety stop": "You stopped for safety. Do not restart until it is safe. Site.",
+  "Planned maintenance": "A planned stop. Restart when it is done, or finish the day. Site.",
+  "End of operating period": "Work time for the machine is over. Finish the day next. Site.",
+  Strike: "Work has stopped on site. Site.",
   Other: "Say what happened. This stops the machine, not your time on site.",
 };
 
