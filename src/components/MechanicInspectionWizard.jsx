@@ -117,7 +117,7 @@ export function MechanicInspectionWizard({
 
   if (mode === "review") {
     return (
-      <div className="fixed inset-0 z-50 bg-[#0A0A0A] text-[#F2F0EA] flex flex-col mobile-safe-bottom">
+      <div className="ops-sheet fixed inset-0 z-50 bg-[#0A0A0A] text-[#F2F0EA] flex flex-col">
         <header className="px-4 pt-4 pb-3 border-b border-[#2A2A2A]">
           <p className="font-logo text-[10px] text-[#00A4A6] tracking-wider">REVIEW BEFORE SUBMIT</p>
           <h1 className="font-logo text-lg text-[#F5C518] mt-1">{machineName || "Inspection"}</h1>
@@ -190,7 +190,7 @@ export function MechanicInspectionWizard({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0A0A0A] text-[#F2F0EA] flex flex-col mobile-safe-bottom">
+    <div className="ops-sheet fixed inset-0 z-50 bg-[#0A0A0A] text-[#F2F0EA] flex flex-col">
       <header className="px-4 pt-4 pb-2 border-b border-[#2A2A2A]">
         <div className="flex justify-between items-start gap-2 mb-2">
           <div className="min-w-0">

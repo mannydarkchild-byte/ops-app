@@ -48,7 +48,25 @@ body,
 
 body {
   overflow-x: hidden;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Full-screen sheets are position:fixed, so body padding does not move them. */
+.ops-sheet {
+  box-sizing: border-box;
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@supports (min-height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
 }
 
 /* Prevent horizontal scroll on small screens */
@@ -246,9 +264,16 @@ select:focus {
 /* ═══════════════════════════════════════════════════════════════
    MOBILE UTILITIES
    ═══════════════════════════════════════════════════════════════ */
-/* Safe area helpers for notched phones */
+/* Safe area helpers for notched phones.
+   Top inset lives on the body. A sticky header must stick below that inset,
+   or iPhone slides it back under the clock. */
 .mobile-safe-top {
-  padding-top: env(safe-area-inset-top, 0);
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+header.sticky {
+  top: constant(safe-area-inset-top);
+  top: env(safe-area-inset-top, 0px);
 }
 .mobile-safe-bottom {
   padding-bottom: calc(env(safe-area-inset-bottom, 0) + 24px);

@@ -15,10 +15,12 @@
         if (t === "light") {
           document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#F6F1DE");
         }
+        document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+          ?.setAttribute("content", t === "light" ? "default" : "black");
       } catch (e) {}
     </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="OPS" />
     <meta name="format-detection" content="telephone=no" />

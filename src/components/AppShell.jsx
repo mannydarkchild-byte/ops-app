@@ -249,7 +249,7 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-30 bg-ops-black border-b border-ops-border mobile-safe-top shadow-ops-sm">
+    <header className="sticky top-0 z-30 bg-ops-black border-b border-ops-border shadow-ops-sm">
       <div className="px-3 sm:px-4 py-2 min-h-[7.25rem] flex items-center gap-3 max-w-5xl mx-auto">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <LogoMark size="bar" />
