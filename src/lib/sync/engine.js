@@ -1,4 +1,4 @@
-import { getPendingCount, getStuckQueueErrors, getSyncMeta, ensureDB } from "../db.js";
+import { getPendingCount, getStuckQueueErrors, getSyncMeta, setSyncMeta, ensureDB } from "../db.js";
 import { syncMachineLocks } from "../machineLock.js";
 import { pushPendingQueue } from "./push.js";
 import { pullIncremental, pullBootstrap, pullStaffDirectory } from "./pull.js";
@@ -8,6 +8,7 @@ let syncInProgress = false;
 let syncListeners = new Set();
 let debounceTimer = null;
 let syncSiteId = null;
+const CATALOG_BOOTSTRAP_VERSION = 2;
 /** @type {Promise<any> | null} */
 let activeSyncPromise = null;
 
@@ -57,11 +58,15 @@ export async function runSync({ silent = true, forceBootstrap = false, forcePush
     try {
       await ensureDB();
 
-      const bootstrapped = await getSyncMeta("bootstrapped_at");
+      const bootstrapKey = `bootstrapped_v${CATALOG_BOOTSTRAP_VERSION}_${effectiveSiteId || "all"}`;
+      const bootstrapped = await getSyncMeta(bootstrapKey);
       if (!bootstrapped || forceBootstrap) {
         const boot = await pullBootstrap({ siteId: effectiveSiteId });
         state.pulled += boot.pulled;
         if (boot.errors?.length) state.errors.push(...boot.errors);
+        if (!boot.errors?.length) {
+          await setSyncMeta(bootstrapKey, new Date().toISOString());
+        }
       }
 
       const media = await uploadPendingMedia();

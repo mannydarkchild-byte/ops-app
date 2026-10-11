@@ -185,6 +185,7 @@ export async function clearSyncedTables({ keepPending = true } = {}) {
     for (const t of SYNC_TABLES) {
       if (database[t]) await database[t].clear();
     }
+    await database.sync_meta.clear();
     return;
   }
   const pendingKeys = new Set(
@@ -196,4 +197,8 @@ export async function clearSyncedTables({ keepPending = true } = {}) {
     const toDelete = all.filter((r) => !pendingKeys.has(`${t}:${r.id}`)).map((r) => r.id);
     if (toDelete.length) await database[t].bulkDelete(toDelete);
   }
+  // Synced rows were removed, so their bootstrap marker and watermarks are no
+  // longer valid. Keeping them would make the next login perform only an
+  // incremental pull and leave older server rows (such as machines) missing.
+  await database.sync_meta.clear();
 }
