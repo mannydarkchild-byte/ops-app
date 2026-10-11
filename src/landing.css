@@ -221,6 +221,10 @@
   color: var(--gold);
 }
 
+.ops-nav nav .ops-nav-mobile-cta {
+  display: none;
+}
+
 .ops-nav-actions {
   display: flex;
   align-items: center;
@@ -1215,7 +1219,31 @@
 
 @media (max-width: 768px) {
   .ops-nav {
-    padding: 0.65rem 1.25rem;
+    padding: 0.5rem 0.85rem;
+  }
+  .ops-nav.is-compact {
+    padding: 0.4rem 0.85rem;
+  }
+  .ops-nav-brand {
+    gap: 0.45rem;
+    min-width: 0;
+  }
+  .ops-nav-brand > div {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  .ops-nav-brand-text {
+    font-size: 1.1rem;
+  }
+  .ops-nav-actions {
+    gap: 0.45rem;
+  }
+  .ops-nav-actions > .ops-btn-gold {
+    display: none;
+  }
+  .ops-nav-actions > .ops-btn-ghost {
+    padding: 0.65rem 1rem;
+    font-size: 0.88rem;
   }
   .ops-nav nav {
     display: none;
@@ -1232,6 +1260,17 @@
   }
   .ops-nav nav.is-open {
     display: flex;
+  }
+  .ops-nav nav .ops-nav-mobile-cta {
+    display: inline-flex;
+    width: 100%;
+    justify-content: center;
+    margin-top: 0.25rem;
+    padding: 0.65rem 1rem;
+    border-radius: 999px;
+    background: var(--gold);
+    color: #14120e;
+    font-weight: 700;
   }
   .ops-nav-menu {
     display: inline-flex;

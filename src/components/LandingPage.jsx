@@ -637,6 +637,7 @@ export function LandingPage({ onLogin }) {
           {NAV.map((item) => (
             <a key={item.href} href={item.href} onClick={closeMenu}>{item.label}</a>
           ))}
+          <a className="ops-nav-mobile-cta" href="#contact" onClick={closeMenu}>Request Demo</a>
         </nav>
         <div className="ops-nav-actions">
           <a href="#contact" className="ops-btn ops-btn-gold">Request Demo</a>
