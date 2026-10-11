@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { AppPage } from "../components/AppShell.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
-import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { DispatchDayForm } from "../components/DispatchDayForm.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
@@ -13,15 +12,8 @@ import { openWhatsApp } from "../lib/whatsapp.js";
 import { buildDispatchWhatsApp } from "../lib/dispatchWhatsApp.js";
 import * as wf from "../services/workflows.js";
 
-const TABS = [
-  { id: "dispatch", label: "Dispatch" },
-  { id: "pulse", label: "Pulse" },
-  { id: "reports", label: "Reports" },
-];
-
 export function DispatchApp() {
   const { user, activeSite, profiles, siteDispatch, getSettingsForSite, refreshLocal, syncNow } = useOps();
-  const [tab, setTab] = useState("dispatch");
   const [alert, setAlert] = useState({ isOpen: false });
   const [preview, setPreview] = useState(null);
   const siteId = user?.site_id || activeSite?.id;
@@ -41,16 +33,14 @@ export function DispatchApp() {
       subtitle="Dispatch"
       context={activeSite?.name || "Site"}
       showSite={false}
-      tabs={TABS}
-      activeTab={tab}
-      onTabChange={setTab}
       onSync={syncNow}
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
-      {tab === "pulse" && <ProductivityPulseScreen embedded />}
-      {tab === "reports" && <WorkHoursPanel />}
-      {tab === "dispatch" && (
-        <DispatchDayForm
+      <div className="mb-4">
+        <WorkHoursPanel variant="clock" />
+        <p className="font-body text-sm text-[#F2F0EA]/70 mt-2">One day, one record. Enter buckets, send for sign-off, done.</p>
+      </div>
+      <DispatchDayForm
           records={siteDispatch}
           siteId={siteId}
           factors={factors}
@@ -70,7 +60,6 @@ export function DispatchApp() {
           }}
           onPreview={async (row) => setPreview(await dispatchDayReport({ ...row, dispatch_date: row.dispatch_date || localDayKey() }, site))}
         />
-      )}
       {preview && (
         <ReportPreviewModal html={preview.html} title={preview.title} sheets={preview.sheets} onClose={() => setPreview(null)} />
       )}

@@ -16,15 +16,12 @@ import { saveLocal } from "../lib/db.js";
 import { scheduleSync } from "../lib/sync/engine.js";
 import { openMechanicInspectionReport } from "../services/reports.js";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
-import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
   { id: "repairs", label: "Repairs" },
   { id: "inspections", label: "Inspections" },
-  { id: "pulse", label: "Pulse" },
-  { id: "hours", label: "Hours" },
 ];
 
 export function MechanicApp() {
@@ -260,8 +257,6 @@ export function MechanicApp() {
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
       <div className="space-y-4">
-        {tab === "pulse" && <ProductivityPulseScreen embedded />}
-        {tab === "hours" && <WorkHoursPanel />}
         {tab === "repairs" && (
           <section className="space-y-3">
             <WorkHoursPanel variant="clock" />

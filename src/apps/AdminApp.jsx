@@ -44,9 +44,7 @@ const TABS = [
   { id: "dashboard", label: "Home" },
   { id: "users", label: "People" },
   { id: "sites", label: "Sites" },
-  { id: "pulse", label: "Pulse" },
-  { id: "hours", label: "Hours" },
-  { id: "more", label: "More" },
+  { id: "setup", label: "Setup" },
 ];
 
 
@@ -281,6 +279,7 @@ export function AdminApp() {
         {tab === "dashboard" && (
           <div className="space-y-4">
             <WorkHoursPanel variant="clock" />
+            <p className="font-body text-sm text-[#F2F0EA]/70">Home is a summary. Daily work happens in People and Sites. Rare setup lives in Setup.</p>
             {selectedMachine && (
               <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
             )}
@@ -374,38 +373,40 @@ export function AdminApp() {
           />
         )}
 
-        {tab === "pulse" && <ProductivityPulseScreen embedded />}
-        {tab === "hours" && <WorkHoursPanel />}
-
-        {tab === "more" && !moreView && (
-          <MoreMenu
-            items={[
-              { label: "Bucket size", onClick: () => setMoreView("buckets") },
-              { label: "Machines", onClick: () => setMoreView("machines") },
-              { label: "Checklists", onClick: () => setMoreView("checklists") },
-              { label: "Expenses", onClick: () => setMoreView("expenses") },
-              { label: "Activity", onClick: () => setMoreView("activity") },
-              { label: "Sync", onClick: () => setMoreView("sync") },
-            ]}
-          />
+        {tab === "setup" && !moreView && (
+          <div className="space-y-3">
+            <p className="font-body text-sm text-[#F2F0EA]/70">Setup in order. Sites first, then machines and buckets, then checklists. Pulse, hours and sync are for checking — not daily work.</p>
+            <MoreMenu
+              items={[
+                { label: "1 · Sites, machines & buckets", onClick: () => setMoreView("site-setup") },
+                { label: "2 · Checklists", onClick: () => setMoreView("checklists") },
+                { label: "3 · Pulse, hours & activity", onClick: () => setMoreView("review") },
+                { label: "4 · Expenses", onClick: () => setMoreView("expenses") },
+                { label: "5 · Sync & backup", onClick: () => setMoreView("sync") },
+              ]}
+            />
+          </div>
         )}
 
-        {tab === "more" && moreView && (
+        {tab === "setup" && moreView && (
           <button type="button" onClick={() => setMoreView(null)} className="mb-3 font-ui text-sm text-[#F5C518]">
-            Back
+            Back to setup steps
           </button>
         )}
 
-        {tab === "more" && moreView === "buckets" && (
-          <BucketSizeEditor
-            siteId={activeSite?.id}
-            settings={getSettingsForSite(activeSite?.id)}
-            onSaved={syncNow}
-            showAlert={showAlert}
-          />
+        {tab === "setup" && moreView === "site-setup" && (
+          <div className="space-y-4">
+            <AdminSitesPanel sites={sites} machines={machines} siteSettings={siteSettings} onSaved={syncNow} showAlert={showAlert} />
+            <BucketSizeEditor
+              siteId={activeSite?.id}
+              settings={getSettingsForSite(activeSite?.id)}
+              onSaved={syncNow}
+              showAlert={showAlert}
+            />
+          </div>
         )}
 
-        {tab === "more" && moreView === "checklists" && (
+        {tab === "setup" && moreView === "checklists" && (
           <AdminChecklistsPanel
             sites={sites}
             siteSettings={siteSettings}
@@ -414,7 +415,25 @@ export function AdminApp() {
           />
         )}
 
-        {tab === "more" && moreView === "expenses" && (
+        {tab === "setup" && moreView === "review" && (
+          <div className="space-y-4">
+            <ProductivityPulseScreen embedded />
+            <WorkHoursPanel />
+            <AdminActivityPanel
+              events={events}
+              workSessions={workSessions}
+              shifts={shifts}
+              issues={issues}
+              fuelLogs={fuelLogs}
+              inspections={inspections}
+              expenses={expenses}
+              machines={machines}
+              sites={sites}
+            />
+          </div>
+        )}
+
+        {tab === "setup" && moreView === "expenses" && (
           <SiteExpensesPanel
             expenses={expenses}
             machines={machines}
@@ -426,18 +445,16 @@ export function AdminApp() {
           />
         )}
 
-        {tab === "more" && moreView === "activity" && (
-          <AdminActivityPanel
-            events={events}
-            workSessions={workSessions}
-            shifts={shifts}
-            issues={issues}
-            fuelLogs={fuelLogs}
-            inspections={inspections}
-            expenses={expenses}
-            machines={machines}
-            sites={sites}
-          />
+        {tab === "sites" && (
+          <div className="space-y-4">
+            <p className="font-body text-sm text-[#F2F0EA]/70">Sites first, then machines. Buckets live in Setup step 1.</p>
+            <AdminMachinesPanel
+              sites={sites}
+              machines={machines}
+              onSaved={refreshLocal}
+              showAlert={showAlert}
+            />
+          </div>
         )}
 
         {tab === "users" && (
@@ -594,18 +611,7 @@ export function AdminApp() {
 
 
 
-        {tab === "more" && moreView === "machines" && (
-          <AdminMachinesPanel
-            sites={sites}
-            machines={machines}
-            onSaved={refreshLocal}
-            showAlert={showAlert}
-          />
-        )}
-
-
-
-        {tab === "more" && moreView === "sync" && (
+        {tab === "setup" && moreView === "sync" && (
 
           <div className="space-y-4">
 

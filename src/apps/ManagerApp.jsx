@@ -33,12 +33,9 @@ import { Modal } from "../components/ui/Modal.jsx";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
-  { id: "overview", label: "Home" },
-  { id: "expenses", label: "Expenses" },
-  { id: "pulse", label: "Pulse" },
-  { id: "reports", label: "Reports" },
+  { id: "today", label: "Today" },
+  { id: "money", label: "Money" },
   { id: "issues", label: "Problems" },
-  { id: "more", label: "More" },
 ];
 
 const REPORT_FILTERS = [
@@ -60,7 +57,9 @@ export function ManagerApp() {
     getSettingsForSite, siteSettings, siteDispatch,
   } = useOps();
 
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("today");
+  const [moneyView, setMoneyView] = useState("spending");
+  const [setupOpen, setSetupOpen] = useState(false);
   const [reportPreset, setReportPreset] = useState("cycle");
   const [timesheetFilter, setTimesheetFilter] = useState("cycle");
   const [signedFilter, setSignedFilter] = useState("cycle");
@@ -453,7 +452,7 @@ export function ManagerApp() {
               </button>
             )}
             {fleetStatus?.isStopped && (
-              <button type="button" onClick={() => setTab("overview")} className="btn-link font-logo text-[10px] text-[#F97316] hover:underline">
+              <button type="button" onClick={() => setTab("today")} className="btn-link font-logo text-[10px] text-[#F97316] hover:underline">
                 Warrior stopped — {fleetStatus.openStop?.reason}
               </button>
             )}
@@ -481,9 +480,10 @@ export function ManagerApp() {
           </label>
         )}
 
-        {tab === "overview" && (
+        {tab === "today" && (
           <div className="space-y-4">
             <WorkHoursPanel variant="clock" />
+            <p className="font-body text-sm text-[#F2F0EA]/70">Start here. Check what is running, then follow money or problems only when needed.</p>
             <p className="font-body text-xs text-[#F2F0EA]/50">{primaryMachine?.name || "This machine"} · {billingPeriod.label}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <DashboardKpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts started · 8h minus Darkchild downtime`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.billable)} />
@@ -562,19 +562,32 @@ export function ManagerApp() {
           </div>
         )}
 
-        {tab === "pulse" && <ProductivityPulseScreen embedded />}
-
-        {tab === "more" && (
-          <MoreMenu
-            items={[
-              { label: "Bucket size", onClick: () => setShowBucketSize(true) },
-              { label: "Stop reasons and owners", onClick: () => setShowStopOwners(true) },
-              { label: "Backdate hour reading", onClick: () => setShowBackdate(true) },
-            ]}
-          />
+        {tab === "money" && (
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <button type="button" onClick={() => setMoneyView("spending")} className={`py-3 rounded-xl font-logo text-sm ${moneyView === "spending" ? "bg-[#F5C518] text-black" : "border border-[#2A2A2A] text-[#F2F0EA]"}`}>1 · Spending</button>
+            <button type="button" onClick={() => setMoneyView("reports")} className={`py-3 rounded-xl font-logo text-sm ${moneyView === "reports" ? "bg-[#F5C518] text-black" : "border border-[#2A2A2A] text-[#F2F0EA]"}`}>2 · Reports</button>
+          </div>
         )}
 
-        {tab === "expenses" && (
+        {tab === "today" && (
+          <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-2">
+            <button type="button" onClick={() => setSetupOpen((v) => !v)} className="w-full py-3 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-logo text-sm">{setupOpen ? "Hide setup & pulse" : "Setup & pulse (only when changing the site)"}</button>
+            {setupOpen && (
+              <div className="space-y-3 pt-1">
+                <ProductivityPulseScreen embedded />
+                <MoreMenu
+                  items={[
+                    { label: "Bucket size", onClick: () => setShowBucketSize(true) },
+                    { label: "Stop reasons and owners", onClick: () => setShowStopOwners(true) },
+                    { label: "Backdate hour reading", onClick: () => setShowBackdate(true) },
+                  ]}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "money" && moneyView === "spending" && (
           <div className="space-y-3">
             <button
               type="button"
@@ -680,7 +693,7 @@ export function ManagerApp() {
           </div>
         )}
 
-        {tab === "reports" && (
+        {tab === "money" && moneyView === "reports" && (
           <div className="space-y-4">
             <WorkHoursPanel />
             <p className="font-body text-sm text-[#F2F0EA]/70">Money and hours for the selected machine, then the signed shift reports underneath.</p>

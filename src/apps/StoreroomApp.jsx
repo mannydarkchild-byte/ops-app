@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { AppPage } from "../components/AppShell.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
-import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { ISSUE } from "../lib/constants.js";
 import { createInventoryItem, issueInventory, receiveInventory } from "../services/inventory.js";
@@ -11,8 +10,6 @@ import * as wf from "../services/workflows.js";
 const TABS = [
   { id: "stock", label: "Stock" },
   { id: "requests", label: "Requests" },
-  { id: "pulse", label: "Pulse" },
-  { id: "hours", label: "Hours" },
 ];
 
 function QtyRow({ item, busy, onReceive, onIssue }) {
@@ -101,8 +98,6 @@ export function StoreroomApp() {
       onSync={syncNow}
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
-      {tab === "hours" && <WorkHoursPanel />}
-      {tab === "pulse" && <ProductivityPulseScreen embedded />}
       {tab === "stock" && (
         <div className="space-y-4">
           <WorkHoursPanel variant="clock" />

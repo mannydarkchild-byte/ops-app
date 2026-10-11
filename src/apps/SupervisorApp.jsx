@@ -18,7 +18,7 @@ import { DashboardKpi, KpiDetailModal, MachineSelect } from "../components/Dashb
 import { DispatchKpis } from "../components/DispatchKpis.jsx";
 import { DispatchSignoffList } from "../components/DispatchSignoffList.jsx";
 
-import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, onSiteRecord, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
+import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, onSiteRecord, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
 
 import { formatSyncErrorMessage } from "../lib/labels.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
@@ -48,12 +48,9 @@ import { ShiftPhotoFix } from "../components/ShiftPhotoFix.jsx";
 
 
 const TABS = [
-  { id: "live", label: "Live" },
-  { id: "pulse", label: "Pulse" },
+  { id: "today", label: "Today" },
   { id: "verify", label: "Sign off" },
   { id: "issues", label: "Problems" },
-  { id: "reports", label: "Reports" },
-  { id: "more", label: "More" },
 ];
 
 
@@ -79,7 +76,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
     [getSettingsForSite, user?.site_id, activeSite?.id]
   );
 
-  const [tab, setTab] = useState(verifyShiftId ? "verify" : "live");
+  const [tab, setTab] = useState(verifyShiftId ? "verify" : "today");
+  const [recordsView, setRecordsView] = useState(null);
 
   const [verifyBusy, setVerifyBusy] = useState(null);
 
@@ -763,7 +761,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const tabItems = useMemo(
     () => TABS.map((t) => ({
       ...t,
-      badge: t.id === "live" ? openShiftsToClose.length : t.id === "verify" ? myPendingVerify + dispatchWaiting : t.id === "issues" ? openSiteIssues.length : 0,
+      badge: t.id === "today" ? openShiftsToClose.length : t.id === "verify" ? myPendingVerify + dispatchWaiting : t.id === "issues" ? openSiteIssues.length : 0,
     })),
     [openShiftsToClose.length, myPendingVerify, dispatchWaiting, openSiteIssues.length]
   );
@@ -818,7 +816,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
             {openShiftsToClose.length > 0 && (
 
-              <button type="button" onClick={() => setTab("live")} className="ops-chip font-logo text-sm text-[#F5C518] hover:underline">
+              <button type="button" onClick={() => setTab("today")} className="ops-chip font-logo text-sm text-[#F5C518] hover:underline">
 
                 {openShiftsToClose.length} open shift{openShiftsToClose.length !== 1 ? "s" : ""} to close
 
@@ -828,7 +826,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
             {stoppedMachines > 0 && (
 
-              <button type="button" onClick={() => setTab("live")} className="ops-chip font-logo text-sm text-[#F97316] hover:underline">
+              <button type="button" onClick={() => setTab("today")} className="ops-chip font-logo text-sm text-[#F97316] hover:underline">
 
                 {stoppedMachines} machine{stoppedMachines !== 1 ? "s" : ""} stopped
 
@@ -842,9 +840,10 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
 
-        {tab === "live" && (
+        {tab === "today" && (
           <div className="space-y-3 mb-4">
             <WorkHoursPanel variant="clock" />
+            <p className="font-body text-sm text-[#F2F0EA]/70">Start here. Close open shifts, then sign off what is waiting for you.</p>
             <div className="grid grid-cols-2 gap-3">
             <DashboardKpi
               label="On site now"
@@ -893,51 +892,10 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
               })}
             />
             </div>
-            {selectedMachine && (
-              <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
-            )}
-            <p className="font-body text-xs text-[#F2F0EA]/50">{selectedMachine?.name || "This machine"} · {billingPeriod.label}</p>
-            <div className="grid grid-cols-2 gap-3">
-            <DashboardKpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts on this machine`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.billable)} />
-            <DashboardKpi label={HOUR_LABELS.machine} value={`${dashboardStats.machineHours.toFixed(1)}h`} sub={`${dashboardStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.machine)} />
-            <DashboardKpi label={HOUR_LABELS.revenue} value={money(dashboardStats.revenue)} sub={selectedMachine ? `${money(selectedMachine.billable_rate)}/h` : "This machine"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.revenue)} />
-            <DashboardKpi label={HOUR_LABELS.expenses} value={money(dashboardStats.expenseTotal)} sub={dashboardStats.earlierExpenses > 0 ? `${dashboardStats.earlierExpenses} earlier` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.expenses)} />
-            <DashboardKpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.diesel)} />
-            <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Stopped time on this machine" color="#EF4444" onClick={() => setKpiDetail(dashboardDetails.downtime)} />
-            </div>
-            <DispatchKpis records={siteDispatch} siteId={user?.site_id} period={billingPeriod} factors={siteConfig} onOpen={setKpiDetail} />
           </div>
         )}
 
-        {tab === "reports" && (
-          <SupervisorReports
-            machines={siteMachines}
-            machineId={selectedMachine?.id}
-            onMachine={setFocusMachineId}
-            period={reportPeriod}
-            periodLabel={reportPeriod?.label || "All time"}
-            filter={reportFilter}
-            filters={REPORT_FILTERS}
-            onFilter={setReportFilter}
-            signedReports={signedReports}
-            signedBillable={signedBillable}
-            signedHours={signedHours}
-            signedDetails={signedDetails}
-            onOpenDetail={setKpiDetail}
-            dispatches={(siteDispatch || []).filter((row) => row.site_id === user?.site_id)}
-            machineName={machineName}
-            events={events}
-            siteConfig={siteConfig}
-            onView={handleViewReport}
-            onDownload={handleDownloadReport}
-            onShare={handleShareReport}
-            onOpenDispatch={async (row) => setReportPreview(await dispatchDayReport(row, activeSite))}
-          />
-        )}
-
-
-
-        {tab === "live" && (
+        {tab === "today" && (
 
           <div className="space-y-4">
 
@@ -1234,46 +1192,65 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
 
-        {tab === "pulse" && <ProductivityPulseScreen embedded />}
-
-        {tab === "more" && showExpenses && (
-          <div className="space-y-3">
-            <button type="button" onClick={() => setShowExpenses(false)} className="font-ui text-sm text-[#F5C518]">Back</button>
-            <SiteExpensesPanel
-              expenses={expenses}
-              machines={siteMachines}
-              siteId={user?.site_id}
-              cycleStartDay={siteConfig.billing_cycle_start_day}
-              scopeLabel={activeSite?.name || "This site"}
-              canEdit
-              onSaved={refreshLocal}
-            />
-          </div>
-        )}
-
-        {tab === "more" && !showExpenses && (
-          <div className="space-y-4">
-            <WorkHoursPanel />
-            <MoreMenu
-              items={[
-                { label: "Expenses", onClick: () => setShowExpenses(true) },
-              ]}
-            />
-            <TimesheetPanel
-              rows={timesheetRows}
-              periodLabel={timesheetPeriod?.label || "All time"}
-              filter={timesheetFilter}
-              onFilter={setTimesheetFilter}
-              machines={machines}
-              onPreview={async () => {
-                try {
-                  const doc = await printTimesheetReport(workSessions, timesheetPeriod, activeSite, machines);
-                  setReportPreview(doc);
-                } catch (e) {
-                  showAlert("Could not open timesheet", e.message, "error");
-                }
-              }}
-            />
+        {tab === "today" && (
+          <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-2">
+            <p className="font-logo text-sm text-[#F5C518]">Next: records & history</p>
+            <p className="font-body text-sm text-[#F2F0EA]/70">Only open this when Today is clear. Signed reports, team hours and pulse live here.</p>
+            <div className="grid grid-cols-1 gap-2">
+              <button type="button" onClick={() => setRecordsView(recordsView === "reports" ? null : "reports")} className="w-full py-3 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-logo text-sm">1 · Signed reports & performance</button>
+              <button type="button" onClick={() => setRecordsView(recordsView === "team" ? null : "team")} className="w-full py-3 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-logo text-sm">2 · Team hours, expenses & timesheets</button>
+              <button type="button" onClick={() => setRecordsView(recordsView === "pulse" ? null : "pulse")} className="w-full py-3 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-logo text-sm">3 · Machine pulse</button>
+            </div>
+            {recordsView === "reports" && (
+              <div className="pt-2">
+                {selectedMachine && (
+                  <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
+                )}
+                <SupervisorReports
+                  machines={siteMachines}
+                  machineId={selectedMachine?.id}
+                  onMachine={setFocusMachineId}
+                  period={reportPeriod}
+                  periodLabel={reportPeriod?.label || "All time"}
+                  filter={reportFilter}
+                  filters={REPORT_FILTERS}
+                  onFilter={setReportFilter}
+                  signedReports={signedReports}
+                  signedBillable={signedBillable}
+                  signedHours={signedHours}
+                  signedDetails={signedDetails}
+                  onOpenDetail={setKpiDetail}
+                  dispatches={(siteDispatch || []).filter((row) => row.site_id === user?.site_id)}
+                  machineName={machineName}
+                  events={events}
+                  siteConfig={siteConfig}
+                  onView={handleViewReport}
+                  onDownload={handleDownloadReport}
+                  onShare={handleShareReport}
+                  onOpenDispatch={async (row) => setReportPreview(await dispatchDayReport(row, activeSite))}
+                />
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <DashboardKpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.billable)} />
+                  <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Stopped time" color="#EF4444" onClick={() => setKpiDetail(dashboardDetails.downtime)} />
+                </div>
+                <DispatchKpis records={siteDispatch} siteId={user?.site_id} period={billingPeriod} factors={siteConfig} onOpen={setKpiDetail} />
+              </div>
+            )}
+            {recordsView === "team" && (
+              <div className="pt-2 space-y-3">
+                <WorkHoursPanel />
+                {showExpenses ? (
+                  <div className="space-y-3">
+                    <button type="button" onClick={() => setShowExpenses(false)} className="font-ui text-sm text-[#F5C518]">Back</button>
+                    <SiteExpensesPanel expenses={expenses} machines={siteMachines} siteId={user?.site_id} cycleStartDay={siteConfig.billing_cycle_start_day} scopeLabel={activeSite?.name || "This site"} canEdit onSaved={refreshLocal} />
+                  </div>
+                ) : (
+                  <MoreMenu items={[{ label: "Expenses", onClick: () => setShowExpenses(true) }]} />
+                )}
+                <TimesheetPanel rows={timesheetRows} periodLabel={timesheetPeriod?.label || "All time"} filter={timesheetFilter} onFilter={setTimesheetFilter} machines={machines} onPreview={async () => { try { const doc = await printTimesheetReport(workSessions, timesheetPeriod, activeSite, machines); setReportPreview(doc); } catch (e) { showAlert("Could not open timesheet", e.message, "error"); } }} />
+              </div>
+            )}
+            {recordsView === "pulse" && <ProductivityPulseScreen embedded />}
           </div>
         )}
 
