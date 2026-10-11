@@ -27,7 +27,7 @@ export function BucketSizeEditor({ siteId, settings, onSaved, showAlert }) {
       const fel_bucket_tonnes = parse(fel, "Tonnes per FEL bucket");
       await updateSiteSettings(siteId, { excavator_bucket_tonnes, fel_bucket_tonnes });
       await onSaved?.();
-      showAlert?.("Saved", "Bucket size saved. Screened tonnes and floor stock use these sizes.");
+      showAlert?.("Saved", "Site bucket variables saved and synced. Daily records will use them automatically.");
     } catch (e) {
       showAlert?.("Could not save", e.message);
     } finally {
@@ -38,7 +38,7 @@ export function BucketSizeEditor({ siteId, settings, onSaved, showAlert }) {
   return (
     <div className="space-y-3">
       <p className="font-body text-sm text-[#F2F0EA]/70">
-        Excavator buckets become screened tonnes. FEL buckets go onto the floor. A later change does not rewrite a day that already saved its own size.
+        Set these variables once for the site. Daily bucket counts automatically use them to calculate screened tonnes and floor stock. A later change does not rewrite completed days.
       </p>
       <label className="block">
         <span className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider">TONNES PER EXCAVATOR BUCKET</span>
@@ -72,7 +72,7 @@ export function BucketSizeEditor({ siteId, settings, onSaved, showAlert }) {
         disabled={busy || !siteId}
         className="w-full py-3 rounded-full bg-[#F5C518] text-black font-logo font-bold disabled:opacity-40"
       >
-        {busy ? "Saving…" : "Save bucket size"}
+        {busy ? "Saving…" : "Save site bucket variables"}
       </button>
     </div>
   );

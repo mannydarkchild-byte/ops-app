@@ -836,7 +836,7 @@ export function ManagerApp() {
           <BucketSizeEditor
             siteId={user?.site_id || activeSite?.id}
             settings={siteConfig}
-            onSaved={async () => { await refreshLocal(); setShowBucketSize(false); }}
+            onSaved={async () => { await syncNow(); setShowBucketSize(false); }}
             showAlert={showAlert}
           />
         </Modal>

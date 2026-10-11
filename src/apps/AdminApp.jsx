@@ -369,7 +369,7 @@ export function AdminApp() {
             sites={sites}
             machines={machines}
             siteSettings={siteSettings}
-            onSaved={refreshLocal}
+            onSaved={syncNow}
             showAlert={showAlert}
           />
         )}
@@ -400,7 +400,7 @@ export function AdminApp() {
           <BucketSizeEditor
             siteId={activeSite?.id}
             settings={getSettingsForSite(activeSite?.id)}
-            onSaved={refreshLocal}
+            onSaved={syncNow}
             showAlert={showAlert}
           />
         )}
