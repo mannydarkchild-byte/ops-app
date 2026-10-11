@@ -1,4 +1,4 @@
-import { DEFAULT_STOP_OWNERS, ownerForStopReason } from "./stopReasons.js";
+import { isContractorStop } from "./stopReasons.js";
 
 /** A billed shift is 8 hours, less downtime owned by Darkchild. */
 export const STANDARD_SHIFT_HOURS = 8;
@@ -46,14 +46,17 @@ function settingsForShift(shift, siteSettings) {
   return siteSettings;
 }
 
-/** Closed Darkchild stops on this shift, in minutes. Berlington and site stops are not deducted. */
-export function darkchildDowntimeMinutes(events, shift, siteSettings) {
+/** Closed contractor stops on this shift, in minutes. Wear and site stops are not deducted. */
+export function contractorDowntimeMinutes(events, shift, siteSettings) {
   const settings = settingsForShift(shift, siteSettings);
   return consolidateShiftStops(events, shift).reduce((sum, stop) => {
-    if (ownerForStopReason(stop.reason, settings) !== DEFAULT_STOP_OWNERS.DARKCHILD) return sum;
+    if (!isContractorStop(stop.reason, settings)) return sum;
     return sum + Number(stop.downtime_minutes || 0);
   }, 0);
 }
+
+/** Closed Darkchild stops on this shift, in minutes (backward compatible alias). */
+export const darkchildDowntimeMinutes = contractorDowntimeMinutes;
 
 /** Billable hours = 8-hour shift minus Darkchild downtime. Never the hour meter. */
 export function shiftBillableHours(shift, events, siteSettings) {

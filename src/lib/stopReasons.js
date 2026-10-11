@@ -115,6 +115,28 @@ export function resolveStopReasons(siteSettings) {
   return normalizeStopReasons(siteSettings?.stop_reasons);
 }
 
+export function getStopOwnerLabels(siteSettings) {
+  return {
+    contractor: siteSettings?.contractor_name || DEFAULT_STOP_OWNERS.DARKCHILD,
+    owner: siteSettings?.equipment_owner_name || DEFAULT_STOP_OWNERS.BERLINGTON,
+    site: siteSettings?.client_site_name || DEFAULT_STOP_OWNERS.SITE,
+  };
+}
+
+export function isContractorStop(reason, siteSettings) {
+  const owner = ownerForStopReason(reason, siteSettings);
+  const labels = getStopOwnerLabels(siteSettings);
+  return (
+    owner === labels.contractor ||
+    owner === DEFAULT_STOP_OWNERS.DARKCHILD ||
+    (typeof owner === "string" && (
+      owner.toLowerCase().includes("darkchild") ||
+      owner.toLowerCase().includes("contractor") ||
+      owner.toLowerCase().includes("mechanical")
+    ))
+  );
+}
+
 export function ownerForStopReason(reason, siteSettings) {
   const list = resolveStopReasons(siteSettings);
   const hit = list.find((r) => r.reason === reason);

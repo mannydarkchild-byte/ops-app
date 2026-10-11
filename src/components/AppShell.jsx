@@ -32,7 +32,7 @@ function LogoFallback() {
   );
 }
 
-export function LogoMark({ size = "bar" }) {
+export function LogoMark({ size = "bar", src = "/logo.png" }) {
   const [imgFailed, setImgFailed] = useState(false);
   const dim = {
     sm: "w-16 h-16",
@@ -47,7 +47,7 @@ export function LogoMark({ size = "bar" }) {
     <div className={`${dim} shrink-0`} aria-hidden>
       {!imgFailed ? (
         <img
-          src="/logo.png"
+          src={src || "/logo.png"}
           alt=""
           className="block w-full h-full object-contain"
           onError={() => setImgFailed(true)}
@@ -252,9 +252,11 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
     <header className="sticky top-0 z-30 bg-ops-black border-b border-ops-border shadow-ops-sm">
       <div className="px-3 sm:px-4 py-2 min-h-[7.25rem] flex items-center gap-3 max-w-5xl mx-auto">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <LogoMark size="bar" />
+          <LogoMark size="bar" src={user?.organization_logo_url || user?.logo_url || "/logo.png"} />
           <div className="min-w-0">
-            <span className="font-logo ops-brand text-base leading-none text-ops-gold">OPS</span>
+            <span className="font-logo ops-brand text-base leading-none text-ops-gold">
+              {user?.organization_name || "OPS"}
+            </span>
             <p className="font-body text-sm text-ops-text truncate leading-tight">
               {displayName}
               <span className={`ml-1.5 font-ui text-xs capitalize ${colors.text}`}>{roleLabel}</span>

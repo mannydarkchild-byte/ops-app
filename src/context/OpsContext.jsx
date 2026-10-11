@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase.js";
-import { initDB, readTable, saveLocal, getPendingCount } from "../lib/db.js";
+import { initDB, readTable, saveLocal, getPendingCount, clearSyncedTables } from "../lib/db.js";
 import { loadProfile, signIn, signOut, readCachedAuthUser, cacheAuthUser } from "../lib/auth.js";
 import { runSync, initSyncListeners, onSyncStateChange } from "../lib/sync/engine.js";
 import { syncMachineLocks } from "../lib/machineLock.js";
@@ -170,6 +170,11 @@ export function OpsProvider({ children }) {
   };
 
   const handleSignOut = async () => {
+    try {
+      await clearSyncedTables({ keepPending: true });
+    } catch (e) {
+      console.warn("clearSyncedTables on signOut:", e);
+    }
     await signOut();
     setUser(null);
     setSession(null);
