@@ -12,7 +12,7 @@ import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import { SignedReportCard } from "../components/SignedReportCard.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
 import { ISSUE, SHIFT } from "../lib/constants.js";
-import { ownerForStopReason } from "../lib/stopReasons.js";
+import { ownerForStopReasonMachine } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
@@ -242,13 +242,13 @@ export function ManagerApp() {
     const map = {};
     for (const e of stops) {
       const reason = e.reason || "Other";
-      const label = `${reason} · ${ownerForStopReason(reason, siteConfig)}`;
+      const label = `${reason} · ${ownerForStopReasonMachine(reason, primaryMachine, siteConfig)}`;
       map[label] = (map[label] || 0) + Number(e.downtime_minutes || 0);
     }
     return Object.entries(map)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
-  }, [events, primaryMachine?.id, billingPeriod, siteConfig]);
+  }, [events, primaryMachine, billingPeriod, siteConfig]);
 
   const myIssues = useMemo(
     () => issues.filter(

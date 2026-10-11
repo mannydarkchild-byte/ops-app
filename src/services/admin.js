@@ -52,7 +52,7 @@ export async function updateSite(siteId, fields) {
 }
 
 export async function createMachine({
-  siteId, name, code, type, startHourMeter, billableRate,
+  siteId, name, code, type, startHourMeter, billableRate, supplierName, wearOwnerName,
 }) {
   if (!siteId) throw new Error("Site is required");
   const trimmedName = name?.trim();
@@ -67,6 +67,8 @@ export async function createMachine({
     name: trimmedName,
     code: trimmedCode,
     type: type?.trim() || "Screen",
+    supplier_name: supplierName?.trim() || null,
+    wear_owner_name: wearOwnerName?.trim() || null,
     start_hour_meter: Number(startHourMeter) || 0,
     billable_rate: Number(billableRate) || 0,
     active: true,

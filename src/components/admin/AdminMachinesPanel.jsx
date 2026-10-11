@@ -11,6 +11,8 @@ export function AdminMachinesPanel({ sites, machines, onSaved, showAlert }) {
     type: "Screen",
     startHourMeter: 0,
     billableRate: 1800,
+    supplierName: "",
+    wearOwnerName: "",
   });
   const [busy, setBusy] = useState(false);
 
@@ -33,7 +35,7 @@ export function AdminMachinesPanel({ sites, machines, onSaved, showAlert }) {
     try {
       await createMachine(form);
       setShowAdd(false);
-      setForm((f) => ({ ...f, name: "", code: "" }));
+      setForm((f) => ({ ...f, name: "", code: "", supplierName: "", wearOwnerName: "" }));
       await onSaved?.();
       showAlert?.("Machine added", "New machine saved.");
     } catch (e) {
@@ -104,6 +106,20 @@ export function AdminMachinesPanel({ sites, machines, onSaved, showAlert }) {
               className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
             />
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={form.supplierName}
+              onChange={(e) => setForm((f) => ({ ...f, supplierName: e.target.value }))}
+              placeholder="Supplier, e.g. Darkchild"
+              className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            />
+            <input
+              value={form.wearOwnerName}
+              onChange={(e) => setForm((f) => ({ ...f, wearOwnerName: e.target.value }))}
+              placeholder="Wear owner, e.g. Berlington"
+              className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            />
+          </div>
           <button
             type="button"
             onClick={handleAdd}
@@ -136,6 +152,26 @@ export function AdminMachinesPanel({ sites, machines, onSaved, showAlert }) {
                 />
                 Active
               </label>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-[#F2F0EA]/50">Supplier (deducted)</label>
+                <input
+                  defaultValue={m.supplier_name || ""}
+                  placeholder="e.g. Darkchild"
+                  onBlur={(e) => saveMachine(m.id, { supplier_name: e.target.value.trim() || null })}
+                  className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded text-[#F2F0EA] text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-[#F2F0EA]/50">Wear owner</label>
+                <input
+                  defaultValue={m.wear_owner_name || ""}
+                  placeholder="e.g. Berlington"
+                  onBlur={(e) => saveMachine(m.id, { wear_owner_name: e.target.value.trim() || null })}
+                  className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded text-[#F2F0EA] text-sm"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>

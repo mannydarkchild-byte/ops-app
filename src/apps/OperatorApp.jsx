@@ -13,7 +13,7 @@ import { FormSection } from "../components/ui/FormSection.jsx";
 import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
 import { ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS, EARLY_CLOCK_OUT_GUIDE, STOP_REASON_GUIDE } from "../lib/constants.js";
-import { stopReasonGroups, ownerForStopReason } from "../lib/stopReasons.js";
+import { stopReasonGroupsForMachine, ownerForStopReasonMachine } from "../lib/stopReasons.js";
 import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
 import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus, sameOperatorId } from "../lib/utils.js";
@@ -62,8 +62,6 @@ export function OperatorApp() {
   const [reportPrefill, setReportPrefill] = useState(null);
   const [sheet, setSheet] = useState(null);
 
-  const stopGroups = useMemo(() => stopReasonGroups(siteConfig), [siteConfig]);
-
   const [stopReason, setStopReason] = useState("");
   const [stopNote, setStopNote] = useState("");
   const [restartNote, setRestartNote] = useState("");
@@ -95,6 +93,8 @@ export function OperatorApp() {
     () => siteMachines.find((m) => m.id === pickedMachineId) || null,
     [siteMachines, pickedMachineId]
   );
+
+  const stopGroups = useMemo(() => stopReasonGroupsForMachine(workMachine, siteConfig), [workMachine, siteConfig]);
 
   const prestartItems = useMemo(
     () => prestartItemsForMachine(siteConfig, workMachine),
@@ -936,7 +936,7 @@ export function OperatorApp() {
             </select>
             {stopReason && (
               <ChoiceHint>
-                {statusGuide(STOP_REASON_GUIDE, stopReason)} Owner: {ownerForStopReason(stopReason, siteConfig)}.
+                {statusGuide(STOP_REASON_GUIDE, stopReason)} Owner: {ownerForStopReasonMachine(stopReason, workMachine, siteConfig)}.
               </ChoiceHint>
             )}
           </FormSection>

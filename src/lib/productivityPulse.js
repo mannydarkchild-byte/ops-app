@@ -1,7 +1,7 @@
 import { buildShiftActivityTimeline } from "./shiftMetrics.js";
 import { SHIFT } from "./constants.js";
 import { dedupeShifts, getShiftStatus } from "./utils.js";
-import { ownerForStopReason } from "./stopReasons.js";
+import { ownerForStopReasonMachine } from "./stopReasons.js";
 
 function dayBounds(ref = new Date()) {
   const start = new Date(ref);
@@ -189,11 +189,11 @@ export function buildStockSeries(periods) {
   };
 }
 
-export function buildOwnerTotals(periods, siteSettings) {
+export function buildOwnerTotals(periods, machine, siteSettings) {
   const totals = {};
   for (const p of periods) {
     if (p.state !== "stopped") continue;
-    const owner = ownerForStopReason(p.reason, siteSettings);
+    const owner = ownerForStopReasonMachine(p.reason, machine, siteSettings);
     totals[owner] = (totals[owner] || 0) + Number(p.minutes || 0);
   }
   return Object.entries(totals).sort((a, b) => b[1] - a[1]);
@@ -201,6 +201,7 @@ export function buildOwnerTotals(periods, siteSettings) {
 
 export function buildPulseSnapshot({
   machineId,
+  machine = null,
   shifts,
   events,
   siteSettings,
@@ -243,11 +244,11 @@ export function buildPulseSnapshot({
     live,
     periods,
     ...series,
-    ownerTotals: buildOwnerTotals(periods, siteSettings),
+    ownerTotals: buildOwnerTotals(periods, machine, siteSettings),
     runningNow,
     openStop: openStop || null,
     latestStop: latestStop || null,
-    currentOwner: openStop ? ownerForStopReason(openStop.reason, siteSettings) : null,
+    currentOwner: openStop ? ownerForStopReasonMachine(openStop.reason, machine, siteSettings) : null,
   };
 }
 

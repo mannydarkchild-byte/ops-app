@@ -1,5 +1,5 @@
 import { SHIFT } from "../lib/constants.js";
-import { ownerForStopReason } from "../lib/stopReasons.js";
+import { ownerForStopReasonMachine } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { resolveMediaUrl } from "../lib/media.js";
 import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
@@ -188,7 +188,11 @@ function trendChartSvg(points) {
 }
 
 /** True-stock productivity: climbs while running, falls while stopped. End = runtime − downtime. */
-function stockProductivitySvg(shift, events, siteSettings) {
+function stopOwner(reason, siteSettings, machine) {
+  return ownerForStopReasonMachine(reason, machine, siteSettings);
+}
+
+function stockProductivitySvg(shift, events, siteSettings, machine) {
   const { periods } = buildShiftActivityTimeline(shift, events);
   if (!periods.length) {
     return `<p class="note">No run/stop timeline on this phone yet for a productivity chart.</p>`;
@@ -196,7 +200,7 @@ function stockProductivitySvg(shift, events, siteSettings) {
   const { points } = buildStockSeries(periods);
   const withOwners = points.map((p) => ({
     ...p,
-    owner: p.state === "stopped" ? ownerForStopReason(p.reason, siteSettings) : null,
+    owner: p.state === "stopped" ? stopOwner(p.reason, siteSettings, machine) : null,
   }));
   return stockChartSvgHtml(withOwners, { esc, formatDurationMinutes });
 }
@@ -284,12 +288,12 @@ function runStopChart(runtimeMin, downtimeMin) {
   </div>`;
 }
 
-function downtimeReasonChart(stops, siteSettings) {
+function downtimeReasonChart(stops, siteSettings, machine) {
   const byReason = {};
   const byOwner = {};
   for (const s of stops) {
     const key = s.reason || "Other";
-    const owner = ownerForStopReason(key, siteSettings);
+    const owner = stopOwner(key, siteSettings, machine);
     byReason[key] = (byReason[key] || 0) + Number(s.downtime_minutes || 0);
     byOwner[owner] = (byOwner[owner] || 0) + Number(s.downtime_minutes || 0);
   }
@@ -301,7 +305,7 @@ function downtimeReasonChart(stops, siteSettings) {
     .map(([owner, min]) => `<span class="owner-chip"><strong>${esc(owner)}</strong> ${formatDurationMinutes(min)}</span>`)
     .join("");
   const bars = rows.map(([reason, min]) => `<div class="hbar">
-    <div class="hbar-label"><span>${esc(reason)} <em class="owner-tag">${esc(ownerForStopReason(reason, siteSettings))}</em></span><strong>${formatDurationMinutes(min)}</strong></div>
+    <div class="hbar-label"><span>${esc(reason)} <em class="owner-tag">${esc(stopOwner(reason, siteSettings, machine))}</em></span><strong>${formatDurationMinutes(min)}</strong></div>
     <div class="hbar-track"><div class="hbar-fill" style="width:${(min / max) * 100}%"></div></div>
   </div>`).join("");
   return `<div class="owner-row">${ownerSummary}</div>${bars}`;
@@ -357,7 +361,7 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
     }
     const range = `${fmtDate(new Date(item.start).toISOString())} – ${fmtDate(new Date(item.end).toISOString())}`;
     if (item.state === "stopped") {
-      return `<tr><td>${range}</td><td>Stopped</td><td>${esc(item.reason || "Downtime")} · ${esc(ownerForStopReason(item.reason, siteSettings))}</td><td>${formatDurationMinutes(item.minutes)}${item.note ? ` · ${esc(item.note)}` : ""}</td></tr>`;
+      return `<tr><td>${range}</td><td>Stopped</td><td>${esc(item.reason || "Downtime")} · ${esc(stopOwner(item.reason, siteSettings, machine))}</td><td>${formatDurationMinutes(item.minutes)}${item.note ? ` · ${esc(item.note)}` : ""}</td></tr>`;
     }
     return `<tr><td>${range}</td><td>Running</td><td>—</td><td>${formatDurationMinutes(item.minutes)}</td></tr>`;
   }).join("");
@@ -375,7 +379,7 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
   const prestartAction = prestart.filter((i) => /action/i.test(i.status || "")).length;
   const prestartBad = prestart.filter((i) => /attention|need|fail/i.test(i.status || "")).length;
   const prestartProblems = prestart.filter((i) => !/^ok$/i.test(i.status || ""));
-  const downtimeChart = downtimeReasonChart(stops, siteSettings);
+  const downtimeChart = downtimeReasonChart(stops, siteSettings, machine);
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Daily Report · ${esc(machine?.name || "Machine")} · ${titleDate}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -486,7 +490,7 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
     <section>
       <h2 class="font-brand">Machine productivity</h2>
       <p class="note" style="margin-top:0">Stock-style score for this shift only. Climbs while the machine runs, falls while it is stopped. End point is runtime minus downtime. Red dots are stops.</p>
-      ${stockProductivitySvg(shift, events, siteSettings)}
+      ${stockProductivitySvg(shift, events, siteSettings, machine)}
     </section>
 
     <section>
@@ -530,7 +534,7 @@ ${timelineRows || '<tr class="empty"><td colspan="4">No activity logged</td></tr
 ${stops.length
     ? stops.map((s) => {
       const endLabel = s.restarted_at ? fmtDate(s.restarted_at) : (shift.ended_at ? fmtDate(shift.ended_at) : "—");
-      return `<tr><td>${esc(s.reason)}</td><td>${esc(ownerForStopReason(s.reason, siteSettings))}</td><td>${fmtDate(s.stopped_at)}${s.restarted_at ? ` → ${endLabel}` : ""}</td><td>${formatDurationMinutes(s.downtime_minutes || 0)}</td><td>${esc(s.note || "")}</td></tr>`;
+      return `<tr><td>${esc(s.reason)}</td><td>${esc(stopOwner(s.reason, siteSettings, machine))}</td><td>${fmtDate(s.stopped_at)}${s.restarted_at ? ` → ${endLabel}` : ""}</td><td>${formatDurationMinutes(s.downtime_minutes || 0)}</td><td>${esc(s.note || "")}</td></tr>`;
     }).join("")
     : '<tr class="empty"><td colspan="5">No stops recorded</td></tr>'}
       </tbody></table>
@@ -602,13 +606,13 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
     ...periods.filter((p) => p.state === "stopped").map((p) => [
       `${fmtDate(new Date(p.start).toISOString())} – ${fmtDate(new Date(p.end).toISOString())}`,
       "Stopped",
-      `${p.reason || "Downtime"} (${ownerForStopReason(p.reason, siteSettings)})`,
+      `${p.reason || "Downtime"} (${stopOwner(p.reason, siteSettings, machine)})`,
       formatDurationMinutes(p.minutes),
     ]),
   ];
   const ownerTotals = {};
   for (const s of stops) {
-    const owner = ownerForStopReason(s.reason, siteSettings);
+    const owner = stopOwner(s.reason, siteSettings, machine);
     ownerTotals[owner] = (ownerTotals[owner] || 0) + Number(s.downtime_minutes || 0);
   }
   return [
@@ -647,7 +651,7 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
         ["Reason", "Owner", "Stopped", "Duration", "Notes"],
         ...stops.map((s) => [
           s.reason || "",
-          ownerForStopReason(s.reason, siteSettings),
+          stopOwner(s.reason, siteSettings, machine),
           fmtDate(s.stopped_at),
           formatDurationMinutes(s.downtime_minutes || 0),
           s.note || "",

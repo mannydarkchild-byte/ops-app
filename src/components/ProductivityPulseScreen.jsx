@@ -6,7 +6,7 @@ import { buildPulseSnapshot } from "../lib/productivityPulse.js";
 import { refreshMachineActivity } from "../lib/machineStatus.js";
 import { getBillingPeriod, getPrimaryMachine } from "../lib/utils.js";
 import { formatDurationMinutes } from "../lib/shiftMetrics.js";
-import { ownerForStopReason } from "../lib/stopReasons.js";
+import { ownerForStopReasonMachine } from "../lib/stopReasons.js";
 
 function toDateInputValue(d) {
   const x = new Date(d);
@@ -87,6 +87,7 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
     if (!machine?.id) return null;
     return buildPulseSnapshot({
       machineId: machine.id,
+      machine,
       shifts,
       events,
       siteSettings: siteConfig,
@@ -96,7 +97,7 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
       cycleEnd: cycle.end,
       nowMs,
     });
-  }, [machine?.id, shifts, events, siteConfig, windowMode, historyDay, cycle.start, cycle.end, nowMs]);
+  }, [machine, shifts, events, siteConfig, windowMode, historyDay, cycle.start, cycle.end, nowMs]);
 
   const windowLabel = windowMode === "today"
     ? "Today since midnight"
@@ -191,7 +192,7 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
           </p>
           {pulse?.openStop && (
             <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">
-              Owner: {pulse.currentOwner || ownerForStopReason(pulse.openStop.reason, siteConfig)}
+              Owner: {pulse.currentOwner || ownerForStopReasonMachine(pulse.openStop.reason, machine, siteConfig)}
               {pulse.openStop.operatorName ? ` · ${pulse.openStop.operatorName}` : ""}
             </p>
           )}
@@ -233,7 +234,7 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
               <div key={`${p.start}-${p.reason}`} className="border-b border-[#2A2A2A] pb-2 last:border-0 last:pb-0">
                 <p className="font-logo text-sm text-[#F2F0EA]">{p.reason || "Stop"}</p>
                 <p className="font-body text-xs text-[#F2F0EA]/55 mt-0.5">
-                  {ownerForStopReason(p.reason, siteConfig)} · {formatDurationMinutes(p.minutes)} ·{" "}
+                  {ownerForStopReasonMachine(p.reason, machine, siteConfig)} · {formatDurationMinutes(p.minutes)} ·{" "}
                   {new Date(p.start).toLocaleString("en-ZA", {
                     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
                   })}

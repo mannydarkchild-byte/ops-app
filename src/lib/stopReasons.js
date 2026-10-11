@@ -1,16 +1,24 @@
-/** Default stop reasons + owners. Admin/Manager can override per site in site_settings.stop_reasons. */
+/** Default stop owners are ROLES, not companies. Each machine resolves the role
+ * to its own supplier/wear-owner name; site settings are the fallback. */
 
 export const DEFAULT_STOP_OWNERS = {
-  DARKCHILD: "Darkchild",
-  BERLINGTON: "Berlington",
+  DARKCHILD: "Machine supplier",
+  BERLINGTON: "Wear owner",
   SITE: "Site / operations",
 };
 
+/** Stable ownership roles behind the display names. */
+export const OWNER_ROLES = {
+  CONTRACTOR: "contractor",
+  WEAR: "wear",
+  SITE: "site",
+};
+
 /**
- * Warrior 2100 downtime.
- * Darkchild: mechanical, engine, hydraulic, electrical.
- * Berlington: wear and consumables.
- * Site: operations, production, and weather.
+ * Downtime roles, resolved per machine.
+ * Machine supplier: mechanical, engine, hydraulic, electrical — deducted.
+ * Wear owner: wear and consumables — no deduction.
+ * Site: operations, production, and weather — standing time, payable in full.
  */
 export const DEFAULT_STOP_REASONS = [
   { reason: "Screenbox bearings or drive", owner: DEFAULT_STOP_OWNERS.DARKCHILD },
@@ -83,9 +91,12 @@ const PREVIOUS_DEFAULT_SIGNATURE = [
 ].sort().join("\n");
 
 const OWNER_HINT = {
-  [DEFAULT_STOP_OWNERS.DARKCHILD]: "Darkchild — mechanical, engine, hydraulic, electrical",
-  [DEFAULT_STOP_OWNERS.BERLINGTON]: "Berlington — wear and consumables",
-  [DEFAULT_STOP_OWNERS.SITE]: "Site — operations, production, weather",
+  [DEFAULT_STOP_OWNERS.DARKCHILD]: "Machine supplier — breakdowns, deducted from billable",
+  [DEFAULT_STOP_OWNERS.BERLINGTON]: "Wear owner — wear and consumables, no deduction",
+  [DEFAULT_STOP_OWNERS.SITE]: "Site — standing time, payable in full",
+  // Legacy stored names resolve to the same hints.
+  Darkchild: "Machine supplier — breakdowns, deducted from billable",
+  Berlington: "Wear owner — wear and consumables, no deduction",
 };
 
 function copyDefaults() {
@@ -178,4 +189,76 @@ export function parseStopReasonsText(text) {
     const parts = line.split("|").map((p) => p.trim());
     return { reason: parts[0] || "", owner: parts[1] || DEFAULT_STOP_OWNERS.SITE };
   }));
+}
+
+/** Stable role behind a stored owner name. Contractor first (deducted), then wear. */
+export function stopOwnerRole(reason, siteSettings) {
+  if (isContractorStop(reason, siteSettings)) return OWNER_ROLES.CONTRACTOR;
+  if (isWearStop(reason, siteSettings)) return OWNER_ROLES.WEAR;
+  return OWNER_ROLES.SITE;
+}
+
+export function isWearStop(reason, siteSettings) {
+  const owner = ownerForStopReason(reason, siteSettings);
+  const labels = getStopOwnerLabels(siteSettings);
+  return (
+    owner === labels.owner ||
+    owner === DEFAULT_STOP_OWNERS.BERLINGTON ||
+    (typeof owner === "string" && (
+      owner.toLowerCase().includes("berlington") ||
+      owner.toLowerCase().includes("wear") ||
+      owner.toLowerCase().includes("consumable")
+    ))
+  );
+}
+
+/**
+ * Display name for an ownership role on one machine.
+ * Warrior → Darkchild, FEL → Mamarc, excavator → Berlington.
+ * Falls back to site settings, then to the generic role label.
+ */
+export function machineOwnerName(machine, role, siteSettings) {
+  const labels = getStopOwnerLabels(siteSettings);
+  if (role === OWNER_ROLES.CONTRACTOR) {
+    return machine?.supplier_name || labels.contractor || DEFAULT_STOP_OWNERS.DARKCHILD;
+  }
+  if (role === OWNER_ROLES.WEAR) {
+    return machine?.wear_owner_name || labels.owner || DEFAULT_STOP_OWNERS.BERLINGTON;
+  }
+  return labels.site || DEFAULT_STOP_OWNERS.SITE;
+}
+
+/** Owner display for one stop on one machine. Billing still keys off the role. */
+export function ownerForStopReasonMachine(reason, machine, siteSettings) {
+  return machineOwnerName(machine, stopOwnerRole(reason, siteSettings), siteSettings);
+}
+
+const ROLE_HINT = {
+  [OWNER_ROLES.CONTRACTOR]: "breakdowns — deducted from billable",
+  [OWNER_ROLES.WEAR]: "wear and consumables — no deduction",
+  [OWNER_ROLES.SITE]: "standing time — payable in full",
+};
+
+/** Stop picker groups for one machine: reasons grouped by role, headed by that machine's owner names. */
+export function stopReasonGroupsForMachine(machine, siteSettings) {
+  const list = resolveStopReasons(siteSettings);
+  const order = [];
+  const byRole = {};
+  for (const row of list) {
+    const role = stopOwnerRole(row.reason, siteSettings);
+    if (!byRole[role]) {
+      byRole[role] = [];
+      order.push(role);
+    }
+    byRole[role].push(row.reason);
+  }
+  return order.map((role) => {
+    const owner = machineOwnerName(machine, role, siteSettings);
+    return {
+      owner,
+      role,
+      hint: `${owner} — ${ROLE_HINT[role] || role}`,
+      reasons: byRole[role],
+    };
+  });
 }
