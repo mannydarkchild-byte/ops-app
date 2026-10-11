@@ -23,6 +23,7 @@ import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBe
 import { formatSyncErrorMessage } from "../lib/labels.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
+import { siteSignLink, siteSignShareText, whatsappShareUrl } from "../lib/shiftAgreement.js";
 
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
@@ -112,6 +113,8 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const [reasonModal, setReasonModal] = useState(null);
 
   const [alert, setAlert] = useState({ isOpen: false });
+  const [justSigned, setJustSigned] = useState(null);
+  const [resendBusy, setResendBusy] = useState(null);
   const [kpiDetail, setKpiDetail] = useState(null);
   const [reportPreview, setReportPreview] = useState(null);
   const [dispatchBusy, setDispatchBusy] = useState(null);
@@ -211,7 +214,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
   const pendingShifts = dedupeShifts(shifts
 
-    .filter((r) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(getShiftStatus(r)) && r.site_id === user?.site_id))
+    .filter((r) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(getShiftStatus(r)) && r.site_id === user?.site_id))
 
     .sort((a, b) => {
 
@@ -222,6 +225,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
       return aMine - bMine || new Date(b.ended_at || 0) - new Date(a.ended_at || 0);
 
     });
+
+  const awaitingSiteShifts = useMemo(() => dedupeShifts(shifts
+    .filter((r) => getShiftStatus(r) === SHIFT.MACHINE_SIGNED && r.site_id === user?.site_id))
+    .sort((a, b) => new Date(b.machine_signed_at || b.updated_at || 0) - new Date(a.machine_signed_at || a.updated_at || 0)),
+  [shifts, user?.site_id]);
 
 
 
@@ -700,7 +708,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     if (!verifyTarget) return;
 
-    if (action !== "verify") {
+    if (action !== "machine_sign") {
 
       openReasonModal(verifyTarget, action);
 
@@ -710,7 +718,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
     if (!signature) {
 
-      showAlert("Signature Required", "Draw your signature before verifying.", "warning");
+      showAlert("Signature Required", "Draw your signature before signing the machine side.", "warning");
 
       return;
 
@@ -724,13 +732,14 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
       if (navigator.onLine) {
 
-        await wf.verifyShift(verifyTarget, user, { action, reason: null, signatureDataUrl: signature });
+        const signed = await wf.verifyShift(verifyTarget, user, { action: "machine_sign", reason: null, signatureDataUrl: signature });
 
         await syncNow();
+        setJustSigned(signed || { ...verifyTarget, shift_status: SHIFT.MACHINE_SIGNED });
 
       } else {
 
-        showAlert("Offline", "Verification requires connection.", "warning");
+        showAlert("Offline", "Machine sign-off needs a connection — the locked version and site link must reach the server.", "warning");
 
         setVerifyBusy(null);
 
@@ -744,7 +753,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
       setSignature(null);
 
-      showAlert("Done", "Shift verified with your signature.", "success");
+      showAlert("Machine signed", "Version locked. Share the site link over WhatsApp so the site supervisor can agree.", "success");
 
     } catch (e) {
 
@@ -761,9 +770,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const tabItems = useMemo(
     () => TABS.map((t) => ({
       ...t,
-      badge: t.id === "today" ? openShiftsToClose.length : t.id === "verify" ? myPendingVerify + dispatchWaiting : t.id === "issues" ? openSiteIssues.length : 0,
+      badge: t.id === "today" ? openShiftsToClose.length : t.id === "verify" ? myPendingVerify + dispatchWaiting + awaitingSiteShifts.length : t.id === "issues" ? openSiteIssues.length : 0,
     })),
-    [openShiftsToClose.length, myPendingVerify, dispatchWaiting, openSiteIssues.length]
+    [openShiftsToClose.length, myPendingVerify, dispatchWaiting, awaitingSiteShifts.length, openSiteIssues.length]
   );
 
   const beginCloseShift = (shift) => {
@@ -788,7 +797,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
-        {(myPendingVerify > 0 || criticalIssues > 0 || stoppedMachines > 0 || openShiftsToClose.length > 0) && (
+        {(myPendingVerify > 0 || awaitingSiteShifts.length > 0 || criticalIssues > 0 || stoppedMachines > 0 || openShiftsToClose.length > 0) && (
 
           <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-xl px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1">
 
@@ -798,7 +807,17 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
               <button type="button" onClick={() => setTab("verify")} className="ops-chip font-logo text-sm text-[#F5C518] hover:underline">
 
-                {myPendingVerify} to sign off
+                {myPendingVerify} to sign (machine)
+
+              </button>
+
+            )}
+
+            {awaitingSiteShifts.length > 0 && (
+
+              <button type="button" onClick={() => setTab("verify")} className="ops-chip font-logo text-sm text-[#00A4A6] hover:underline">
+
+                {awaitingSiteShifts.length} awaiting site sign
 
               </button>
 
@@ -1114,7 +1133,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
 
 
-            <p className="font-logo text-sm text-[#F5C518] mb-2">Needs your sign-off ({displayedPendingShifts.length})</p>
+            <p className="font-logo text-sm text-[#F5C518] mb-2">Needs machine sign-off ({displayedPendingShifts.length})</p>
 
 
 
@@ -1172,7 +1191,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
                 <div className="grid grid-cols-1 gap-2 mt-4">
 
-                  <button onClick={() => openVerifyModal(r)} disabled={verifyBusy === r.id} className="w-full bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold">Sign off</button>
+                  <button onClick={() => openVerifyModal(r)} disabled={verifyBusy === r.id} className="w-full bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold">Sign machine side</button>
 
                   <button onClick={() => openReasonModal(r, "correct")} disabled={verifyBusy === r.id} className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold">Send back</button>
 
@@ -1185,6 +1204,43 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
               </div>
 
             ))}
+
+            {justSigned?.site_token && (
+              <SiteSignShareCard
+                shift={shifts.find((s) => s.id === justSigned.id) || justSigned}
+                machineName={machineName(justSigned.machine_id)}
+                onDismiss={() => setJustSigned(null)}
+              />
+            )}
+
+            {awaitingSiteShifts.length > 0 && (
+              <div className="mt-4">
+                <p className="font-logo text-sm text-[#00A4A6] mb-2">Awaiting site sign-off ({awaitingSiteShifts.length}) — version locked, on their desk</p>
+                <div className="space-y-2">
+                  {awaitingSiteShifts.map((r) => (
+                    <SiteSignShareCard
+                      key={r.id}
+                      shift={r}
+                      machineName={machineName(r.machine_id)}
+                      compact
+                      onResend={async () => {
+                        setResendBusy(r.id);
+                        try {
+                          await wf.resendSiteLink(user, r);
+                          await refreshLocal();
+                          showAlert("Link resent", "A fresh 7-day site link was created. Share it over WhatsApp.", "success");
+                        } catch (e) {
+                          showAlert("Could not resend", e.message, "error");
+                        } finally {
+                          setResendBusy(null);
+                        }
+                      }}
+                      resending={resendBusy === r.id}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
           </div>
 
@@ -1505,7 +1561,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
       {verifyTarget && (
 
-        <Modal title="Sign Off Shift" color="green" onClose={() => { setVerifyTarget(null); setSignature(null); }}>
+        <Modal title="Sign — machine side" color="green" onClose={() => { setVerifyTarget(null); setSignature(null); }}>
 
           <p className="font-body text-sm text-[#F2F0EA]/70 mb-4">
 
@@ -1515,11 +1571,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 
           <SignaturePad onChange={setSignature} />
 
-          <button onClick={() => handleVerify("verify")} disabled={verifyBusy || !signature}
+          <button onClick={() => handleVerify("machine_sign")} disabled={verifyBusy || !signature}
 
             className="w-full mt-4 bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40">
 
-            {verifyBusy ? "Signing off…" : "Sign off"}
+            {verifyBusy ? "Signing…" : "Sign machine side"}
 
           </button>
 
@@ -1584,6 +1640,54 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
 }
 
 
+
+function SiteSignShareCard({ shift, machineName, onDismiss, onResend, resending, compact }) {
+  const link = shift?.site_token ? siteSignLink(shift) : "";
+  const expiry = shift?.site_token_expires_at ? new Date(shift.site_token_expires_at).toLocaleDateString() : "";
+  const shareText = shift?.site_token ? siteSignShareText(shift, machineName, link) : "";
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      window.prompt("Copy this site sign-off link:", link);
+    }
+  };
+  return (
+    <div className="bg-[#00A4A6]/5 border border-[#00A4A6]/40 rounded-xl p-4">
+      <p className="font-logo text-sm text-[#00A4A6] mb-1">
+        {compact ? "Site link ready" : "Machine signed — send this to the site supervisor"}
+      </p>
+      <p className="text-base text-[#F2F0EA]">
+        {machineName} · {shift?.operator_name || "Operator"} · {Number(shift?.hours_worked || 0).toFixed(1)}h machine
+      </p>
+      <p className="text-sm text-[#F2F0EA]/60 mt-1">
+        Signed machine side by {shift?.machine_signature_name || shift?.supervisor_signature_name || "supervisor"}
+        {shift?.shift_version ? ` · v${shift.shift_version} locked` : ""}
+        {expiry ? ` · link expires ${expiry}` : ""}
+      </p>
+      <div className="grid grid-cols-2 gap-2 mt-3">
+        <button type="button" onClick={copyLink} disabled={!link} className="w-full border border-[#00A4A6] text-[#00A4A6] py-3 rounded-xl font-logo text-sm disabled:opacity-40">
+          Copy site link
+        </button>
+        <a href={link ? whatsappShareUrl("", shareText) : undefined} target="_blank" rel="noreferrer" className={`w-full text-center py-3 rounded-xl font-logo text-sm ${link ? "bg-[#22C55E] text-black" : "bg-[#2A2A2A] text-[#F2F0EA]/40 pointer-events-none"}`}>
+          WhatsApp site
+        </a>
+      </div>
+      <div className="flex gap-2 mt-2">
+        {onResend && (
+          <button type="button" onClick={onResend} disabled={resending} className="flex-1 border border-[#2A2A2A] text-[#F2F0EA] py-2 rounded-xl font-logo text-sm disabled:opacity-40">
+            {resending ? "Resending…" : "Resend fresh link"}
+          </button>
+        )}
+        {onDismiss && (
+          <button type="button" onClick={onDismiss} className="flex-1 border border-[#2A2A2A] text-[#F2F0EA]/60 py-2 rounded-xl font-logo text-sm">
+            Dismiss
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function FleetMachineCard({ fleet, onCloseShift, workSessions = [], profiles = [] }) {
 

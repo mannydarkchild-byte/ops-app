@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { fmtDateShort } from "../lib/utils.js";
+import { agreementLabel } from "../lib/shiftAgreement.js";
 import { formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
 
 export function SignedReportCard({ shift, machineName, events, siteSettings, onViewReport, onDownloadReport, onShareReport }) {
@@ -41,8 +42,10 @@ export function SignedReportCard({ shift, machineName, events, siteSettings, onV
             {fmtDateShort(shift.started_at)} · {shift.operator_name || "Operator"}
           </p>
           <p className="text-[10px] text-[#F5C518]/90 mt-1">
-            ✓ Signed by {shift.supervisor_signature_name || "Supervisor"}
+            ✓ Signed by {shift.machine_signature_name || shift.supervisor_signature_name || "Supervisor"}
+            {shift.site_signature_name ? ` + ${shift.site_signature_name} (site)` : ""}
           </p>
+          <p className="text-[9px] text-[#F2F0EA]/40 mt-0.5">{agreementLabel(shift)}</p>
         </div>
         <div className="text-right shrink-0">
           <p className="font-logo text-lg text-[#22C55E]">{shiftBillableHours(shift, events, siteSettings).toFixed(1)}h</p>

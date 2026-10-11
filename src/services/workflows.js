@@ -547,6 +547,9 @@ function assertOwnEditableShift(user, shift) {
   if (getShiftStatus(shift) === SHIFT.VERIFIED) {
     throw new Error("This shift is already signed off. Ask a supervisor if it must change.");
   }
+  if (getShiftStatus(shift) === SHIFT.MACHINE_SIGNED) {
+    throw new Error("The machine supervisor already signed this version. Ask them to send it back if it must change.");
+  }
 }
 
 /** Operator edits their own unsigned shift — times, meters, notes, supervisor. */
@@ -1090,8 +1093,8 @@ async function addEvent(user, machine, site, type, details = {}) {
 export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, reading } = {}) {
   if (!shift?.id) throw new Error("No shift to update");
   if (!photoRef) throw new Error("Take or choose a clearer photo first");
-  if (getShiftStatus(shift) === SHIFT.VERIFIED) {
-    throw new Error("This shift is already signed off");
+  if ([SHIFT.VERIFIED, SHIFT.MACHINE_SIGNED].includes(getShiftStatus(shift))) {
+    throw new Error("This shift version is already signed and locked");
   }
   const now = nowISO();
   const h = reading === "" || reading == null ? null : Number(reading);
@@ -1272,8 +1275,9 @@ export async function verifyShift(shift, supervisor, options) {
 
 async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDataUrl }) {
   if (action === "verify" && getShiftStatus(shift) === SHIFT.VERIFIED) return shift;
-  if (action === "verify" && !signatureDataUrl) {
-    throw new Error("Supervisor signature is required to verify");
+  if (action === "machine_sign" && getShiftStatus(shift) === SHIFT.MACHINE_SIGNED) return shift;
+  if ((action === "verify" || action === "machine_sign") && !signatureDataUrl) {
+    throw new Error("Supervisor signature is required to sign");
   }
 
   let signatureRef = null;
@@ -1283,6 +1287,8 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
 
   const now = nowISO();
   const token = shift.verification_token || crypto.randomUUID?.() || makeId("TOK");
+  const siteToken = crypto.randomUUID?.() || makeId("SITE");
+  const siteExpiry = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 
   if (navigator.onLine) {
     if (!shift.verification_token) {
@@ -1310,12 +1316,18 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
             verification_token: null,
             updated_at: now,
           }
-        : {
-            shift_status: SHIFT.CORRECTION_REQUIRED,
-            supervisor_comment: reason || "Correction required",
-            verification_token: null,
-            updated_at: now,
-          };
+        : action === "machine_sign"
+          ? {
+              shift_status: SHIFT.MACHINE_SIGNED,
+              verification_token: null,
+              updated_at: now,
+            }
+          : {
+              shift_status: SHIFT.CORRECTION_REQUIRED,
+              supervisor_comment: reason || "Correction required",
+              verification_token: null,
+              updated_at: now,
+            };
       const { error: updErr } = await supabase.from("shifts").update(patch).eq("id", shift.id);
       if (updErr) throw updErr;
     }
@@ -1327,9 +1339,39 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
         updated_at: now,
       }).eq("id", shift.id);
     }
+
+    if (action === "machine_sign") {
+      const { error: signErr } = await supabase.from("shifts").update({
+        machine_signature_ref: signatureRef,
+        machine_signature_name: supervisor.name,
+        machine_signed_at: now,
+        machine_signed_by: supervisor.id,
+        shift_version: Number(shift.shift_version || 1),
+        site_token: siteToken,
+        site_token_expires_at: siteExpiry,
+        updated_at: now,
+      }).eq("id", shift.id);
+      if (signErr) throw signErr;
+    }
+  } else if (action === "machine_sign" || action === "verify") {
+    throw new Error("Need a connection to sign — the locked version and site link must reach the server");
   }
 
-  const updated = {
+  const updated = action === "machine_sign"
+    ? {
+        ...shift,
+        shift_status: SHIFT.MACHINE_SIGNED,
+        machine_signature_ref: signatureRef || shift.machine_signature_ref,
+        machine_signature_name: supervisor.name,
+        machine_signed_at: now,
+        machine_signed_by: supervisor.id,
+        shift_version: Number(shift.shift_version || 1),
+        site_token: siteToken,
+        site_token_expires_at: siteExpiry,
+        verification_token: null,
+        updated_at: now,
+      }
+    : {
     ...shift,
     shift_status: action === "verify" ? SHIFT.VERIFIED : SHIFT.CORRECTION_REQUIRED,
     verified_at: action === "verify" ? now : shift.verified_at,
@@ -1353,6 +1395,12 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
         verified_by: supervisor.id,
         updated_at: now,
       });
+    } else if (action === "machine_sign") {
+      await saveLocal("shift_submissions", {
+        ...submission,
+        status: SHIFT.MACHINE_SIGNED,
+        updated_at: now,
+      });
     } else {
       await saveLocal("shift_submissions", {
         ...submission,
@@ -1364,6 +1412,41 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
 
   scheduleSync();
   return updated;
+}
+
+/** Regenerate the site sign-off link after expiry or loss. Machine sign stays intact. */
+export async function resendSiteLink(supervisor, shift) {
+  if (getShiftStatus(shift) !== SHIFT.MACHINE_SIGNED) {
+    throw new Error("Site link is only available after the machine side is signed");
+  }
+  if (!navigator.onLine) throw new Error("Need a connection to create a fresh site link");
+  const now = nowISO();
+  const siteToken = crypto.randomUUID?.() || makeId("SITE");
+  const siteExpiry = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+  const { error } = await supabase.from("shifts").update({
+    site_token: siteToken,
+    site_token_expires_at: siteExpiry,
+    updated_at: now,
+  }).eq("id", shift.id);
+  if (error) throw new Error(error.message || "Could not create a fresh link");
+  const updated = { ...shift, site_token: siteToken, site_token_expires_at: siteExpiry, updated_at: now };
+  await saveLocal("shifts", updated);
+  scheduleSync();
+  return updated;
+}
+
+/** Site supervisor agrees/disputes via WhatsApp magic link. No login; token is the auth. */
+export async function siteSignShiftPublic({ shiftId, token, name, phone, action, reason }) {
+  const { error } = await supabase.rpc("site_sign_shift", {
+    p_shift_id: shiftId,
+    p_token: token,
+    p_name: name || null,
+    p_phone: phone || null,
+    p_action: action,
+    p_reason: reason || null,
+  });
+  if (error) throw new Error(error.message || "Could not record the site decision");
+  return true;
 }
 
 /** Operator fixes a shift after supervisor requested correction */
@@ -1388,6 +1471,17 @@ export async function resubmitShiftAfterCorrection(user, machine, site, shift, {
     downtime_minutes: downtimeMinutes,
     shift_status: SHIFT.RESUBMITTED,
     verification_token: crypto.randomUUID?.() || makeId("TOK"),
+    // New version: previous machine signature no longer applies.
+    machine_signature_ref: null,
+    machine_signature_name: null,
+    machine_signed_at: null,
+    machine_signed_by: null,
+    site_signature_name: null,
+    site_signer_phone: null,
+    site_signed_at: null,
+    site_token: null,
+    site_token_expires_at: null,
+    shift_version: Number(shift.shift_version || 1) + 1,
     notes: [shift.notes, operatorNote ? `Resubmit: ${operatorNote}` : "Resubmitted after correction"].filter(Boolean).join(" | "),
     updated_at: now,
   };

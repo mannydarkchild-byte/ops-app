@@ -28,6 +28,7 @@ import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.j
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
+import { currentShiftWindow } from "../lib/shiftAgreement.js";
 import { BucketSizeEditor } from "../components/BucketSizeEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
 import * as wf from "../services/workflows.js";
@@ -294,10 +295,22 @@ export function ManagerApp() {
 
   const pendingVerify = useMemo(
     () => warriorShifts.filter(
-      (s) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED].includes(s.shift_status)
+      (s) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(s.shift_status)
     ).length,
     [warriorShifts]
   );
+
+  const awaitingSiteCount = useMemo(
+    () => warriorShifts.filter((s) => s.shift_status === SHIFT.MACHINE_SIGNED).length,
+    [warriorShifts]
+  );
+
+  const dualSignedCount = useMemo(
+    () => signedReports.filter((s) => s.site_signature_name || s.site_signed_at).length,
+    [signedReports]
+  );
+
+  const currentShift = useMemo(() => currentShiftWindow(), []);
 
   const signedReports = useMemo(
     () => dedupeShifts(warriorShifts
@@ -397,7 +410,8 @@ export function ManagerApp() {
     partsRequests.length > 0 ||
     criticalWarriorIssues.length > 0 ||
     fleetStatus?.isStopped ||
-    pendingVerify > 0;
+    pendingVerify > 0 ||
+    awaitingSiteCount > 0;
 
   const tabItems = useMemo(
     () => TABS.map((t) => ({
@@ -458,7 +472,12 @@ export function ManagerApp() {
             )}
             {pendingVerify > 0 && (
               <span className="font-logo text-[10px] text-[#F2F0EA]/50">
-                {pendingVerify} shift{pendingVerify !== 1 ? "s" : ""} awaiting supervisor sign-off
+                {pendingVerify} shift{pendingVerify !== 1 ? "s" : ""} awaiting machine sign-off
+              </span>
+            )}
+            {awaitingSiteCount > 0 && (
+              <span className="font-logo text-[10px] text-[#00A4A6]">
+                {awaitingSiteCount} shift{awaitingSiteCount !== 1 ? "s" : ""} awaiting site sign-off — with Berlington
               </span>
             )}
           </div>
@@ -484,7 +503,7 @@ export function ManagerApp() {
           <div className="space-y-4">
             <WorkHoursPanel variant="clock" />
             <p className="font-body text-sm text-[#F2F0EA]/70">Start here. Check what is running, then follow money or problems only when needed.</p>
-            <p className="font-body text-xs text-[#F2F0EA]/50">{primaryMachine?.name || "This machine"} · {billingPeriod.label}</p>
+            <p className="font-body text-xs text-[#F2F0EA]/50">{primaryMachine?.name || "This machine"} · {billingPeriod.label} · Current shift: {currentShift.label}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <DashboardKpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts started · 8h minus Darkchild downtime`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.billable)} />
               <DashboardKpi label={HOUR_LABELS.machine} value={`${cycleStats.machineHours.toFixed(1)}h`} sub={`${primaryMachine?.name || "This machine"} · ${cycleStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.machine)} />
@@ -746,8 +765,7 @@ export function ManagerApp() {
 
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-3">
-                <h3 className="font-logo text-[#F5C518] text-sm">SIGNED DAILY REPORTS</h3>
-                <div className="flex flex-wrap gap-1 ml-auto">
+                <h3 className="font-logo text-[#F5C518] text-sm">SIGNED DAILY REPORTS</h3>                <div className="flex flex-wrap gap-1 ml-auto">
                   {REPORT_FILTERS.map((f) => (
                     <button
                       key={f.id}
@@ -760,6 +778,9 @@ export function ManagerApp() {
                   ))}
                 </div>
               </div>
+              <p className="text-[10px] text-[#F2F0EA]/40 -mt-1">
+                {dualSignedCount} dual-signed (both sides agreed, billable) · {signedReports.length - dualSignedCount} legacy single-signed
+              </p>
               {signedReports.length === 0 ? (
                 <p className="text-sm text-[#F2F0EA]/40 text-center py-6">No signed reports for this period.</p>
               ) : (

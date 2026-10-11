@@ -14,6 +14,8 @@ export const SHIFT = {
   RUNNING: "RUNNING",
   SUBMITTED: "SUBMITTED",
   WAITING_FOR_VERIFICATION: "WAITING_FOR_VERIFICATION",
+  /** Machine supervisor signed in app; version locked; waiting for site sign-off via link. */
+  MACHINE_SIGNED: "MACHINE_SIGNED",
   VERIFIED: "VERIFIED",
   CORRECTION_REQUIRED: "CORRECTION_REQUIRED",
   RESUBMITTED: "RESUBMITTED",
@@ -274,7 +276,7 @@ export const ALLOWED_COLUMNS = {
   sites: ["id", "name", "code", "timezone", "organization_id", "active", "created_at", "updated_at"],
   machines: ["id", "site_id", "name", "code", "type", "organization_id", "start_hour_meter", "billable_rate", "active", "created_at", "updated_at"],
   profiles: ["id", "email", "name", "role", "site_id", "machine_id", "organization_id", "phone", "shift_band", "active", "created_at", "updated_at"],
-  shifts: ["id", "site_id", "machine_id", "operator_id", "operator_name", "organization_id", "assigned_supervisor_id", "assigned_supervisor_name", "shift_status", "started_at", "ended_at", "start_hour_meter", "end_hour_meter", "hours_worked", "runtime_minutes", "downtime_minutes", "verification_token", "supervisor_comment", "supervisor_signature_ref", "supervisor_signature_name", "correction_history", "verified_at", "verified_by", "notes", "created_at", "updated_at", "is_manual", "tonnes_dispatched", "trucks_dispatched", "tonnes_on_floor", "weighbridge_photo"],
+  shifts: ["id", "site_id", "machine_id", "operator_id", "operator_name", "organization_id", "assigned_supervisor_id", "assigned_supervisor_name", "shift_status", "started_at", "ended_at", "start_hour_meter", "end_hour_meter", "hours_worked", "runtime_minutes", "downtime_minutes", "verification_token", "supervisor_comment", "supervisor_signature_ref", "supervisor_signature_name", "machine_signature_ref", "machine_signature_name", "machine_signed_at", "machine_signed_by", "site_signature_name", "site_signer_phone", "site_signed_at", "site_token", "site_token_expires_at", "shift_version", "correction_history", "verified_at", "verified_by", "notes", "created_at", "updated_at", "is_manual", "tonnes_dispatched", "trucks_dispatched", "tonnes_on_floor", "weighbridge_photo"],
   events: ["id", "site_id", "shift_id", "machine_id", "operator_id", "operator_name", "organization_id", "type", "reason", "note", "stopped_at", "restarted_at", "downtime_minutes", "status", "photo_data", "timestamp", "created_at", "updated_at"],
   expenses: ["id", "site_id", "machine_id", "operator_id", "operator_name", "organization_id", "category", "amount", "vendor", "description", "receipt_photo", "date", "created_at", "updated_at"],
   inspections: ["id", "site_id", "machine_id", "operator_id", "operator_name", "organization_id", "type", "category", "item_name", "status", "photo", "remark", "inspection_id", "timestamp", "created_at", "updated_at"],

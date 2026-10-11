@@ -9,6 +9,7 @@ import { AdminApp } from "./apps/AdminApp.jsx";
 import { DispatchApp } from "./apps/DispatchApp.jsx";
 import { StoreroomApp } from "./apps/StoreroomApp.jsx";
 import { LandingPage } from "./components/LandingPage.jsx";
+import { SiteSignPage } from "./components/SiteSignPage.jsx";
 import { ROLES } from "./lib/constants.js";
 
 const VERIFY_ONCE_KEY = "ops_verify_once";
@@ -49,6 +50,8 @@ function forgetVerifyParams() {
 
 function shouldOpenLoginFirst() {
   const params = new URLSearchParams(window.location.search);
+  // Site sign-off links (?sign=&token=) are public — never force login for them.
+  if (params.has("sign")) return false;
   const hash = window.location.hash || "";
   if (params.has("verify") || params.has("token")) return true;
   if (/type=recovery|access_token|error_description/i.test(hash)) return true;
@@ -57,9 +60,26 @@ function shouldOpenLoginFirst() {
 }
 
 function RoleRouter() {
+  const [signParams] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const sign = params.get("sign");
+      const token = params.get("token");
+      // ?verify= belongs to the logged-in supervisor flow; ?sign= is the public site link.
+      if (sign && token && !params.has("verify")) return { shiftId: sign, token };
+    } catch {}
+    return null;
+  });
   const { user, loading, authError, signIn, passwordRecovery, setPassword } = useOps();
   const [verifyParams, setVerifyParams] = useState(consumeVerifyParams);
   const [gate, setGate] = useState(() => (shouldOpenLoginFirst() ? "login" : "site"));
+  if (signParams) {
+    return (
+      <div className="ops-field min-h-screen">
+        <SiteSignPage shiftId={signParams.shiftId} token={signParams.token} />
+      </div>
+    );
+  }
 
   const clearVerifyLink = () => {
     forgetVerifyParams();
