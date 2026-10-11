@@ -17,10 +17,14 @@ import { scheduleSync } from "../lib/sync/engine.js";
 import { openMechanicInspectionReport } from "../services/reports.js";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
+import { RolePulse } from "../components/RolePulse.jsx";
+import { Button } from "../components/ui/Button.jsx";
+import { FieldSelect } from "../components/ui/FieldSelect.jsx";
 import * as wf from "../services/workflows.js";
 
 const TABS = [
   { id: "repairs", label: "Repairs" },
+  { id: "pulse", label: "Pulse" },
   { id: "inspections", label: "Inspections" },
 ];
 
@@ -254,15 +258,21 @@ export function MechanicApp() {
       onTabChange={setTab}
       onSync={syncNow}
       maxWidth="max-w-2xl"
+      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
+      {tab !== "pulse" && (
+        <div className="mb-4">
+          <WorkHoursPanel variant="clock" />
+        </div>
+      )}
+
       <div className="space-y-4">
         {tab === "repairs" && (
           <section className="space-y-3">
-            <WorkHoursPanel variant="clock" />
-            <h2 className="font-logo text-[#F5C518] text-lg tracking-wider mb-3">My repairs ({myJobs.length})</h2>
+            <h2 className="font-ui text-sm font-semibold text-[#F2F0EA]">My repairs ({myJobs.length})</h2>
             {myJobs.length === 0 ? (
-              <p className="text-sm text-[#F2F0EA]/40">
+              <p className="font-body text-sm text-[#F2F0EA]/40">
                 No repair jobs assigned. The supervisor sends work to you from a problem.
               </p>
             ) : myJobs.map((j) => {
@@ -272,12 +282,12 @@ export function MechanicApp() {
                   key={j.id}
                   type="button"
                   onClick={() => openJob(j)}
-                  className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 mb-2 active:border-[#F5C518]"
+                  className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 active:border-[#F5C518]"
                 >
-                  <p className="font-logo text-sm">{j.title}</p>
+                  <p className="font-ui text-sm font-semibold">{j.title}</p>
                   <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">{machineName(j.machine_id)}</p>
-                  <p className="text-[10px] text-[#F2F0EA]/40 mt-1">
-                    {iss ? issueStatusLabel(iss.status) : j.status} · {fmtDate(j.started_at)}
+                  <p className="font-body text-xs text-[#F2F0EA]/40 mt-1">
+                    {iss ? issueStatusLabel(iss.status) : j.status} - {fmtDate(j.started_at)}
                   </p>
                 </button>
               );
@@ -285,47 +295,46 @@ export function MechanicApp() {
           </section>
         )}
 
+        {tab === "pulse" && <RolePulse />}
+
         {tab === "inspections" && (
           <section className="space-y-3">
-            <button
-              type="button"
+            <Button
+              variant="teal"
+              size="lg"
+              className="w-full"
               onClick={openNewInspection}
               disabled={siteMachines.length === 0}
-              className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold text-xs tracking-wider disabled:opacity-40"
             >
-              + START WALK-AROUND
-            </button>
-            <p className="text-[10px] text-[#F2F0EA]/40 text-center">One item per screen — tap answer, then Next</p>
+              Start walk-around
+            </Button>
+            <p className="font-body text-xs text-[#F2F0EA]/40 text-center">One item per screen - tap an answer, then Next.</p>
             {siteMachines.length === 0 && (
-              <p className="text-sm text-[#F2F0EA]/40 text-center">No machines configured on this site.</p>
+              <p className="font-body text-sm text-[#F2F0EA]/40 text-center">No machines configured on this site.</p>
             )}
-            <h2 className="font-logo text-[#F5C518] text-sm tracking-wider">Recent inspections ({myInspectionBatches.length})</h2>
+            <h2 className="font-ui text-sm font-semibold text-[#F2F0EA]">Recent inspections ({myInspectionBatches.length})</h2>
             {myInspectionBatches.length === 0 ? (
-              <p className="text-sm text-[#F2F0EA]/40">No inspections yet. Run a full walk-around and submit the checklist.</p>
+              <p className="font-body text-sm text-[#F2F0EA]/40">No inspections yet. Run a full walk-around and submit the checklist.</p>
             ) : myInspectionBatches.map((batch) => {
               const flagged = batch.items.filter(
                 (i) => i.status && !["Good", "OK", "Working", "Pass", "Present", "None"].includes(i.status)
               ).length;
               const photoCount = batch.items.filter((i) => i.photo_ref).length;
               return (
-                <div key={batch.id} className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-                  <div className="flex justify-between items-start gap-2 mb-2">
+                <div key={batch.id} className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3">
+                  <div className="flex justify-between items-start gap-2">
                     <div>
-                      <p className="font-logo text-sm">{machineName(batch.machine_id)}</p>
-                      <p className="text-[10px] text-[#F2F0EA]/40 mt-1">{fmtDate(batch.timestamp)} · {batch.items.length} items</p>
+                      <p className="font-ui text-sm font-semibold">{machineName(batch.machine_id)}</p>
+                      <p className="font-body text-xs text-[#F2F0EA]/40 mt-1">{fmtDate(batch.timestamp)} - {batch.items.length} items</p>
                     </div>
-                    <div className="text-right text-[10px] font-logo">
+                    <div className="text-right font-body text-xs">
                       {flagged > 0 && <p className="text-[#F97316]">{flagged} flagged</p>}
                       {photoCount > 0 && <p className="text-[#22C55E]">{photoCount} photo{photoCount !== 1 ? "s" : ""}</p>}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleViewInspectionReport(batch)}
-                    className="w-full border border-[#F5C518] text-[#F5C518] py-2.5 rounded-lg font-logo text-xs tracking-wider"
-                  >
-                    VIEW REPORT
-                  </button>
+                  <Button variant="secondary" className="w-full" onClick={() => handleViewInspectionReport(batch)}>
+                    View report
+                  </Button>
                 </div>
               );
             })}
@@ -334,75 +343,73 @@ export function MechanicApp() {
       </div>
 
       {selected && (
-        <Modal title="REPAIR JOB" color="blue" onClose={() => setSelected(null)}>
-          <p className="font-logo text-base text-[#F5C518] mb-3">{machineName(selected.machine_id)}</p>
+        <Modal title="Repair job" color="blue" onClose={() => setSelected(null)}>
+          <p className="font-ui text-base font-semibold text-[#F5C518] mb-3">{machineName(selected.machine_id)}</p>
           {selectedIssue && (
             <div className="mb-4">
-              <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-2">PROBLEM TIMELINE</p>
+              <p className="font-ui text-xs font-semibold text-[#F2F0EA]/50 mb-2">Problem timeline</p>
               <IssueTimeline issue={selectedIssue} messages={selectedMessages} />
             </div>
           )}
-          <label className="text-xs text-[#F2F0EA]/50">Diagnosis</label>
-          <VoiceInput value={diagnosis} onChange={setDiagnosis} rows={2} placeholder="What is wrong…" />
-          <label className="text-xs text-[#F2F0EA]/50 mt-2 block">Work performed</label>
-          <VoiceInput value={workPerformed} onChange={setWorkPerformed} rows={3} placeholder="What you did…" />
+          <label className="ops-field-label">Diagnosis</label>
+          <VoiceInput value={diagnosis} onChange={setDiagnosis} rows={2} placeholder="What is wrong..." />
+          <label className="ops-field-label mt-3">Work performed</label>
+          <VoiceInput value={workPerformed} onChange={setWorkPerformed} rows={3} placeholder="What you did..." />
+          <label className="ops-field-label mt-3">Labour hours</label>
           <input
             type="number"
             step="0.1"
             value={labourHours}
             onChange={(e) => setLabourHours(e.target.value)}
-            placeholder="Labour hours"
-            className="w-full bg-[#0A0A0A] border p-3 rounded mt-2 text-[#F2F0EA]"
+            placeholder="0"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA]"
           />
-          <VoiceInput value={recommendations} onChange={setRecommendations} rows={2} placeholder="Notes for close-out…" />
+          <label className="ops-field-label mt-3">Notes for close-out</label>
+          <VoiceInput value={recommendations} onChange={setRecommendations} rows={2} placeholder="Anything the supervisor should know..." />
           <div className="grid grid-cols-2 gap-2 mt-4">
-            <button type="button" onClick={saveJob} disabled={busy} className="bg-[#F5C518] text-black py-3 rounded font-logo font-bold text-sm">SAVE</button>
-            <button
-              type="button"
+            <Button onClick={saveJob} disabled={busy} className="w-full">Save</Button>
+            <Button
+              variant="secondary"
               onClick={() => setShowParts(true)}
               disabled={!selectedIssue || selectedIssue.status === ISSUE.WAITING_FOR_PARTS}
-              className="border border-[#F97316] text-[#F97316] py-3 rounded font-logo font-bold text-sm disabled:opacity-40"
+              className="w-full"
             >
-              REQUEST PARTS
-            </button>
+              Request parts
+            </Button>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="teal"
+            size="lg"
+            className="w-full mt-2"
             onClick={handleRepairDone}
             disabled={busy || selectedIssue?.status === ISSUE.WAITING_FOR_PARTS}
-            className="w-full mt-2 bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40"
           >
-            {busy ? "SAVING…" : "REPAIR FINISHED"}
-          </button>
+            {busy ? "Saving..." : "Repair finished"}
+          </Button>
           {selectedIssue?.status === ISSUE.WAITING_FOR_PARTS && (
-            <p className="text-[10px] text-[#F97316] mt-2 text-center">Waiting for parts — manager must mark ordered / on site</p>
+            <p className="font-body text-xs text-[#F97316] mt-2 text-center">Waiting for parts - manager must mark ordered / on site</p>
           )}
         </Modal>
       )}
 
       {inspectionFlow === "pick-machine" && (
-        <Modal title="WHICH MACHINE?" color="blue" onClose={() => setInspectionFlow(null)}>
-          <p className="text-sm text-[#F2F0EA]/60 mb-4">
+        <Modal title="Which machine?" color="blue" onClose={() => setInspectionFlow(null)}>
+          <p className="font-body text-sm text-[#F2F0EA]/60 mb-4">
             {machineUsesEarthmovingPrestart(inspectionMachine)
               ? "Excavator and loader inspection. One item at a time."
               : "Screen inspection. One item at a time."}
           </p>
-          <select
-            value={inspectionMachineId}
-            onChange={(e) => setInspectionMachineId(e.target.value)}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded mb-4 text-[#F2F0EA]"
-          >
-            {siteMachines.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={startInspectionWizard}
-            className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold"
-          >
-            START INSPECTION
-          </button>
+          <label className="block mb-4">
+            <span className="ops-field-label">Machine</span>
+            <FieldSelect value={inspectionMachineId} onChange={setInspectionMachineId} placeholder="Choose a machine">
+              {siteMachines.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </FieldSelect>
+          </label>
+          <Button variant="teal" size="lg" className="w-full" onClick={startInspectionWizard}>
+            Start inspection
+          </Button>
         </Modal>
       )}
 

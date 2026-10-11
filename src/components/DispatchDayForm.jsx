@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { localDayKey } from "../lib/utils.js";
 import { bucketTonnes, DISPATCH_STATUS, dispatchStatus, previewFloor } from "../lib/dispatchMetrics.js";
 import { ShiftDispatchFields } from "./ShiftDispatchFields.jsx";
+import { Button } from "./ui/Button.jsx";
+import { FieldDate, FieldSelect } from "./ui/FieldSelect.jsx";
 
 function dayRow(records, siteId, day) {
   return (records || []).find((row) => (!siteId || row.site_id === siteId) && String(row.dispatch_date).slice(0, 10) === day) || null;
@@ -85,23 +87,17 @@ export function DispatchDayForm({
   return (
     <div className="space-y-4">
       <div>
-        <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">TODAY</p>
+        <p className="font-ui text-sm font-semibold text-[#F2F0EA]">Today</p>
         <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">
           {factors.excavator_bucket_tonnes && factors.fel_bucket_tonnes
-            ? `Excavator ${factors.excavator_bucket_tonnes} t a bucket · FEL ${factors.fel_bucket_tonnes} t a bucket.`
-            : "Set tonnes per excavator bucket and tonnes per FEL bucket in Admin or Manager, under More → Bucket size."}
+            ? `Excavator ${factors.excavator_bucket_tonnes} t a bucket - FEL ${factors.fel_bucket_tonnes} t a bucket.`
+            : "Set tonnes per excavator bucket and tonnes per FEL bucket in Admin or Manager, under Site setup."}
         </p>
       </div>
 
       <label className="block">
-        <span className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider">DAY</span>
-        <input
-          type="date"
-          value={date}
-          max={today}
-          onChange={(e) => loadDay(e.target.value)}
-          className="mt-1 w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA]"
-        />
+        <span className="ops-field-label">Day</span>
+        <FieldDate value={date} max={today} onChange={loadDay} />
       </label>
 
       {status === DISPATCH_STATUS.WAITING && (
@@ -115,17 +111,17 @@ export function DispatchDayForm({
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3">
-          <p className="font-logo text-[10px] text-[#F2F0EA]/45">SCREENED</p>
-          <p className="font-logo text-lg text-[#F2F0EA]">{screened == null ? "—" : `${screened.toLocaleString("en-US")} t`}</p>
+        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
+          <p className="font-ui text-xs font-semibold text-[#F2F0EA]/50">Screened</p>
+          <p className="font-ui text-lg font-semibold text-[#F2F0EA] mt-1">{screened == null ? "-" : `${screened.toLocaleString("en-US")} t`}</p>
         </div>
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3">
-          <p className="font-logo text-[10px] text-[#F2F0EA]/45">ON THE FLOOR</p>
-          <p className="font-logo text-lg text-[#F2F0EA]">{floor == null ? "—" : `${floor.toLocaleString("en-US")} t`}</p>
-          <p className="font-body text-[10px] text-[#F2F0EA]/45 mt-1">
+        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
+          <p className="font-ui text-xs font-semibold text-[#F2F0EA]/50">On the floor</p>
+          <p className="font-ui text-lg font-semibold text-[#F2F0EA] mt-1">{floor == null ? "-" : `${floor.toLocaleString("en-US")} t`}</p>
+          <p className="font-body text-xs text-[#F2F0EA]/45 mt-1">
             {`${floorPreview.opening.toLocaleString("en-US")} t opened`}
             {floorPreview.added == null ? "" : ` + ${floorPreview.added.toLocaleString("en-US")} FEL`}
-            {floorPreview.removed == null ? "" : ` − ${floorPreview.removed.toLocaleString("en-US")} dispatched`}
+            {floorPreview.removed == null ? "" : ` - ${floorPreview.removed.toLocaleString("en-US")} dispatched`}
           </p>
         </div>
       </div>
@@ -147,17 +143,12 @@ export function DispatchDayForm({
             onPhoto={(ref, data) => { setPhotoRef(ref); setPhotoPreview(data || null); }}
           />
           <label className="block">
-            <span className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider">SUPERVISOR</span>
-            <select
-              value={supervisorId}
-              onChange={(e) => setSupervisorId(e.target.value)}
-              className="mt-1 w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA]"
-            >
-              <option value="">Who signs this off</option>
+            <span className="ops-field-label">Supervisor</span>
+            <FieldSelect value={supervisorId} onChange={setSupervisorId} placeholder="Who signs this off">
               {supervisors.map((person) => (
                 <option key={person.id} value={person.id}>{person.name}</option>
               ))}
-            </select>
+            </FieldSelect>
           </label>
         </>
       )}
@@ -167,28 +158,29 @@ export function DispatchDayForm({
       <div className="grid grid-cols-1 gap-2">
         {!locked && (
           <>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full"
               disabled={!!busy}
               onClick={() => run("save", () => onSave(fields))}
-              className="w-full py-3 rounded-full border border-[#2A2A2A] text-[#F2F0EA] font-logo"
             >
-              {busy === "save" ? "Saving…" : "Save draft"}
-            </button>
-            <button
-              type="button"
+              {busy === "save" ? "Saving..." : "Save draft"}
+            </Button>
+            <Button
+              size="lg"
+              className="w-full"
               disabled={!!busy || !supervisorId}
               onClick={() => run("send", () => onSubmit(fields, supervisors.find((s) => s.id === supervisorId)))}
-              className="w-full py-4 rounded-full bg-[#F5C518] text-black font-logo font-bold disabled:opacity-40"
             >
-              {busy === "send" ? "Sending…" : "Send for sign-off"}
-            </button>
+              {busy === "send" ? "Sending..." : "Send for sign-off"}
+            </Button>
           </>
         )}
         {row && (
-          <button type="button" onClick={() => onPreview(row)} className="w-full py-3 rounded-full border border-[#F5C518]/50 text-[#F5C518] font-logo">
+          <Button variant="secondary" size="lg" className="w-full" onClick={() => onPreview(row)}>
             Open daily report
-          </button>
+          </Button>
         )}
       </div>
     </div>

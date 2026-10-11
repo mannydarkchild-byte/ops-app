@@ -1144,6 +1144,67 @@ export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, rea
   return patch;
 }
 
+/** Supervisor corrects meters or photos on an unsigned report before signing. */
+export async function editShiftBeforeSign(actor, shift, {
+  startHour,
+  endHour,
+  openingPhotoRef,
+  closingPhotoRef,
+  note,
+} = {}) {
+  if (!shift?.id) throw new Error("No shift to edit");
+  if ([SHIFT.VERIFIED, SHIFT.MACHINE_SIGNED].includes(getShiftStatus(shift))) {
+    throw new Error("This shift version is already signed and locked");
+  }
+  const now = nowISO();
+  const startMeter = startHour === "" || startHour == null ? Number(shift.start_hour_meter) : Number(startHour);
+  const endMeter = endHour === "" || endHour == null
+    ? (shift.end_hour_meter != null ? Number(shift.end_hour_meter) : null)
+    : Number(endHour);
+  if (!Number.isFinite(startMeter) || startMeter < 0) throw new Error("Enter a valid opening meter");
+  if (endMeter != null && (!Number.isFinite(endMeter) || endMeter < 0)) throw new Error("Enter a valid closing meter");
+  if (endMeter != null && endMeter < startMeter) throw new Error("Closing meter cannot be below opening");
+
+  let updated = {
+    ...shift,
+    start_hour_meter: startMeter,
+    end_hour_meter: endMeter,
+    hours_worked: endMeter != null ? meterHoursWorked(startMeter, endMeter) : shift.hours_worked,
+    notes: [shift.notes, note?.trim() ? `Supervisor edit: ${note.trim()}` : `Edited by ${actor?.name || "supervisor"}`].filter(Boolean).join(" | "),
+    updated_at: now,
+  };
+  await saveLocal("shifts", updated);
+
+  if (openingPhotoRef) {
+    updated = await replaceShiftMeterPhoto(actor, updated, {
+      side: "opening",
+      photoRef: openingPhotoRef,
+      reading: startMeter,
+    });
+  }
+  if (closingPhotoRef) {
+    updated = await replaceShiftMeterPhoto(actor, updated, {
+      side: "closing",
+      photoRef: closingPhotoRef,
+      reading: endMeter,
+    });
+  }
+
+  if (navigator.onLine) {
+    try {
+      await supabase.from("shifts").update({
+        start_hour_meter: updated.start_hour_meter,
+        end_hour_meter: updated.end_hour_meter,
+        hours_worked: updated.hours_worked,
+        notes: updated.notes,
+        updated_at: now,
+      }).eq("id", shift.id);
+    } catch {}
+  }
+  scheduleSync();
+  return updated;
+}
+
 function wholeCount(value, label, required) {
   if (value === "" || value == null) {
     if (required) throw new Error(`Enter the ${label}.`);
@@ -1414,11 +1475,23 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
   return updated;
 }
 
-/** Regenerate the site sign-off link after expiry or loss. Machine sign stays intact. */
+/** Create or refresh the Berlington sign-off link. Works on new MACHINE_SIGNED reports and older VERIFIED reports that only have the OPS signature. */
+export async function requestSiteSign(supervisor, shift) {
+  const status = getShiftStatus(shift);
+  const alreadySite = !!(shift?.site_signature_name || shift?.site_signed_at);
+  const ready = status === SHIFT.MACHINE_SIGNED
+    || (status === SHIFT.VERIFIED && !alreadySite && (shift?.machine_signature_name || shift?.supervisor_signature_name || shift?.verified_at));
+  if (!ready) throw new Error("Sign this report first, or it is already signed by Berlington.");
+  if (alreadySite) throw new Error("Berlington has already signed this report.");
+  return refreshSiteToken(shift);
+}
+
+/** Regenerate the site sign-off link after expiry or loss. */
 export async function resendSiteLink(supervisor, shift) {
-  if (getShiftStatus(shift) !== SHIFT.MACHINE_SIGNED) {
-    throw new Error("Site link is only available after the machine side is signed");
-  }
+  return requestSiteSign(supervisor, shift);
+}
+
+async function refreshSiteToken(shift) {
   if (!navigator.onLine) throw new Error("Need a connection to create a fresh site link");
   const now = nowISO();
   const siteToken = crypto.randomUUID?.() || makeId("SITE");

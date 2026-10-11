@@ -1,6 +1,6 @@
 import { SignedReportCard } from "./SignedReportCard.jsx";
-import { DashboardKpi, MachineSelect } from "./DashboardKpi.jsx";
-import { HOUR_LABELS } from "../lib/shiftMetrics.js";
+import { MachineSelect } from "./DashboardKpi.jsx";
+import { FieldSelect } from "./ui/FieldSelect.jsx";
 import { dispatchInPeriod, dispatchStatus, DISPATCH_STATUS, tonnesLabel } from "../lib/dispatchMetrics.js";
 
 function dayLabel(iso) {
@@ -21,6 +21,7 @@ function groupByDay(rows, isoOf) {
 }
 
 export function SupervisorReports({
+  group = "operators",
   machines,
   machineId,
   onMachine,
@@ -29,11 +30,7 @@ export function SupervisorReports({
   filter,
   filters,
   onFilter,
-  signedReports,
-  signedBillable,
-  signedHours,
-  signedDetails,
-  onOpenDetail,
+  signedReports = [],
   dispatches,
   machineName,
   events,
@@ -47,75 +44,61 @@ export function SupervisorReports({
   const dispatchRows = (dispatches || []).filter((row) => dispatchStatus(row) === DISPATCH_STATUS.SIGNED && dispatchInPeriod(row, period));
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">REPORTS</p>
-        <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">Signed shift reports and signed dispatch reports for {periodLabel}.</p>
-      </div>
-
-      {machines?.length > 0 && machineId && (
-        <MachineSelect machines={machines} value={machineId} onChange={onMachine} />
+    <div className="space-y-4">
+      {filters?.length > 0 && (
+        <FieldSelect value={filter} onChange={onFilter}>
+          {filters.map((item) => (
+            <option key={item.id} value={item.id}>{item.label}</option>
+          ))}
+        </FieldSelect>
       )}
 
-      <div className="flex flex-wrap gap-1">
-        {filters.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onFilter(item.id)}
-            className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${filter === item.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      {group === "operators" && (
+        <section className="space-y-3">
+          {machines?.length > 0 && machineId && (
+            <MachineSelect machines={machines} value={machineId} onChange={onMachine} />
+          )}
+          {shiftGroups.length === 0 ? (
+            <p className="font-body text-sm text-ops-muted">No signed operator reports for {periodLabel}.</p>
+          ) : shiftGroups.map((day) => (
+            <div key={day.label} className="space-y-2">
+              <p className="font-ui text-xs font-semibold text-ops-muted">{day.label}</p>
+              {day.rows.map((row) => (
+                <SignedReportCard
+                  key={row.id}
+                  shift={row}
+                  machineName={machineName(row.machine_id)}
+                  events={events}
+                  siteSettings={siteConfig}
+                  onViewReport={onView}
+                  onDownloadReport={onDownload}
+                  onShareReport={onShare}
+                />
+              ))}
+            </div>
+          ))}
+        </section>
+      )}
 
-      <section className="space-y-3">
-        <p className="font-logo text-sm text-[#F2F0EA]">Dispatch</p>
-        {dispatchRows.length === 0 ? (
-          <p className="font-body text-sm text-[#F2F0EA]/40">No signed dispatch report in this period.</p>
-        ) : dispatchRows.map((row) => (
-          <button
-            key={row.id}
-            type="button"
-            onClick={() => onOpenDispatch(row)}
-            className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4"
-          >
-            <p className="font-logo text-[#F2F0EA]">{String(row.dispatch_date).slice(0, 10)}</p>
-            <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">
-              {tonnesLabel(row.tonnes_dispatched)} · {row.trucks_dispatched ?? "—"} trucks · signed by {row.signed_by_name || "supervisor"}
-            </p>
-          </button>
-        ))}
-      </section>
-
-      <section className="space-y-3">
-        <p className="font-logo text-sm text-[#F2F0EA]">Signed shifts</p>
-        <div className="grid grid-cols-2 gap-3">
-          <DashboardKpi label="Signed reports" value={String(signedReports.length)} sub={periodLabel} color="#F2F0EA" />
-          <DashboardKpi label={HOUR_LABELS.billable} value={`${signedBillable.toFixed(1)}h`} sub="Signed shifts" color="#22C55E" onClick={() => onOpenDetail(signedDetails.billable)} />
-          <DashboardKpi label={HOUR_LABELS.machine} value={`${signedHours.toFixed(1)}h`} sub="Closing meter" color="#22C55E" onClick={() => onOpenDetail(signedDetails.machine)} />
-        </div>
-        {shiftGroups.length === 0 ? (
-          <p className="font-body text-sm text-[#F2F0EA]/40">No signed shift reports in this period.</p>
-        ) : shiftGroups.map((group) => (
-          <div key={group.label} className="space-y-2">
-            <p className="font-logo text-[10px] tracking-wider text-[#F2F0EA]/45">{group.label}</p>
-            {group.rows.map((row) => (
-              <SignedReportCard
-                key={row.id}
-                shift={row}
-                machineName={machineName(row.machine_id)}
-                events={events}
-                siteSettings={siteConfig}
-                onViewReport={onView}
-                onDownloadReport={onDownload}
-                onShareReport={onShare}
-              />
-            ))}
-          </div>
-        ))}
-      </section>
+      {group === "dispatch" && (
+        <section className="space-y-3">
+          {dispatchRows.length === 0 ? (
+            <p className="font-body text-sm text-ops-muted">No signed dispatch day for {periodLabel}.</p>
+          ) : dispatchRows.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => onOpenDispatch(row)}
+              className="w-full text-left bg-ops-card border-2 border-ops-gold rounded-2xl p-4"
+            >
+              <p className="font-ui font-semibold text-ops-text">{String(row.dispatch_date).slice(0, 10)}</p>
+              <p className="font-body text-sm text-ops-muted mt-1">
+                {tonnesLabel(row.tonnes_dispatched)} · {row.trucks_dispatched ?? "—"} trucks · signed by {row.signed_by_name || "supervisor"}
+              </p>
+            </button>
+          ))}
+        </section>
+      )}
     </div>
   );
 }

@@ -71,7 +71,7 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
       <select
         value={siteId}
         onChange={(e) => setSiteId(e.target.value)}
-        className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl font-logo text-xs text-[#F2F0EA]"
+        className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl font-logo text-xs text-[#F2F0EA]"
       >
         {sites.map((s) => (
           <option key={s.id} value={s.id}>{s.name}</option>
@@ -96,32 +96,32 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
       </div>
 
       {tab === "prestart" && (
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 space-y-3">
+        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3">
           <p className="text-[10px] text-[#F2F0EA]/50">Screen pre-start. One item per line. Used on the screen.</p>
           <textarea
             value={prestartText}
             onChange={(e) => setPrestartText(e.target.value)}
             rows={10}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm font-body"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm font-body"
           />
           <p className="text-[10px] text-[#F2F0EA]/50">Excavator and front end loader. One shared list. One item per line. A machine uses this list when its name or code says excavator, FEL, or loader.</p>
           <textarea
             value={earthmovingText}
             onChange={(e) => setEarthmovingText(e.target.value)}
             rows={10}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm font-body"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm font-body"
           />
           <label className="block text-[10px] text-[#F2F0EA]/50">Status buttons (comma-separated)</label>
           <input
             value={statusText}
             onChange={(e) => setStatusText(e.target.value)}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm"
           />
         </div>
       )}
 
       {tab === "mechanic" && (
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 space-y-3">
+        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3">
           <p className="text-[10px] text-[#F2F0EA]/50">
             Screen inspection. Group lines start with ## Category. Item lines: Item name | Option1, Option2
           </p>
@@ -129,7 +129,7 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
             value={groupsText}
             onChange={(e) => setGroupsText(e.target.value)}
             rows={12}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm font-mono text-xs"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm font-mono text-xs"
           />
           <p className="text-[10px] text-[#F2F0EA]/50">
             Excavator and front end loader. One shared list. Same format. A machine uses this when its name or code says excavator, FEL, or loader.
@@ -138,13 +138,13 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
             value={earthmovingGroupsText}
             onChange={(e) => setEarthmovingGroupsText(e.target.value)}
             rows={12}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm font-mono text-xs"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm font-mono text-xs"
           />
         </div>
       )}
 
       {tab === "stops" && (
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
+        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
           <StopReasonsEditor
             siteId={siteId}
             siteSettingsRow={settingsRow}
@@ -159,7 +159,7 @@ export function AdminChecklistsPanel({ sites, siteSettings, onSaved, showAlert }
           type="button"
           onClick={save}
           disabled={busy || !siteId}
-          className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold text-xs disabled:opacity-40"
+          className="w-full bg-[#00A4A6] text-white py-4 rounded-2xl font-logo font-bold text-xs disabled:opacity-40"
         >
           SAVE CHECKLISTS
         </button>

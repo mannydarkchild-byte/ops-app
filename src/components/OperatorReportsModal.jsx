@@ -146,16 +146,14 @@ export function OperatorReportsModal({
 
   const content = (
     <>
-        <p className="font-body text-sm text-ops-muted mb-4">
-          Same daily report your supervisor signs. This cycle: {period.label}.
-        </p>
+        <p className="font-body text-sm text-ops-muted mb-4">{period.label}</p>
 
         <div className="grid grid-cols-2 gap-2 mb-4">
-          <DashTile label="Your time" value={`${dash.yourTime.toFixed(1)}h`} hint="Clock-in to clock-out" />
-          <DashTile label="Machine hours" value={`${dash.meterHours.toFixed(1)}h`} hint="Hour meter" />
-          <DashTile label="Billable hours" value={`${dash.billableHours.toFixed(1)}h`} hint="8h minus Darkchild downtime" />
-          <DashTile label="Signed off" value={String(dash.signed)} hint="Supervisor signed" color="#22C55E" />
-          <DashTile label="Pending" value={String(dash.pending + dash.sentBack)} hint={dash.sentBack ? `${dash.sentBack} sent back` : "Waiting for supervisor"} color="#F5C518" />
+          <DashTile label="Your time" value={`${dash.yourTime.toFixed(1)}h`} />
+          <DashTile label="Machine hours" value={`${dash.meterHours.toFixed(1)}h`} />
+          <DashTile label="Billable hours" value={`${dash.billableHours.toFixed(1)}h`} />
+          <DashTile label="Signed off" value={String(dash.signed)} color="#22C55E" />
+          <DashTile label="Pending" value={String(dash.pending + dash.sentBack)} hint={dash.sentBack ? `${dash.sentBack} sent back` : undefined} color="#F5C518" />
         </div>
         <button
           type="button"
@@ -289,7 +287,7 @@ function DashTile({ label, value, hint, color }) {
     <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4">
       <p className="font-logo text-sm tracking-wider text-[#F2F0EA]/50">{label}</p>
       <p className="font-logo text-3xl mt-1" style={{ color: color || "#F5C518" }}>{value}</p>
-      <p className="font-body text-base text-[#F2F0EA]/50 mt-1">{hint}</p>
+      {hint ? <p className="font-body text-base text-[#F2F0EA]/50 mt-1">{hint}</p> : null}
     </div>
   );
 }

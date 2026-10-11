@@ -6,7 +6,7 @@
 ALTER TABLE machines ADD COLUMN IF NOT EXISTS supplier_name TEXT;
 ALTER TABLE machines ADD COLUMN IF NOT EXISTS wear_owner_name TEXT;
 
--- This site: Warrior = Darkchild iron, FEL = Mamarc, excavator = Berlington-owned.
+-- This site: Warrior = Darkchild. FEL and excavator = Berlington.
 UPDATE machines SET
   supplier_name = 'Darkchild',
   wear_owner_name = 'Berlington',
@@ -15,7 +15,7 @@ WHERE (name ILIKE '%warrior%' OR code ILIKE '%W2100%')
   AND supplier_name IS NULL;
 
 UPDATE machines SET
-  supplier_name = 'Mamarc',
+  supplier_name = 'Berlington',
   wear_owner_name = 'Berlington',
   updated_at = now()
 WHERE (name ILIKE '%fel%' OR name ILIKE '%front end%' OR name ILIKE '%loader%' OR type ILIKE '%loader%')

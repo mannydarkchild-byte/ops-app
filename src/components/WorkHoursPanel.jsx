@@ -101,7 +101,7 @@ export function WorkHoursPanel({ variant = "full" }) {
 
   const clockCard = (
     <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3">
-      <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">TIME ON SITE</p>
+      <p className="font-ui text-xs font-semibold text-[#F5C518]">Time on site</p>
       {workSession ? (
         <>
           <p className="font-body text-sm text-[#F2F0EA]">
@@ -119,7 +119,7 @@ export function WorkHoursPanel({ variant = "full" }) {
             value={supervisorId || suggested?.id || ""}
             onChange={setSupervisorId}
             suggestedId={suggested?.id || null}
-            title="WHO IS ON DUTY?"
+            label="Supervisor on duty"
           />
           <button type="button" disabled={busy || !(supervisorId || suggested?.id)} onClick={clockIn} className="w-full py-3 rounded-full bg-[#22C55E] text-black font-logo disabled:opacity-40">
             {busy ? "Clocking in…" : "Clock in"}
@@ -136,7 +136,7 @@ export function WorkHoursPanel({ variant = "full" }) {
         <div className="space-y-4">
           {clockCard}
           <div>
-            <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">MY HOURS</p>
+            <p className="font-ui text-xs font-semibold text-[#F5C518]">My hours</p>
             <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">One report of your clock-in and clock-out times.</p>
           </div>
           <div className="flex flex-wrap gap-1">

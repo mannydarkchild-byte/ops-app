@@ -62,10 +62,10 @@ export function getShiftAgreement(shift) {
 
 export function agreementLabel(shift) {
   const a = getShiftAgreement(shift);
-  if (a.dualSigned) return "Dual-signed · billable";
-  if (a.legacySingleSigned) return "Legacy single-signed";
-  if (a.awaitingSite) return "Awaiting site sign-off";
-  if (a.awaitingMachine) return "Awaiting machine sign-off";
+  if (a.dualSigned) return "Signed by both";
+  if (a.legacySingleSigned) return "Needs Berlington sign";
+  if (a.awaitingSite) return "Needs Berlington sign";
+  if (a.awaitingMachine) return "Needs your sign";
   if (a.status === SHIFT.CORRECTION_REQUIRED) return "Sent back for correction";
   if (a.status === SHIFT.RUNNING) return "Running";
   return a.status || "—";
@@ -82,11 +82,16 @@ export function whatsappShareUrl(phone, text) {
   return phone ? `https://wa.me/${encodeURIComponent(phone)}?text=${body}` : `https://wa.me/?text=${body}`;
 }
 
-export function siteSignShareText(shift, machineName, link) {
+export function needsBerlingtonSign(shift) {
+  const a = getShiftAgreement(shift);
+  return a.awaitingSite || a.legacySingleSigned;
+}
+
+export function siteSignShareText(shift, machineName, link, ownerName = "Berlington") {
   const hours = Number(shift?.hours_worked || 0).toFixed(1);
-  const when = shift?.started_at ? new Date(shift.started_at).toLocaleString() : "";
+  const when = shift?.started_at ? new Date(shift.started_at).toLocaleDateString("en-ZA") : "";
   return (
-    `OPS shift sign-off — ${machineName || "Machine"} ${when} — ${hours}h. ` +
-    `Tap to agree or dispute: ${link}`
+    `OPS shift report — ${machineName || "Machine"} · ${when} · ${hours}h. ` +
+    `${ownerName} supervisor: tap to sign: ${link}`
   );
 }

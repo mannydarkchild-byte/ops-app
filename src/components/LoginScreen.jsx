@@ -62,9 +62,9 @@ export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPa
           </div>
           <p className="font-body text-ops-text login-copy mt-4">
             {mode === "newpass"
-              ? "Choose a new password for this phone."
+              ? "Choose a new password."
               : mode === "login"
-                ? "Open the app on this phone. Clock-in comes after that."
+                ? "Sign in to your site."
                 : "We will email you a reset link."}
           </p>
         </div>
@@ -108,7 +108,7 @@ export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPa
               onClick={submitLogin}
               disabled={busy || loading || !email || !password}
             >
-              {busy ? "Opening…" : "Open the app"}
+              {busy ? "Signing in…" : "Sign in"}
             </Button>
             <button
               type="button"
@@ -117,7 +117,6 @@ export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPa
             >
               Forgot password?
             </button>
-            <p className="login-note">Works offline after the first time you open it.</p>
           </form>
         ) : mode === "newpass" ? (
           <form

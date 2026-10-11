@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Modal } from "./ui/Modal.jsx";
 import { VoiceInput } from "./ui/VoiceInput.jsx";
-import { ISSUE_AREA_GROUPS, ISSUE_PRIORITIES, ROLES, issueAreaRequiresMachine } from "../lib/constants.js";
+import { ISSUE_PRIORITIES, ROLES, issueAreaRequiresMachine } from "../lib/constants.js";
+import { issueAreaGroupsForMachine } from "../lib/stopReasons.js";
 import { pickMedia, resolveMediaUrl } from "../lib/media.js";
 import * as wf from "../services/workflows.js";
 
 const SITE_WIDE_MACHINE = "__site__";
-const fieldClass = "w-full bg-[#0A0A0A] border border-[#444] p-4 rounded-xl text-[#F2F0EA] text-base mb-4";
-const labelClass = "block font-logo text-sm text-[#F2F0EA] mb-2";
+const fieldClass = "w-full bg-ops-inset border-2 border-ops-gold p-4 rounded-xl text-ops-text text-base mb-4";
+const labelClass = "block font-ui text-sm font-semibold text-ops-text mb-2";
 
 export function ReportIssueModal({
   onClose, user, machine, machines, site, profiles, onDone,
@@ -117,11 +118,13 @@ export function ReportIssueModal({
     : machineOptions.length > 1;
 
   return (
-    <Modal title="REPORT PROBLEM" color="red" onClose={onClose}>
+    <Modal title="Report a problem" color="red" onClose={onClose}>
       <label className={labelClass}>What kind of problem?</label>
       <select value={area} onChange={(e) => handleAreaChange(e.target.value)} className={fieldClass}>
         <option value="">Select type…</option>
-        {ISSUE_AREA_GROUPS.map((group) => (
+        {issueAreaGroupsForMachine(
+          machineOptions.find((m) => m.id === machineId) || machine,
+        ).map((group) => (
           <optgroup key={group.label} label={group.label}>
             {group.areas.map((x) => (
               <option key={x} value={x}>{x}</option>
@@ -166,13 +169,13 @@ export function ReportIssueModal({
         className={`w-full mt-3 mb-4 py-4 rounded-xl font-logo text-base border-2 ${
           mediaPreview
             ? "bg-[#22C55E]/20 border-[#22C55E] text-[#22C55E]"
-            : "bg-[#0A0A0A] border-[#444] text-[#F2F0EA]"
+            : "bg-ops-inset border-ops-gold text-ops-text"
         }`}
       >
         {mediaPreview ? "PHOTO ATTACHED — TAP TO REPLACE" : "ADD PHOTO (OPTIONAL)"}
       </button>
       {mediaPreview && (
-        <img src={mediaPreview} alt="" className="w-full max-h-52 object-contain rounded-xl mb-4 border border-[#444]" />
+        <img src={mediaPreview} alt="" className="w-full max-h-52 object-contain rounded-xl mb-4 border-2 border-ops-gold" />
       )}
 
       {error && <p className="text-[#EF4444] text-base mb-4">{error}</p>}

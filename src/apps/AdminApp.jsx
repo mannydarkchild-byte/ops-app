@@ -8,7 +8,7 @@ import { updateUserRole, updateProfileFields } from "../lib/auth.js";
 
 import { deactivateUser, reactivateUser } from "../services/users.js";
 
-import { getDB, clearSyncedTables } from "../lib/db.js";
+import { clearSyncedTables } from "../lib/db.js";
 
 import { pullBootstrap } from "../lib/sync/pull.js";
 
@@ -32,16 +32,15 @@ import { AdminSitesPanel } from "../components/admin/AdminSitesPanel.jsx";
 import { AdminMachinesPanel } from "../components/admin/AdminMachinesPanel.jsx";
 import { AdminChecklistsPanel } from "../components/admin/AdminChecklistsPanel.jsx";
 import { AdminActivityPanel } from "../components/admin/AdminActivityPanel.jsx";
-import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { RolePulse } from "../components/RolePulse.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
-import { BucketSizeEditor } from "../components/BucketSizeEditor.jsx";
-
-
+import { Button } from "../components/ui/Button.jsx";
 
 const TABS = [
-  { id: "dashboard", label: "Home" },
+  { id: "home", label: "Home" },
+  { id: "pulse", label: "Pulse" },
   { id: "users", label: "People" },
   { id: "sites", label: "Sites" },
   { id: "setup", label: "Setup" },
@@ -61,7 +60,7 @@ export function AdminApp() {
     siteSettings, siteDispatch, getSettingsForSite,
   } = useOps();
 
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = useState("home");
 
   const [showBackdate, setShowBackdate] = useState(false);
 
@@ -261,7 +260,7 @@ export function AdminApp() {
 
   const tabItems = useMemo(() => TABS.map((t) => ({ ...t, badge: 0 })), []);
 
-  const headerContext = `${activeSite?.name || "All sites"} · ${dashboard.periodLabel}`;
+  const headerContext = `${activeSite?.name || "All sites"} - ${dashboard.periodLabel}`;
 
   return (
 
@@ -273,13 +272,20 @@ export function AdminApp() {
       activeTab={tab}
       onTabChange={(id) => { setTab(id); setMoreView(null); }}
       onSync={syncNow}
+      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
-        {tab === "dashboard" && (
-          <div className="space-y-4">
+        {tab !== "pulse" && moreView !== "review" && (
+          <div className="mb-4">
             <WorkHoursPanel variant="clock" />
-            <p className="font-body text-sm text-[#F2F0EA]/70">Home is a summary. Daily work happens in People and Sites. Rare setup lives in Setup.</p>
+          </div>
+        )}
+
+        {tab === "pulse" && <RolePulse />}
+
+        {tab === "home" && (
+          <div className="space-y-4">
             {selectedMachine && (
               <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
             )}
@@ -302,87 +308,40 @@ export function AdminApp() {
             <p className="font-body text-xs text-[#F2F0EA]/40">Sync queue {dashboard.overview.syncPending}</p>
 
             <section>
-              <p className="font-logo text-[10px] text-[#F5C518] mb-2 tracking-wider">BY ROLE</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <RoleCard title="Operators" icon="👷" metrics={[
-                  { label: "Active staff", value: dashboard.roles.operator.headcount },
-                  { label: "Clocked in now", value: dashboard.roles.operator.clockedIn },
-                  { label: "Verified shifts", value: dashboard.roles.operator.verifiedShifts },
-                  { label: "Pre-starts", value: dashboard.roles.operator.prestartInspections },
-                  { label: "Early clock-outs", value: dashboard.roles.operator.earlyClockOuts },
-                  { label: "Top operator", value: `${dashboard.roles.operator.topName} (${dashboard.roles.operator.topShifts})` },
-                ]} />
-                <RoleCard title="Supervisors" icon="✅" metrics={[
-                  { label: "Active staff", value: dashboard.roles.supervisor.headcount },
-                  { label: "Awaiting sign-off", value: dashboard.roles.supervisor.pendingVerify },
-                  { label: "Signed this period", value: dashboard.roles.supervisor.verifiedThisPeriod },
-                  { label: "Open site problems", value: dashboard.roles.supervisor.openSiteIssues },
-                  { label: "Most sign-offs", value: `${dashboard.roles.supervisor.topName} (${dashboard.roles.supervisor.topCount})` },
-                ]} />
-                <RoleCard title="Mechanics" icon="🔧" metrics={[
-                  { label: "Active staff", value: dashboard.roles.mechanic.headcount },
-                  { label: "Active repair jobs", value: dashboard.roles.mechanic.activeJobs },
-                  { label: "Completed (period)", value: dashboard.roles.mechanic.completedJobs },
-                  { label: "Full inspections", value: dashboard.roles.mechanic.inspections },
-                  { label: "Open breakdowns", value: dashboard.roles.mechanic.openBreakdowns },
-                ]} />
-                <RoleCard title="Managers" icon="📊" metrics={[
-                  { label: "Active staff", value: dashboard.roles.manager.headcount },
-                  { label: "Waiting for parts", value: dashboard.roles.manager.waitingParts },
-                  { label: "Critical problems", value: dashboard.roles.manager.criticalIssues },
-                ]} />
-              </div>
-            </section>
-
-            <section>
-              <p className="font-logo text-[10px] text-[#F5C518] mb-2 tracking-wider">FLEET NOW</p>
+              <p className="font-ui text-sm font-semibold text-ops-muted mb-2">Fleet now</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {dashboard.fleet.length === 0 ? (
                   <p className="text-sm text-[#F2F0EA]/40">No machines configured.</p>
                 ) : dashboard.fleet.map((f) => (
-                  <div key={f.id} className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3 flex justify-between items-center gap-2">
+                  <div key={f.id} className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 flex justify-between items-center gap-2">
                     <div>
-                      <p className="font-logo text-sm">{f.name}</p>
-                      {f.stopReason && <p className="text-[10px] text-[#F97316] mt-0.5">{f.stopReason}</p>}
+                      <p className="font-ui text-sm font-semibold">{f.name}</p>
+                      {f.stopReason && <p className="text-xs text-[#F97316] mt-0.5">{f.stopReason}</p>}
                     </div>
-                    <span className={`font-logo text-[10px] px-2 py-1 rounded ${
+                    <span className={`font-ui text-xs px-2.5 py-1 rounded-full ${
                       f.status === "running" ? "bg-[#22C55E]/20 text-[#22C55E]"
                         : f.status === "stopped" ? "bg-[#EF4444]/20 text-[#EF4444]"
                           : "bg-[#2A2A2A] text-[#F2F0EA]/50"
                     }`}>
-                      {f.status.toUpperCase()}
+                      {f.status === "running" ? "Running" : f.status === "stopped" ? "Stopped" : "Idle"}
                     </span>
                   </div>
                 ))}
               </div>
             </section>
 
-            <button type="button" onClick={() => syncNow()} className="w-full bg-[#00A4A6] text-white py-3 rounded-xl font-logo font-bold text-xs">
-              🔄 SYNC ALL DATA
-            </button>
           </div>
-        )}
-
-        {tab === "sites" && (
-          <AdminSitesPanel
-            sites={sites}
-            machines={machines}
-            siteSettings={siteSettings}
-            onSaved={syncNow}
-            showAlert={showAlert}
-          />
         )}
 
         {tab === "setup" && !moreView && (
           <div className="space-y-3">
-            <p className="font-body text-sm text-[#F2F0EA]/70">Setup in order. Sites first, then machines and buckets, then checklists. Pulse, hours and sync are for checking — not daily work.</p>
+            <p className="font-body text-sm text-[#F2F0EA]/70">Checklists, hours, expenses, and sync. Sites and machines live under Sites.</p>
             <MoreMenu
               items={[
-                { label: "1 · Sites, machines & buckets", onClick: () => setMoreView("site-setup") },
-                { label: "2 · Checklists", onClick: () => setMoreView("checklists") },
-                { label: "3 · Pulse, hours & activity", onClick: () => setMoreView("review") },
-                { label: "4 · Expenses", onClick: () => setMoreView("expenses") },
-                { label: "5 · Sync & backup", onClick: () => setMoreView("sync") },
+                { label: "Checklists", onClick: () => setMoreView("checklists") },
+                { label: "Hours and activity", onClick: () => setMoreView("review") },
+                { label: "Expenses", onClick: () => setMoreView("expenses") },
+                { label: "Sync and backup", onClick: () => setMoreView("sync") },
               ]}
             />
           </div>
@@ -392,18 +351,6 @@ export function AdminApp() {
           <button type="button" onClick={() => setMoreView(null)} className="mb-3 font-ui text-sm text-[#F5C518]">
             Back to setup steps
           </button>
-        )}
-
-        {tab === "setup" && moreView === "site-setup" && (
-          <div className="space-y-4">
-            <AdminSitesPanel sites={sites} machines={machines} siteSettings={siteSettings} onSaved={syncNow} showAlert={showAlert} />
-            <BucketSizeEditor
-              siteId={activeSite?.id}
-              settings={getSettingsForSite(activeSite?.id)}
-              onSaved={syncNow}
-              showAlert={showAlert}
-            />
-          </div>
         )}
 
         {tab === "setup" && moreView === "checklists" && (
@@ -417,7 +364,6 @@ export function AdminApp() {
 
         {tab === "setup" && moreView === "review" && (
           <div className="space-y-4">
-            <ProductivityPulseScreen embedded />
             <WorkHoursPanel />
             <AdminActivityPanel
               events={events}
@@ -447,7 +393,7 @@ export function AdminApp() {
 
         {tab === "sites" && (
           <div className="space-y-4">
-            <p className="font-body text-sm text-[#F2F0EA]/70">Sites first, then machines. Buckets live in Setup step 1.</p>
+            <AdminSitesPanel sites={sites} machines={machines} siteSettings={siteSettings} onSaved={syncNow} showAlert={showAlert} />
             <AdminMachinesPanel
               sites={sites}
               machines={machines}
@@ -458,61 +404,36 @@ export function AdminApp() {
         )}
 
         {tab === "users" && (
-
-          <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-
-            <div className="flex flex-wrap gap-2 mb-4">
-
-              <button type="button" onClick={() => setShowAddUser(true)}
-
-                className="flex-1 min-w-[140px] bg-[#22C55E] text-black py-3 rounded-xl font-logo font-bold text-xs tracking-wider">
-
-                + ADD USER
-
-              </button>
-
-              <button type="button" onClick={() => setShowInactive(!showInactive)}
-
-                className="px-4 py-3 rounded-xl font-logo text-xs border border-[#2A2A2A] text-[#F2F0EA]/70">
-
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button className="flex-1 min-w-[140px]" onClick={() => setShowAddUser(true)}>
+                Add user
+              </Button>
+              <Button variant="secondary" onClick={() => setShowInactive(!showInactive)}>
                 {showInactive ? "Hide inactive" : "Show inactive"}
-
-              </button>
-
+              </Button>
             </div>
 
-
-
             {visibleProfiles.length === 0 ? (
-
               <p className="text-sm text-[#F2F0EA]/40">No users. Sync when online or add a user.</p>
-
             ) : visibleProfiles.map((p) => (
-
-              <div key={p.id} className={`py-3 border-b border-[#2A2A2A] last:border-0 space-y-2 ${p.active === false ? "opacity-50" : ""}`}>
-
+              <div key={p.id} className={`bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3 ${p.active === false ? "opacity-50" : ""}`}>
                 <div className="flex justify-between items-start gap-2">
-
                   <div className="min-w-0 flex-1">
-
-                    <p className="font-logo text-xs truncate">{p.name || p.email}</p>
-
-                    <p className="text-[9px] text-[#F2F0EA]/40 truncate">{p.email}</p>
-
-                    {p.active === false && <p className="text-[9px] text-[#EF4444] font-logo mt-1">INACTIVE</p>}
-
+                    <p className="font-ui text-sm font-semibold truncate">{p.name || p.email}</p>
+                    <p className="font-body text-xs text-[#F2F0EA]/40 truncate">{p.email}</p>
+                    {p.active === false && <p className="text-xs text-[#EF4444] mt-1">Inactive</p>}
                   </div>
-
-                  <select value={p.role || ROLES.OPERATOR} onChange={(e) => handleRoleChange(p.id, e.target.value)}
-
+                  <select
+                    value={p.role || ROLES.OPERATOR}
+                    onChange={(e) => handleRoleChange(p.id, e.target.value)}
                     disabled={p.active === false}
-
-                    className="bg-[#0A0A0A] border border-[#2A2A2A] p-1 rounded font-logo text-[10px]">
-
-                    {MANAGEABLE_ROLES.map((r) => <option key={r} value={r}>{r === ROLES.DISPATCH ? "Dispatch" : r === ROLES.STOREROOM ? "Storeroom" : r}</option>)}
-
+                    className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl font-ui text-sm text-[#F2F0EA]"
+                  >
+                    {MANAGEABLE_ROLES.map((r) => (
+                      <option key={r} value={r}>{r === ROLES.DISPATCH ? "Dispatch" : r === ROLES.STOREROOM ? "Storeroom" : r}</option>
+                    ))}
                   </select>
-
                 </div>
 
                 {p.active !== false && (
@@ -520,18 +441,18 @@ export function AdminApp() {
                     <select
                       defaultValue={p.site_id || ""}
                       onChange={(e) => updateProfileFields(p.id, { site_id: e.target.value || null }).then(() => refreshLocal())}
-                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]"
+                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl font-ui text-sm text-[#F2F0EA]"
                     >
                       <option value="">No site</option>
                       {sites.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
-                    {(p.role === ROLES.OPERATOR) && (
+                    {p.role === ROLES.OPERATOR && (
                       <select
                         defaultValue={p.machine_id || ""}
                         onChange={(e) => updateProfileFields(p.id, { machine_id: e.target.value || null }).then(() => refreshLocal())}
-                        className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]"
+                        className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl font-ui text-sm text-[#F2F0EA]"
                       >
                         <option value="">No default machine</option>
                         {machines.filter((m) => m.site_id === p.site_id).map((m) => (
@@ -542,71 +463,43 @@ export function AdminApp() {
                   </div>
                 )}
                 {p.role === ROLES.OPERATOR && p.active !== false && (
-                  <p className="text-[10px] text-[#F2F0EA]/45">One login records every machine on this site. Each machine still gets its own shift and report.</p>
+                  <p className="font-body text-xs text-[#F2F0EA]/45">One login records every machine on this site. Each machine still gets its own shift and report.</p>
                 )}
 
                 {p.role === ROLES.SUPERVISOR && p.active !== false && (
-
                   <div className="grid grid-cols-2 gap-2">
-
-                    <input type="tel" defaultValue={p.phone || ""} placeholder="WhatsApp phone"
-
+                    <input
+                      type="tel"
+                      defaultValue={p.phone || ""}
+                      placeholder="WhatsApp phone"
                       onBlur={(e) => updateProfileFields(p.id, { phone: e.target.value.trim() || null }).then(() => refreshLocal())}
-
-                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-body text-[10px] text-[#F2F0EA]" />
-
-                    <select defaultValue={p.shift_band || "any"}
-
+                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl font-body text-sm text-[#F2F0EA]"
+                    />
+                    <select
+                      defaultValue={p.shift_band || "any"}
                       onChange={(e) => updateProfileFields(p.id, { shift_band: e.target.value }).then(() => refreshLocal())}
-
-                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-2 rounded font-logo text-[10px] text-[#F2F0EA]">
-
+                      className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl font-ui text-sm text-[#F2F0EA]"
+                    >
                       <option value="day">Day shift</option>
-
                       <option value="night">Night shift</option>
-
                       <option value="any">All shifts</option>
-
                     </select>
-
                   </div>
-
                 )}
 
-                <div className="flex gap-2">
-
-                  {p.active !== false && p.id !== user?.id && (
-
-                    <button type="button" onClick={() => handleDeactivate(p)}
-
-                      className="text-[10px] font-logo text-[#EF4444] tracking-wider py-1">
-
-                      REMOVE USER
-
-                    </button>
-
-                  )}
-
-                  {p.active === false && (
-
-                    <button type="button" onClick={() => handleReactivate(p)}
-
-                      className="text-[10px] font-logo text-[#22C55E] tracking-wider py-1">
-
-                      REACTIVATE
-
-                    </button>
-
-                  )}
-
-                </div>
-
+                {p.active !== false && p.id !== user?.id && (
+                  <Button variant="ghost" className="text-[#EF4444]" onClick={() => handleDeactivate(p)}>
+                    Remove user
+                  </Button>
+                )}
+                {p.active === false && (
+                  <Button variant="secondary" onClick={() => handleReactivate(p)}>
+                    Reactivate
+                  </Button>
+                )}
               </div>
-
             ))}
-
           </div>
-
         )}
 
 
@@ -643,21 +536,15 @@ export function AdminApp() {
 
             </div>
 
-            <button type="button" onClick={() => setShowBackdate(true)}
-
-              className="w-full mb-3 border border-[#00A4A6] text-[#00A4A6] py-4 rounded-xl font-logo font-bold text-xs tracking-wider">
-
-              📸 BACKDATE HOUR READING (ADMIN)
-
-            </button>
+            <Button variant="teal" className="w-full mb-3" onClick={() => setShowBackdate(true)}>
+              Backdate hour reading
+            </Button>
 
             <div className="flex flex-wrap gap-2">
 
-              <button onClick={() => syncNow()} className="flex-1 bg-[#F5C518] text-black py-3 rounded-lg font-logo font-bold text-xs min-w-[120px]">FORCE SYNC</button>
-
-              <button onClick={handleFullRefresh} className="flex-1 bg-[#EF4444] text-white py-3 rounded-lg font-logo font-bold text-xs min-w-[120px]">FULL REFRESH</button>
-
-              <button onClick={exportJson} className="flex-1 bg-[#00A4A6] text-white py-3 rounded-lg font-logo font-bold text-xs min-w-[120px]">EXPORT JSON</button>
+              <Button className="flex-1 min-w-[120px]" onClick={() => syncNow()}>Force sync</Button>
+              <Button variant="danger" className="flex-1 min-w-[120px]" onClick={handleFullRefresh}>Full refresh</Button>
+              <Button variant="teal" className="flex-1 min-w-[120px]" onClick={exportJson}>Export JSON</Button>
 
             </div>
 
@@ -719,31 +606,5 @@ export function AdminApp() {
 
   );
 
-}
-
-function Kpi({ label, value, sub, color = "#F2F0EA" }) {
-  return (
-    <div className="rounded-xl p-3 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
-      <p className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider">{label}</p>
-      <p className="font-logo text-xl mt-1" style={{ color }}>{value}</p>
-      {sub && <p className="text-[10px] text-[#F2F0EA]/40 mt-1">{sub}</p>}
-    </div>
-  );
-}
-
-function RoleCard({ title, icon, metrics }) {
-  return (
-    <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-      <p className="font-logo text-sm text-[#F5C518] mb-3">{icon} {title}</p>
-      <div className="space-y-2">
-        {metrics.map((m) => (
-          <div key={m.label} className="flex justify-between gap-3 text-xs">
-            <span className="text-[#F2F0EA]/50">{m.label}</span>
-            <span className="font-logo text-[#F2F0EA] text-right">{m.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 

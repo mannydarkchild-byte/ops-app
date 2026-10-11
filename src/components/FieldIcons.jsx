@@ -29,10 +29,18 @@ export function IconAlert() {
 
 export function IconReports() {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden {...stroke}>
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...stroke}>
       <path d="M7 3h8l4 4v14H7z" />
       <path d="M15 3v4h4" />
       <path d="M10 12h6M10 16h6" />
+    </svg>
+  );
+}
+
+export function IconPulse() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...stroke}>
+      <path d="M3 12h4l2-6 4 12 2-6h6" />
     </svg>
   );
 }

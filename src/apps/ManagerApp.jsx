@@ -3,7 +3,6 @@ import { useOps } from "../context/OpsContext.jsx";
 import { useLiveTimer } from "../hooks/useLiveTimer.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { BackdateReadingModal } from "../components/BackdateReadingModal.jsx";
-import { ActivityFeed } from "../components/ActivityFeed.jsx";
 import { EditExpenseModal, ExpenseModal } from "../components/ExpenseModal.jsx";
 import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
@@ -12,7 +11,6 @@ import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import { SignedReportCard } from "../components/SignedReportCard.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
 import { ISSUE, SHIFT } from "../lib/constants.js";
-import { ownerForStopReasonMachine } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
@@ -24,17 +22,18 @@ import {
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
-import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { RolePulse } from "../components/RolePulse.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
 import { currentShiftWindow } from "../lib/shiftAgreement.js";
 import { BucketSizeEditor } from "../components/BucketSizeEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
-import * as wf from "../services/workflows.js";
+import { Button } from "../components/ui/Button.jsx";
 
 const TABS = [
   { id: "today", label: "Today" },
+  { id: "pulse", label: "Pulse" },
   { id: "money", label: "Money" },
   { id: "issues", label: "Problems" },
 ];
@@ -231,25 +230,6 @@ export function ManagerApp() {
     };
   }, [primaryMachine, shifts, events, workSessions]);
 
-  const downtimeByReason = useMemo(() => {
-    const stops = events.filter(
-      (e) =>
-        e.machine_id === primaryMachine?.id &&
-        e.type === "STOP" &&
-        e.status === "closed" &&
-        inPeriod(e.stopped_at, billingPeriod)
-    );
-    const map = {};
-    for (const e of stops) {
-      const reason = e.reason || "Other";
-      const label = `${reason} · ${ownerForStopReasonMachine(reason, primaryMachine, siteConfig)}`;
-      map[label] = (map[label] || 0) + Number(e.downtime_minutes || 0);
-    }
-    return Object.entries(map)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-  }, [events, primaryMachine, billingPeriod, siteConfig]);
-
   const myIssues = useMemo(
     () => issues.filter(
       (i) =>
@@ -422,12 +402,12 @@ export function ManagerApp() {
   );
 
   const headerContext = primaryMachine
-    ? `${activeSite?.name || "Site"} · ${primaryMachine.name} · ${money(primaryMachine.billable_rate)}/h · ${billingPeriod.label}`
+    ? `${activeSite?.name || "Site"} - ${primaryMachine.name} - ${money(primaryMachine.billable_rate)}/h - ${billingPeriod.label}`
     : activeSite?.name;
 
   if (!primaryMachine) {
     return (
-      <AppPage subtitle="Manager" context={headerContext} alert={<AlertModal {...alert} confirmText="OK" />}>
+      <AppPage subtitle="Manager" context={headerContext} onSync={syncNow} openHeaderTools alert={<AlertModal {...alert} confirmText="OK" />}>
         <p className="py-12 text-center text-sm text-[#F2F0EA]/40">
           No primary machine configured for this site. Ask admin to add a machine and set the primary in Sites.
         </p>
@@ -444,66 +424,72 @@ export function ManagerApp() {
       activeTab={tab}
       onTabChange={setTab}
       onSync={syncNow}
+      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
         {needsAttention && (
-          <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-xl px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="font-logo text-[10px] text-[#EF4444] tracking-wider">NEEDS ATTENTION</span>
+          <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-2xl px-4 py-3 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="font-ui text-xs font-semibold text-[#EF4444]">Needs attention</span>
             {partsRequests.length > 0 && (
-              <span className="font-logo text-[10px] text-[#F97316]">
+              <span className="font-ui text-xs text-[#F97316]">
                 {partsRequests.length} parts request{partsRequests.length !== 1 ? "s" : ""} with the storeroom
               </span>
             )}
             {assignedToMe.length > 0 && (
-              <button type="button" onClick={() => setTab("issues")} className="btn-link font-logo text-[10px] text-[#F5C518] hover:underline">
+              <button type="button" onClick={() => setTab("issues")} className="btn-link font-ui text-xs text-[#F5C518] hover:underline">
                 {assignedToMe.length} issue{assignedToMe.length !== 1 ? "s" : ""} assigned to you
               </button>
             )}
             {criticalWarriorIssues.length > 0 && (
-              <button type="button" onClick={() => setTab("issues")} className="btn-link font-logo text-[10px] text-[#EF4444] hover:underline">
+              <button type="button" onClick={() => setTab("issues")} className="btn-link font-ui text-xs text-[#EF4444] hover:underline">
                 {criticalWarriorIssues.length} critical
               </button>
             )}
             {fleetStatus?.isStopped && (
-              <button type="button" onClick={() => setTab("today")} className="btn-link font-logo text-[10px] text-[#F97316] hover:underline">
+              <button type="button" onClick={() => setTab("today")} className="btn-link font-ui text-xs text-[#F97316] hover:underline">
                 Warrior stopped — {fleetStatus.openStop?.reason}
               </button>
             )}
             {pendingVerify > 0 && (
-              <span className="font-logo text-[10px] text-[#F2F0EA]/50">
+              <span className="font-ui text-xs text-[#F2F0EA]/50">
                 {pendingVerify} shift{pendingVerify !== 1 ? "s" : ""} awaiting machine sign-off
               </span>
             )}
             {awaitingSiteCount > 0 && (
-              <span className="font-logo text-[10px] text-[#00A4A6]">
+              <span className="font-ui text-xs text-[#00A4A6]">
                 {awaitingSiteCount} shift{awaitingSiteCount !== 1 ? "s" : ""} awaiting site sign-off — with Berlington
               </span>
             )}
           </div>
         )}
 
-        {tab !== "pulse" && siteMachines.length > 1 && (
+        {tab !== "pulse" && !(tab === "money" && moneyView === "reports") && (
+          <div className="mb-4">
+            <WorkHoursPanel variant="clock" />
+          </div>
+        )}
+
+        {tab !== "pulse" && tab !== "issues" && siteMachines.length > 1 && (
           <label className="block mb-4">
-            <span className="font-logo text-[10px] tracking-wider text-[#F5C518]">MACHINE</span>
+            <span className="ops-field-label">Machine</span>
             <select
               value={primaryMachine?.id || ""}
               onChange={(e) => setFocusMachineId(e.target.value)}
-              className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA]"
+              className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA]"
             >
               {siteMachines.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
-            <p className="font-body text-xs text-[#F2F0EA]/50 mt-1">Billable hours, machine hours, diesel, and expenses on this screen are for this machine only.</p>
           </label>
         )}
 
+        {tab === "pulse" && <RolePulse />}
+
         {tab === "today" && (
           <div className="space-y-4">
-            <WorkHoursPanel variant="clock" />
-            <p className="font-body text-sm text-[#F2F0EA]/70">Start here. Check what is running, then follow money or problems only when needed.</p>
-            <p className="font-body text-xs text-[#F2F0EA]/50">{primaryMachine?.name || "This machine"} · {billingPeriod.label} · Current shift: {currentShift.label}</p>
+            <p className="font-body text-xs text-[#F2F0EA]/50">{primaryMachine?.name || "This machine"} · {billingPeriod.label} · {currentShift.label}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <DashboardKpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts started · 8h minus Darkchild downtime`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.billable)} />
               <DashboardKpi label={HOUR_LABELS.machine} value={`${cycleStats.machineHours.toFixed(1)}h`} sub={`${primaryMachine?.name || "This machine"} · ${cycleStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.machine)} />
@@ -524,48 +510,30 @@ export function ManagerApp() {
 
             {fleetStatus && <WarriorStatusCard fleet={fleetStatus} workSessions={workSessions} profiles={profiles} />}
 
-            {downtimeByReason.length > 0 && (
-              <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-                <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-3 tracking-wider">DOWNTIME BY REASON · THIS CYCLE</p>
-                <div className="space-y-2">
-                  {downtimeByReason.map(([reason, minutes]) => (
-                    <div key={reason} className="flex justify-between items-center gap-2">
-                      <span className="text-xs text-[#F2F0EA]/70 truncate">{reason}</span>
-                      <span className="font-logo text-xs text-[#EF4444] shrink-0">{formatDurationMinutes(minutes)}</span>
-                    </div>
-                  ))}
+            <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-2">
+              <Button variant="secondary" className="w-full" onClick={() => setSetupOpen((v) => !v)}>{setupOpen ? "Hide site setup" : "Site setup"}</Button>
+              {setupOpen && (
+                <div className="space-y-3 pt-1">
+                  <MoreMenu
+                    items={[
+                      { label: "Bucket size", onClick: () => setShowBucketSize(true) },
+                      { label: "Stop reasons and owners", onClick: () => setShowStopOwners(true) },
+                      { label: "Backdate hour reading", onClick: () => setShowBackdate(true) },
+                    ]}
+                  />
                 </div>
-              </div>
-            )}
-
-            <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-              <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-3 tracking-wider">RECENT ACTIVITY</p>
-              <ActivityFeed
-                events={warriorActivity.events}
-                fuelLogs={warriorActivity.fuelLogs}
-                issues={warriorActivity.issues}
-                machines={machines}
-                siteId={user?.site_id}
-                limit={15}
-              />
+              )}
             </div>
           </div>
         )}
 
         {tab === "issues" && (
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setShowReportIssue(true)}
-              className="w-full bg-[#EF4444] text-white py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
-            >
-              ⚠ REPORT PROBLEM
-            </button>
-            <p className="text-[10px] text-[#F2F0EA]/40">
-              Machine issues go to the operator. Site, supplier, and staffing problems go to the supervisor.
-            </p>
+            <Button variant="danger" className="w-full" size="lg" onClick={() => setShowReportIssue(true)}>
+              Report a problem
+            </Button>
             {partsRequests.length > 0 && (
-              <p className="text-[10px] text-[#F97316] font-logo tracking-wider">
+              <p className="font-body text-xs text-[#F97316]">
                 {partsRequests.length} waiting for parts — the storeroom issues them
               </p>
             )}
@@ -583,45 +551,19 @@ export function ManagerApp() {
 
         {tab === "money" && (
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <button type="button" onClick={() => setMoneyView("spending")} className={`py-3 rounded-xl font-logo text-sm ${moneyView === "spending" ? "bg-[#F5C518] text-black" : "border border-[#2A2A2A] text-[#F2F0EA]"}`}>1 · Spending</button>
-            <button type="button" onClick={() => setMoneyView("reports")} className={`py-3 rounded-xl font-logo text-sm ${moneyView === "reports" ? "bg-[#F5C518] text-black" : "border border-[#2A2A2A] text-[#F2F0EA]"}`}>2 · Reports</button>
-          </div>
-        )}
-
-        {tab === "today" && (
-          <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-2">
-            <button type="button" onClick={() => setSetupOpen((v) => !v)} className="w-full py-3 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-logo text-sm">{setupOpen ? "Hide setup & pulse" : "Setup & pulse (only when changing the site)"}</button>
-            {setupOpen && (
-              <div className="space-y-3 pt-1">
-                <ProductivityPulseScreen embedded />
-                <MoreMenu
-                  items={[
-                    { label: "Bucket size", onClick: () => setShowBucketSize(true) },
-                    { label: "Stop reasons and owners", onClick: () => setShowStopOwners(true) },
-                    { label: "Backdate hour reading", onClick: () => setShowBackdate(true) },
-                  ]}
-                />
-              </div>
-            )}
+            <Button variant={moneyView === "spending" ? "primary" : "secondary"} onClick={() => setMoneyView("spending")}>Spending</Button>
+            <Button variant={moneyView === "reports" ? "primary" : "secondary"} onClick={() => setMoneyView("reports")}>Reports</Button>
           </div>
         )}
 
         {tab === "money" && moneyView === "spending" && (
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setShowExpense(true)}
-              className="w-full bg-[#00A4A6] text-white py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
-            >
-              + LOG / BACKDATE EXPENSE
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowImportExpenses(true)}
-              className="w-full border border-[#F5C518]/50 text-[#F5C518] py-3.5 rounded-xl font-logo font-bold text-xs tracking-wider"
-            >
-              UPLOAD BANK RECON
-            </button>
+            <Button variant="teal" className="w-full" size="lg" onClick={() => setShowExpense(true)}>
+              Log expense
+            </Button>
+            <Button variant="secondary" className="w-full" size="lg" onClick={() => setShowImportExpenses(true)}>
+              Upload bank recon
+            </Button>
 
             <div className="flex flex-wrap gap-1">
               {EXPENSE_FILTERS.map((f) => (
@@ -665,8 +607,8 @@ export function ManagerApp() {
             </div>
 
             {expenseByCategory.length > 0 && (
-              <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-                <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-3 tracking-wider">BY CATEGORY</p>
+              <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
+                <p className="font-ui text-sm font-semibold text-ops-muted mb-3">By category</p>
                 <div className="space-y-2">
                   {expenseByCategory.map(([cat, catTotal]) => {
                     const pct = expenseDashboard.total > 0 ? (catTotal / expenseDashboard.total) * 100 : 0;
@@ -715,9 +657,8 @@ export function ManagerApp() {
         {tab === "money" && moneyView === "reports" && (
           <div className="space-y-4">
             <WorkHoursPanel />
-            <p className="font-body text-sm text-[#F2F0EA]/70">Money and hours for the selected machine, then the signed shift reports underneath.</p>
-            <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-              <h3 className="font-logo text-[#F5C518] text-sm mb-3">OPERATIONS REPORT</h3>
+            <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
+              <h3 className="font-ui text-sm font-semibold text-[#F5C518] mb-3">Operations report</h3>
               <div className="flex flex-wrap gap-2 mb-4">
                 {getDatePresets(siteConfig.billing_cycle_start_day).map((p) => (
                   <button
@@ -740,11 +681,10 @@ export function ManagerApp() {
                     showAlert("Could not open report", e.message, "error");
                   }
                 }}
-                className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold tracking-wider"
+                className="w-full bg-[#F5C518] text-black py-4 rounded-2xl font-ui font-semibold"
               >
-                👁 PREVIEW / PRINT OPERATIONS REPORT
+                Open operations report
               </button>
-              <p className="text-[10px] text-[#F2F0EA]/40 mt-2">Warrior 2100 data only · works offline.</p>
             </div>
 
             <TimesheetPanel
@@ -765,7 +705,8 @@ export function ManagerApp() {
 
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-3">
-                <h3 className="font-logo text-[#F5C518] text-sm">SIGNED DAILY REPORTS</h3>                <div className="flex flex-wrap gap-1 ml-auto">
+                <h3 className="font-ui text-sm font-semibold text-[#F5C518]">Signed daily reports</h3>
+                <div className="flex flex-wrap gap-1 ml-auto">
                   {REPORT_FILTERS.map((f) => (
                     <button
                       key={f.id}
@@ -866,7 +807,7 @@ export function ManagerApp() {
       )}
 
       {showBucketSize && (
-        <Modal title="BUCKET SIZE" color="yellow" onClose={() => setShowBucketSize(false)}>
+        <Modal title="Bucket size" color="yellow" onClose={() => setShowBucketSize(false)}>
           <BucketSizeEditor
             siteId={user?.site_id || activeSite?.id}
             settings={siteConfig}
@@ -877,7 +818,7 @@ export function ManagerApp() {
       )}
 
       {showStopOwners && (
-        <Modal title="STOP REASONS & OWNERS" color="yellow" onClose={() => setShowStopOwners(false)}>
+        <Modal title="Stop reasons and owners" color="yellow" onClose={() => setShowStopOwners(false)}>
           <StopReasonsEditor
             siteId={user?.site_id}
             siteSettingsRow={siteSettingsRow}
@@ -897,16 +838,16 @@ function WarriorStatusCard({ fleet, workSessions = [], profiles = [] }) {
   const runningSeconds = useLiveTimer(runningShift?.started_at, isRunning);
   const downtimeSeconds = useLiveTimer(openStop?.stopped_at, isStopped);
   const statusColor = isStopped ? "#EF4444" : isRunning ? "#22C55E" : "#F2F0EA";
-  const statusLabel = isStopped ? "STOPPED" : isRunning ? "RUNNING" : "IDLE";
+  const statusLabel = isStopped ? "Stopped" : isRunning ? "Running" : "Idle";
 
   return (
-    <div className={`bg-[#141414] border rounded-xl p-4 ${isStopped ? "border-[#EF4444]/50 bg-[#2a1616]/40" : "border-[#2A2A2A]"}`}>
+    <div className={`bg-[#141414] border rounded-2xl p-4 ${isStopped ? "border-[#EF4444]/50 bg-[#2a1616]/40" : "border-[#2A2A2A]"}`}>
       <div className="flex justify-between items-start gap-2 mb-2">
         <div>
-          <p className="font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider">LIVE STATUS</p>
-          <p className="font-logo text-sm text-[#F2F0EA]">{machine.name}</p>
+          <p className="font-ui text-xs text-[#F2F0EA]/50">Live status</p>
+          <p className="font-ui text-sm font-semibold text-[#F2F0EA]">{machine.name}</p>
         </div>
-        <p className="font-logo text-sm" style={{ color: statusColor }}>{statusLabel}</p>
+        <p className="font-ui text-sm font-semibold" style={{ color: statusColor }}>{statusLabel}</p>
       </div>
       {isRunning && (
         <p className="text-sm text-[#F2F0EA]/70">
@@ -936,7 +877,7 @@ function WarriorStatusCard({ fleet, workSessions = [], profiles = [] }) {
 
 function Kpi({ label, value, sub, color }) {
   return (
-    <div className="rounded-xl p-3 sm:p-4 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
+    <div className="rounded-2xl p-3 sm:p-4 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
       <p className="font-logo text-[10px] text-[#F2F0EA]/50">{label}</p>
       <p className="font-logo text-xl sm:text-2xl" style={{ color }}>{value}</p>
       <p className="font-body text-[10px] text-[#F2F0EA]/40 mt-1">{sub}</p>

@@ -50,7 +50,7 @@ export function AdminActivityPanel({
         <select
           value={siteId}
           onChange={(e) => setSiteId(e.target.value)}
-          className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl font-logo text-xs text-[#F2F0EA]"
+          className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl font-logo text-xs text-[#F2F0EA]"
         >
           <option value="all">All sites</option>
           {sites.map((s) => (
@@ -60,7 +60,7 @@ export function AdminActivityPanel({
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
-          className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl font-logo text-xs text-[#F2F0EA]"
+          className="bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl font-logo text-xs text-[#F2F0EA]"
         >
           {TYPES.map((t) => (
             <option key={t.id} value={t.id}>{t.label}</option>
@@ -74,7 +74,7 @@ export function AdminActivityPanel({
         {rows.length === 0 ? (
           <p className="text-sm text-[#F2F0EA]/40">No activity in this period.</p>
         ) : rows.map((row) => (
-          <div key={row.id} className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-3">
+          <div key={row.id} className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3">
             <div className="flex justify-between gap-2 items-start">
               <p className="font-logo text-xs">
                 {row.icon} {row.label}

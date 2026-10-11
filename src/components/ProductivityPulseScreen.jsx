@@ -7,6 +7,9 @@ import { refreshMachineActivity } from "../lib/machineStatus.js";
 import { getBillingPeriod, getPrimaryMachine } from "../lib/utils.js";
 import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 import { ownerForStopReasonMachine } from "../lib/stopReasons.js";
+import { OwnerDowntimeChart, StopReasonChart } from "./PulseCharts.jsx";
+import { FieldDate, FieldSelect } from "./ui/FieldSelect.jsx";
+import { Button } from "./ui/Button.jsx";
 
 function toDateInputValue(d) {
   const x = new Date(d);
@@ -16,11 +19,38 @@ function toDateInputValue(d) {
   return `${y}-${m}-${day}`;
 }
 
+function formatDayOption(value, todayValue) {
+  const d = new Date(`${value}T12:00:00`);
+  const label = d.toLocaleDateString("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+  });
+  return value === todayValue ? `Today — ${label}` : label;
+}
+
+function recentDayValues(count = 90) {
+  const today = new Date();
+  const values = [];
+  for (let i = 0; i < count; i += 1) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    values.push(toDateInputValue(d));
+  }
+  return values;
+}
+
 /**
  * Live machine productivity — stock-style score for every role.
  * One machine at a time. Opens on the primary machine. Default window: today since midnight.
  */
-export function ProductivityPulseScreen({ onClose, embedded = false }) {
+export function ProductivityPulseScreen({
+  onClose,
+  embedded = false,
+  children,
+  initialMachineId,
+  initialWindow = "today",
+}) {
   const {
     user, activeSite, machines, shifts, events, getSettingsForSite, syncNow, refreshLocal,
   } = useOps();
@@ -31,14 +61,17 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
     () => (machines || []).filter((m) => m.site_id === siteId && m.active !== false),
     [machines, siteId]
   );
-  const [pickedId, setPickedId] = useState("");
+  const [pickedId, setPickedId] = useState(initialMachineId || "");
+  useEffect(() => {
+    if (initialMachineId) setPickedId(initialMachineId);
+  }, [initialMachineId]);
   const machine = useMemo(() => {
     const picked = siteMachines.find((m) => m.id === pickedId);
     if (picked) return picked;
     return getPrimaryMachine(machines, siteId, siteConfig);
   }, [siteMachines, pickedId, machines, siteId, siteConfig]);
 
-  const [windowMode, setWindowMode] = useState("today");
+  const [windowMode, setWindowMode] = useState(initialWindow === "cycle" || initialWindow === "history" ? initialWindow : "today");
   const [historyDay, setHistoryDay] = useState(() => toDateInputValue(new Date()));
   const [nowMs, setNowMs] = useState(Date.now());
   const [refreshing, setRefreshing] = useState(false);
@@ -99,6 +132,14 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
     });
   }, [machine, shifts, events, siteConfig, windowMode, historyDay, cycle.start, cycle.end, nowMs]);
 
+  const isOperator = (user?.role || "").toLowerCase() === "operator";
+  const todayValue = toDateInputValue(new Date());
+  const dayChoices = useMemo(() => {
+    const values = recentDayValues(90);
+    if (historyDay && !values.includes(historyDay)) values.unshift(historyDay);
+    return values;
+  }, [historyDay]);
+
   const windowLabel = windowMode === "today"
     ? "Today since midnight"
     : windowMode === "history"
@@ -115,18 +156,13 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
     <div className={`space-y-4 ${embedded ? "" : "px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]"}`}>
       <div className="flex flex-wrap gap-2 items-center justify-between">
         <div className="min-w-0">
-          <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">MACHINE PRODUCTIVITY</p>
-          <p className="font-logo text-xl text-[#F2F0EA] truncate">{machine?.name || "No machine"}</p>
-          <p className="font-body text-sm text-[#F2F0EA]/55">{activeSite?.name || "Site"} · {windowLabel}</p>
+          <p className="font-ui text-sm font-semibold text-[#F5C518]">Machine productivity</p>
+          <p className="font-ui text-xl font-semibold text-ops-text truncate">{machine?.name || "No machine"}</p>
+          <p className="font-body text-sm text-ops-muted">{activeSite?.name || "Site"} · {windowLabel}</p>
         </div>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="shrink-0 px-3 py-2 rounded-xl border border-[#2A2A2A] font-logo text-xs text-[#F5C518] disabled:opacity-60"
-        >
+        <Button type="button" variant="secondary" size="md" onClick={handleRefresh} disabled={refreshing}>
           {refreshing ? "Refreshing…" : "Refresh"}
-        </button>
+        </Button>
       </div>
       {refreshError && (
         <p className="font-body text-xs text-[#EF4444] -mt-2">{refreshError}</p>
@@ -140,36 +176,36 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
         />
       )}
 
-      <div className="flex gap-1">
-        {[
-          { id: "today", label: "Today" },
-          { id: "history", label: "History" },
-          { id: "cycle", label: "Cycle" },
-        ].map((w) => (
-          <button
-            key={w.id}
-            type="button"
-            onClick={() => setWindowMode(w.id)}
-            className={`flex-1 py-3 rounded-xl font-logo text-sm ${
-              windowMode === w.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"
-            }`}
-          >
-            {w.label}
-          </button>
-        ))}
-      </div>
+      <label className="block">
+        <span className="ops-field-label">Show</span>
+        <FieldSelect value={windowMode} onChange={setWindowMode}>
+          <option value="today">Today</option>
+          <option value="history">A past day</option>
+          <option value="cycle">This cycle</option>
+        </FieldSelect>
+      </label>
 
       {windowMode === "history" && (
-        <label className="block">
-          <span className="font-logo text-[10px] tracking-wider text-[#F2F0EA]/45">Day</span>
-          <input
-            type="date"
-            value={historyDay}
-            max={toDateInputValue(new Date())}
-            onChange={(e) => setHistoryDay(e.target.value)}
-            className="mt-1 w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA] font-logo text-sm"
-          />
-        </label>
+        <div className="space-y-3">
+          <label className="block">
+            <span className="ops-field-label">Day</span>
+            <FieldSelect value={historyDay} onChange={setHistoryDay}>
+              {dayChoices.map((value) => (
+                <option key={value} value={value}>
+                  {formatDayOption(value, todayValue)}
+                </option>
+              ))}
+            </FieldSelect>
+          </label>
+          <label className="block">
+            <span className="ops-field-label">Or pick on the calendar</span>
+            <FieldDate
+              value={historyDay}
+              onChange={(value) => value && setHistoryDay(value)}
+              max={todayValue}
+            />
+          </label>
+        </div>
       )}
 
       {pulse?.live && (
@@ -180,7 +216,7 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
               ? "border-[#EF4444]/40 bg-[#EF4444]/10"
               : "border-[#2A2A2A] bg-[#141414]"
         }`}>
-          <p className="font-logo text-xs tracking-wider text-[#F2F0EA]/50 mb-1">NOW</p>
+          <p className="font-ui text-xs font-semibold text-[#F2F0EA]/50 mb-1">Now</p>
           <p className={`font-logo text-2xl ${
             pulse?.runningNow ? "text-[#22C55E]" : pulse?.openStop ? "text-[#EF4444]" : "text-[#F2F0EA]"
           }`}>
@@ -190,11 +226,14 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
                 ? `Stopped — ${pulse.openStop.reason || "downtime"}`
                 : "Idle"}
           </p>
-          {pulse?.openStop && (
+          {pulse?.openStop && !isOperator && (
             <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">
               Owner: {pulse.currentOwner || ownerForStopReasonMachine(pulse.openStop.reason, machine, siteConfig)}
               {pulse.openStop.operatorName ? ` · ${pulse.openStop.operatorName}` : ""}
             </p>
+          )}
+          {pulse?.openStop && isOperator && pulse.openStop.operatorName && (
+            <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">{pulse.openStop.operatorName}</p>
           )}
         </div>
       )}
@@ -206,44 +245,22 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
       </div>
 
       <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3">
-        <p className="font-logo text-sm text-[#F2F0EA] px-1 mb-1">Running time minus stop time</p>
-        <p className="font-body text-xs text-[#F2F0EA]/55 px-1 mb-2">Up: machine running. Down: machine stopped.</p>
+        <p className="font-ui text-sm font-semibold text-ops-text px-1 mb-2">Running vs stopped</p>
         <StockChartSvg points={pulse?.points || []} />
       </div>
 
-      {pulse?.ownerTotals?.length > 0 && (
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-2">
-          <p className="font-logo text-xs tracking-wider text-[#F5C518]">DOWNTIME BY OWNER</p>
-          {pulse.ownerTotals.map(([owner, min]) => (
-            <div key={owner} className="flex justify-between gap-3 font-body text-sm text-[#F2F0EA]">
-              <span className="truncate">{owner}</span>
-              <span className="font-logo text-[#EF4444] shrink-0">{formatDurationMinutes(min)}</span>
-            </div>
-          ))}
+      {!isOperator && (
+        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3">
+          <p className="font-ui text-sm font-semibold text-[#F5C518]">Downtime by owner</p>
+          <OwnerDowntimeChart rows={pulse?.ownerTotals || []} />
         </div>
       )}
 
-      {pulse?.periods?.filter((p) => p.state === "stopped" && p.minutes >= 1).length > 0 && (
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3">
-          <p className="font-logo text-xs tracking-wider text-[#F5C518]">STOPS</p>
-          {pulse.periods
-            .filter((p) => p.state === "stopped" && p.minutes >= 1)
-            .slice(-12)
-            .reverse()
-            .map((p) => (
-              <div key={`${p.start}-${p.reason}`} className="border-b border-[#2A2A2A] pb-2 last:border-0 last:pb-0">
-                <p className="font-logo text-sm text-[#F2F0EA]">{p.reason || "Stop"}</p>
-                <p className="font-body text-xs text-[#F2F0EA]/55 mt-0.5">
-                  {ownerForStopReasonMachine(p.reason, machine, siteConfig)} · {formatDurationMinutes(p.minutes)} ·{" "}
-                  {new Date(p.start).toLocaleString("en-ZA", {
-                    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-                  })}
-                  {p.operatorName ? ` · ${p.operatorName}` : ""}
-                </p>
-              </div>
-            ))}
-        </div>
-      )}
+      <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3">
+        <p className="font-ui text-sm font-semibold text-[#F5C518]">Stops</p>
+        <StopReasonChart rows={pulse?.stopReasonTotals || []} />
+      </div>
+      {children}
     </div>
   );
 
@@ -252,14 +269,10 @@ export function ProductivityPulseScreen({ onClose, embedded = false }) {
   return (
     <div className="ops-sheet fixed inset-0 z-[70] bg-[#0A0A0A] flex flex-col">
       <div className="shrink-0 border-b border-[#2A2A2A] bg-[#141414] px-4 py-3 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="shrink-0 px-4 py-3 bg-[#2A2A2A] text-[#F2F0EA] rounded-xl font-logo"
-        >
+        <Button type="button" variant="secondary" size="md" onClick={onClose}>
           Back
-        </button>
-        <p className="flex-1 min-w-0 font-logo text-[#F5C518] truncate">Pulse</p>
+        </Button>
+        <p className="flex-1 min-w-0 font-ui font-semibold text-[#F5C518] truncate">Pulse</p>
       </div>
       <div className="flex-1 overflow-y-auto pt-4">{body}</div>
     </div>

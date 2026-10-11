@@ -3,7 +3,7 @@ import { fmtDateShort } from "../lib/utils.js";
 import { agreementLabel } from "../lib/shiftAgreement.js";
 import { formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
 
-export function SignedReportCard({ shift, machineName, events, siteSettings, onViewReport, onDownloadReport, onShareReport }) {
+export function SignedReportCard({ shift, machineName, events, siteSettings, onViewReport }) {
   const [busy, setBusy] = useState(false);
 
   const openReport = async () => {
@@ -15,29 +15,11 @@ export function SignedReportCard({ shift, machineName, events, siteSettings, onV
     }
   };
 
-  const saveReport = async () => {
-    setBusy(true);
-    try {
-      await onDownloadReport?.(shift);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const shareReport = async () => {
-    setBusy(true);
-    try {
-      await onShareReport?.(shift);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
       <div className="flex justify-between items-start gap-3 mb-3">
         <div className="min-w-0 flex-1">
-          <p className="font-logo text-sm text-[#F2F0EA]">{machineName || "Machine"}</p>
+          <p className="font-ui text-sm font-semibold text-[#F2F0EA]">{machineName || "Machine"}</p>
           <p className="text-[10px] text-[#F2F0EA]/45 mt-0.5">
             {fmtDateShort(shift.started_at)} · {shift.operator_name || "Operator"}
           </p>
@@ -48,7 +30,7 @@ export function SignedReportCard({ shift, machineName, events, siteSettings, onV
           <p className="text-[9px] text-[#F2F0EA]/40 mt-0.5">{agreementLabel(shift)}</p>
         </div>
         <div className="text-right shrink-0">
-          <p className="font-logo text-lg text-[#22C55E]">{shiftBillableHours(shift, events, siteSettings).toFixed(1)}h</p>
+          <p className="font-ui text-lg font-semibold text-[#22C55E]">{shiftBillableHours(shift, events, siteSettings).toFixed(1)}h</p>
           <p className="text-[9px] text-[#F2F0EA]/40">billable</p>
         </div>
       </div>
@@ -66,34 +48,14 @@ export function SignedReportCard({ shift, machineName, events, siteSettings, onV
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-2">
-        <button
-          type="button"
-          onClick={openReport}
-          disabled={busy}
-          className="bg-[#F5C518] text-black py-3 rounded-xl font-logo font-bold disabled:opacity-50"
-        >
-          {busy ? "OPENING…" : "Open report"}
-        </button>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={saveReport}
-            disabled={busy}
-            className="border border-[#2A2A2A] text-[#F2F0EA] py-3 rounded-xl font-logo disabled:opacity-50"
-          >
-            Download
-          </button>
-          <button
-            type="button"
-            onClick={shareReport}
-            disabled={busy || !onShareReport}
-            className="bg-[#22C55E] text-black py-3 rounded-xl font-logo font-bold disabled:opacity-50"
-          >
-            Share
-          </button>
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={openReport}
+        disabled={busy}
+        className="w-full bg-[#F5C518] text-black py-3 rounded-xl font-ui font-semibold disabled:opacity-50"
+      >
+        {busy ? "Opening…" : "Open report"}
+      </button>
     </div>
   );
 }

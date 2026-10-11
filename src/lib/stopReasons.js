@@ -1,3 +1,5 @@
+import { ISSUE_AREA_GROUPS } from "./constants.js";
+
 /** Default stop owners are ROLES, not companies. Each machine resolves the role
  * to its own supplier/wear-owner name; site settings are the fallback. */
 
@@ -212,18 +214,37 @@ export function isWearStop(reason, siteSettings) {
   );
 }
 
+function machineLine(machine) {
+  const text = `${machine?.name || ""} ${machine?.code || ""} ${machine?.type || ""}`.toLowerCase();
+  if (/\bexcavator\b/.test(text)) return "excavator";
+  if (/\bfel\b/.test(text) || /front[\s-]*end/.test(text) || /\bloader\b/.test(text)) return "fel";
+  if (/screen|warrior|crusher/.test(text)) return "screener";
+  return null;
+}
+
+function looksLikeDarkchild(name) {
+  return String(name || "").toLowerCase().includes("darkchild");
+}
+
 /**
  * Display name for an ownership role on one machine.
- * Warrior → Darkchild, FEL → Mamarc, excavator → Berlington.
- * Falls back to site settings, then to the generic role label.
+ * Darkchild is Warrior only. FEL → Mamarc. Excavator → Berlington.
  */
 export function machineOwnerName(machine, role, siteSettings) {
   const labels = getStopOwnerLabels(siteSettings);
+  const line = machineLine(machine);
   if (role === OWNER_ROLES.CONTRACTOR) {
-    return machine?.supplier_name || labels.contractor || DEFAULT_STOP_OWNERS.DARKCHILD;
+    const stored = machine?.supplier_name?.trim();
+    if (line === "screener") return stored || labels.contractor || "Darkchild";
+    if (line === "fel") return stored && !looksLikeDarkchild(stored) ? stored : "Mamarc";
+    if (line === "excavator") return stored && !looksLikeDarkchild(stored) ? stored : "Berlington";
+    if (stored && !looksLikeDarkchild(stored)) return stored;
+    return DEFAULT_STOP_OWNERS.DARKCHILD;
   }
   if (role === OWNER_ROLES.WEAR) {
-    return machine?.wear_owner_name || labels.owner || DEFAULT_STOP_OWNERS.BERLINGTON;
+    const stored = machine?.wear_owner_name?.trim();
+    if (stored && !looksLikeDarkchild(stored)) return stored;
+    return labels.owner || DEFAULT_STOP_OWNERS.BERLINGTON;
   }
   return labels.site || DEFAULT_STOP_OWNERS.SITE;
 }
@@ -239,9 +260,27 @@ const ROLE_HINT = {
   [OWNER_ROLES.SITE]: "standing time — payable in full",
 };
 
+const WARRIOR_ONLY_REASONS = new Set([
+  "Screenbox bearings or drive",
+  "Conveyor or feeder drive",
+  "Worn or torn screen media",
+  "Screen media wear",
+  "Feed rate or screen overflow",
+  "Feed rate or overflow",
+  "Product not to size",
+  "Hopper, chute, or wear plate",
+]);
+
+export function isWarriorOnlyReason(reason) {
+  return WARRIOR_ONLY_REASONS.has(reason);
+}
+
 /** Stop picker groups for one machine: reasons grouped by role, headed by that machine's owner names. */
 export function stopReasonGroupsForMachine(machine, siteSettings) {
-  const list = resolveStopReasons(siteSettings);
+  const line = machineLine(machine);
+  const list = resolveStopReasons(siteSettings).filter((row) => (
+    line === "screener" || line == null || !isWarriorOnlyReason(row.reason)
+  ));
   const order = [];
   const byRole = {};
   for (const row of list) {
@@ -261,4 +300,23 @@ export function stopReasonGroupsForMachine(machine, siteSettings) {
       reasons: byRole[role],
     };
   });
+}
+
+/** Problem-type groups, labelled with this machine's owners. Warrior faults stay on the screen. */
+export function issueAreaGroupsForMachine(machine, siteSettings) {
+  const line = machineLine(machine);
+  const contractor = machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings);
+  const wear = machineOwnerName(machine, OWNER_ROLES.WEAR, siteSettings);
+  return ISSUE_AREA_GROUPS.map((group) => {
+    let label = group.label;
+    if (group.label.startsWith("Darkchild")) {
+      label = `${contractor} — mechanical, engine, hydraulic, electrical`;
+    } else if (group.label.startsWith("Berlington")) {
+      label = `${wear} — wear and consumables`;
+    }
+    const areas = (line === "screener" || !line)
+      ? group.areas
+      : group.areas.filter((area) => !isWarriorOnlyReason(area));
+    return { ...group, label, areas };
+  }).filter((group) => group.areas.length);
 }

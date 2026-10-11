@@ -1,5 +1,5 @@
 import { SHIFT } from "../lib/constants.js";
-import { ownerForStopReasonMachine } from "../lib/stopReasons.js";
+import { machineOwnerName, OWNER_ROLES, ownerForStopReasonMachine } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { resolveMediaUrl } from "../lib/media.js";
 import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
@@ -205,7 +205,7 @@ function stockProductivitySvg(shift, events, siteSettings, machine) {
   return stockChartSvgHtml(withOwners, { esc, formatDurationMinutes });
 }
 
-function reportPageStyles() {
+export function reportPageStyles() {
   return `
   *{box-sizing:border-box}
   body{margin:0;font-family:Inter,system-ui,sans-serif;background:#F2F0EA;color:#2A2A2A;line-height:1.5;font-size:14px;-webkit-font-smoothing:antialiased}
@@ -429,7 +429,7 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
       <div class="summary-cell highlight">
         <div class="label">Billable hours</div>
         <div class="value font-brand">${billableHours.toFixed(1)}h</div>
-        <div class="sub">8h shift minus Darkchild downtime</div>
+        <div class="sub">8h shift minus ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))} downtime</div>
       </div>
       <div class="summary-cell highlight">
         <div class="label">Machine hours</div>
@@ -572,7 +572,8 @@ ${shiftFuel.length
         <div class="signoff-head">
           <h2>Supervisor sign-off</h2>
           <div class="signoff-meta">
-            <p><strong>Verified by:</strong> ${esc(shift.supervisor_signature_name || shift.verified_by || "Supervisor")}</p>
+            <p><strong>Verified by:</strong> ${esc(shift.machine_signature_name || shift.supervisor_signature_name || shift.verified_by || "Supervisor")}</p>
+            ${shift.site_signature_name ? `<p><strong>Site sign-off:</strong> ${esc(shift.site_signature_name)}</p>` : ""}
             <p><strong>Verified at:</strong> ${fmtDate(shift.verified_at || shift.ended_at)}</p>
             ${shift.assigned_supervisor_name ? `<p><strong>Assigned:</strong> ${esc(shift.assigned_supervisor_name)}</p>` : ""}
           </div>
@@ -581,9 +582,9 @@ ${shiftFuel.length
           <div class="signature-label">Authorised signature</div>
           ${signatureUrl
     ? `<img src="${esc(signatureUrl)}" alt="Supervisor signature"/>`
-    : `<p class="note" style="margin:8px 0 0">${esc(shift.supervisor_signature_name || "Signature not on this phone yet — tap Update and open the report again.")}</p>`}
+    : `<p class="note" style="margin:8px 0 0">${esc(shift.machine_signature_name || shift.supervisor_signature_name || "Signature not on this phone yet - tap Update and open the report again.")}</p>`}
         </div>
-        <p class="note">Billable hours are an 8-hour shift minus downtime owned by Darkchild. Machine hours are the hour meter. Runtime and downtime are app-tracked.</p>
+        <p class="note">Billable hours are an 8-hour shift minus downtime owned by ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))}. Machine hours are the hour meter. Runtime and downtime are app-tracked.</p>
       </div>
     </section>
 
@@ -633,7 +634,7 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
         ["Closing meter (h)", shift.end_hour_meter ?? ""],
         ["Machine hours", Number(shift.hours_worked || 0)],
         ["Billable hours", shiftBillableHours(shift, events, siteSettings)],
-        ["Billable basis", "8h shift minus Darkchild downtime"],
+        ["Billable basis", `8h shift minus ${machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings)} downtime`],
         ["Runtime (min)", Number(shift.runtime_minutes || 0)],
         ["Downtime (min)", Number(shift.downtime_minutes || 0)],
         ["Site tonnes dispatched", siteDispatch?.tonnes_dispatched ?? ""],
@@ -685,7 +686,7 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
 }
 
 export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [], siteSettings, profiles = [], workSessions = [], siteDispatch: siteDispatchRows = [] }) {
-  const sigRef = firstMedia(shift.supervisor_signature_ref, shift.supervisor_signature);
+  const sigRef = firstMedia(shift.machine_signature_ref, shift.supervisor_signature_ref, shift.machine_signature, shift.supervisor_signature);
   const prestartItems = shiftPrestart(inspections, shift);
   const prestartPhotoMap = await resolveInspectionPhotoMap(prestartItems);
   const prestartPhotoUrls = Object.fromEntries(
@@ -814,7 +815,7 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
       <div class="summary-cell highlight">
         <div class="label">Billable hours</div>
         <div class="value">${billableHours.toFixed(1)}h</div>
-        <div class="sub">${shifts.length} shifts · 8h each minus Darkchild downtime</div>
+        <div class="sub">${shifts.length} shifts · 8h each minus ${esc(machineOwnerName(machine || machineList[0], OWNER_ROLES.CONTRACTOR, siteSettings))} downtime</div>
       </div>
       <div class="summary-cell highlight">
         <div class="label">Machine hours</div>
@@ -892,7 +893,7 @@ ${expenseRows || '<tr class="empty"><td colspan="2">No expenses recorded</td></t
       </tbody></table>
     </section>
 
-    <p class="note">Billable hours are an 8-hour shift minus downtime owned by Darkchild, on supervisor-signed shifts. Machine hours are the hour meter. Runtime and downtime are app-tracked. Generated from local OPS data.</p>
+    <p class="note">Billable hours are an 8-hour shift minus downtime owned by ${esc(machineOwnerName(machine || machineList[0], OWNER_ROLES.CONTRACTOR, siteSettings))}, on supervisor-signed shifts. Machine hours are the hour meter. Runtime and downtime are app-tracked. Generated from local OPS data.</p>
 
     <footer class="footer">
       <span>OPS Operations · ${esc(site?.name || "Site")}</span>

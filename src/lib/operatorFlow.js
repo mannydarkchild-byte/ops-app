@@ -1,11 +1,11 @@
 /** Operator day flow — one path, plain language */
 export const OPERATOR_FLOW_STEPS = [
-  { id: "clock", label: "Clock in", hint: "Start your time on site. This does not start a machine." },
-  { id: "machines", label: "Choose a machine", hint: "Each machine has its own pre-start, meter, and report." },
-  { id: "inspect", label: "Complete pre-start check", hint: "Check this machine. Then you can start it." },
-  { id: "start", label: "Start machine", hint: "Name who is in the cab, photo the hour meter, then start." },
-  { id: "run", label: "Machine running", hint: "Leave it running and choose the next machine, or finish this shift." },
-  { id: "end", label: "Shift sent", hint: "This machine is with the supervisor. Choose another, or clock out when you leave site." },
+  { id: "clock", label: "Clock in", hint: "Starts your time. Does not start a machine." },
+  { id: "machines", label: "Choose a machine", hint: "Each machine gets its own report." },
+  { id: "inspect", label: "Pre-start check", hint: "Walk the machine, then start it." },
+  { id: "start", label: "Start machine", hint: "Name the operator, photo the meter, then start." },
+  { id: "run", label: "Machine running", hint: "Stop if it stands. Finish when this machine is done." },
+  { id: "end", label: "Shift sent", hint: "Pick the next machine, or clock out when you leave." },
 ];
 
 export function operatorFlowIndex(stepId) {

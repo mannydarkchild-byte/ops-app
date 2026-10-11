@@ -2,26 +2,28 @@ import { useEffect, useState } from "react";
 import {
   buildReportFiles,
   downloadBlob,
-  excelFileFromSheets,
   shareNativeFile,
 } from "../lib/reportShare.js";
+import { Button } from "./ui/Button.jsx";
 
-/** Full-screen report viewer — PDF / WhatsApp / email / Excel. */
-export function ReportPreviewModal({ html, title, sheets, onClose }) {
+/** Full-screen report viewer. One Share button; every option sends A4 PDF. */
+export function ReportPreviewModal({ html, title, startShareOpen = false, onClose }) {
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("Preparing the PDF…");
   const [files, setFiles] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setFiles(null);
+    setShareOpen(!!startShareOpen);
     setNote("Preparing the PDF…");
     (async () => {
       try {
         const built = await buildReportFiles(html, title);
         if (cancelled) return;
         setFiles(built);
-        setNote("PDF ready. Tap WhatsApp, Email, or Download.");
+        setNote("PDF ready.");
       } catch (e) {
         if (!cancelled) setNote(e.message || "Could not build the PDF on this phone.");
       }
@@ -33,8 +35,8 @@ export function ReportPreviewModal({ html, title, sheets, onClose }) {
     setBusy(key);
     try {
       const result = await fn();
-      if (result === "shared") setNote("Pick WhatsApp — the report file is already attached.");
-      if (result === "downloaded") setNote("Saved on this phone. Send that file from WhatsApp.");
+      if (result === "shared") setNote("Pick the app — the PDF is already attached.");
+      if (result === "downloaded") setNote("PDF saved on this phone.");
     } catch (e) {
       if (e?.name === "AbortError") return;
       setNote(e.message || "Could not share this report.");
@@ -44,8 +46,7 @@ export function ReportPreviewModal({ html, title, sheets, onClose }) {
   };
 
   const pdf = files?.pdf || files?.file;
-  const image = files?.jpeg || files?.png;
-  const ready = Boolean(pdf || image);
+  const ready = Boolean(pdf);
 
   return (
     <div className="ops-sheet fixed inset-0 z-[70] bg-[#0A0A0A] flex flex-col">
@@ -54,50 +55,49 @@ export function ReportPreviewModal({ html, title, sheets, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 px-4 py-3 bg-[#2A2A2A] text-[#F2F0EA] rounded-xl font-logo"
+            className="shrink-0 px-4 py-3 bg-[#2A2A2A] text-[#F2F0EA] rounded-xl font-ui font-semibold"
           >
             Back
           </button>
-          <p className="flex-1 min-w-0 font-logo text-[#F2F0EA] truncate">{title || "Report"}</p>
+          <p className="flex-1 min-w-0 font-ui font-semibold text-[#F2F0EA] truncate">{title || "Report"}</p>
+          <Button
+            type="button"
+            disabled={!ready || !!busy}
+            onClick={() => setShareOpen((open) => !open)}
+          >
+            {busy ? "Sharing…" : shareOpen ? "Close share" : "Share"}
+          </Button>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            disabled={!ready || !!busy}
-            onClick={() => run("download", () => {
-              downloadBlob(pdf || image, (pdf || image).name);
-              return "downloaded";
-            })}
-            className="bg-[#F5C518] text-black rounded-xl font-logo font-bold disabled:opacity-50"
-          >
-            {busy === "download" ? "Saving…" : "Download PDF"}
-          </button>
-          <button
-            type="button"
-            disabled={!ready || !!busy}
-            onClick={() => run("whatsapp", () => shareNativeFile(image || pdf))}
-            className="bg-[#25D366] text-black rounded-xl font-logo font-bold disabled:opacity-50"
-          >
-            {busy === "whatsapp" ? "Opening…" : "WhatsApp"}
-          </button>
-          <button
-            type="button"
-            disabled={!ready || !!busy}
-            onClick={() => run("email", () => shareNativeFile(pdf || image))}
-            className="border border-[#2A2A2A] text-[#F2F0EA] rounded-xl font-logo disabled:opacity-50"
-          >
-            {busy === "email" ? "Opening…" : "Email"}
-          </button>
-          <button
-            type="button"
-            disabled={!!busy}
-            onClick={() => run("excel", () => shareNativeFile(excelFileFromSheets(sheets, title)))}
-            className="border border-[#F5C518] text-[#F5C518] rounded-xl font-logo disabled:opacity-50"
-          >
-            {busy === "excel" ? "Opening…" : "Excel"}
-          </button>
-        </div>
-        {note && <p className="font-body text-[#F5C518]">{note}</p>}
+        {shareOpen && (
+          <div className="grid grid-cols-1 gap-2">
+            <Button
+              type="button"
+              disabled={!ready || !!busy}
+              onClick={() => run("download", () => {
+                downloadBlob(pdf, pdf.name);
+                return "downloaded";
+              })}
+            >
+              {busy === "download" ? "Saving…" : "Download PDF"}
+            </Button>
+            <Button
+              variant="whatsapp"
+              disabled={!ready || !!busy}
+              onClick={() => run("whatsapp", () => shareNativeFile(pdf))}
+            >
+              {busy === "whatsapp" ? "Opening…" : "WhatsApp PDF"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!ready || !!busy}
+              onClick={() => run("email", () => shareNativeFile(pdf))}
+            >
+              {busy === "email" ? "Opening…" : "Email PDF"}
+            </Button>
+          </div>
+        )}
+        {note && <p className="font-body text-sm text-[#F5C518]">{note}</p>}
       </div>
       <iframe
         id="ops-report-frame"

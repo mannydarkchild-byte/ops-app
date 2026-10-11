@@ -1,33 +1,36 @@
 import { Modal } from "./ui/Modal.jsx";
+import { FieldSelect } from "./ui/FieldSelect.jsx";
 
 export function MachineSelect({ machines, value, onChange }) {
   return (
     <label className="block">
-      <span className="font-logo text-[10px] tracking-wider text-[#F5C518]">MACHINE</span>
-      <div className="relative mt-1">
-        <select
-          value={value || ""}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-[#0A0A0A] border border-[#2A2A2A] py-3 pl-3 rounded-xl text-[#F2F0EA] font-logo"
-        >
-          {machines.map((machine) => (
-            <option key={machine.id} value={machine.id}>{machine.name}</option>
-          ))}
-        </select>
-      </div>
+      <span className="ops-field-label">Machine</span>
+      <FieldSelect value={value || ""} onChange={onChange} placeholder="Choose a machine…">
+        {machines.map((machine) => (
+          <option key={machine.id} value={machine.id}>{machine.name}</option>
+        ))}
+      </FieldSelect>
     </label>
   );
 }
 
-export function DashboardKpi({ label, value, sub, color = "#F2F0EA", onClick }) {
+export function DashboardKpi({ label, value, sub, color = "#F2F0EA", onClick, progress }) {
   const className = "w-full text-left rounded-2xl p-4 border";
   const style = { background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" };
+  const pct = progress == null || !Number.isFinite(Number(progress))
+    ? null
+    : Math.min(100, Math.max(0, Number(progress) * 100));
   const body = (
     <>
-      <p className="font-logo text-[10px] tracking-wider text-[#F2F0EA]/60">{label}</p>
-      <p className="font-logo text-xl mt-1" style={{ color }}>{value}</p>
+      <p className="font-ui text-xs font-semibold text-[#F2F0EA]/60">{label}</p>
+      <p className="font-ui text-xl font-semibold mt-1" style={{ color }}>{value}</p>
       {sub && <p className="font-body text-xs text-[#F2F0EA]/50 mt-1">{sub}</p>}
-      {onClick && <p className="font-logo text-[10px] text-[#F5C518] mt-2">Details</p>}
+      {pct != null && (
+        <div className="mt-2 h-1.5 rounded-full bg-black/35 overflow-hidden" aria-hidden>
+          <div className="h-full rounded-full bg-[#F5C518]" style={{ width: `${pct}%` }} />
+        </div>
+      )}
+      {onClick && <p className="font-ui text-xs text-[#F5C518] mt-2">Details</p>}
     </>
   );
   if (!onClick) {

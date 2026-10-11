@@ -19,6 +19,8 @@ export function buildActivityFeed({ events, fuelLogs, issues, machines, siteId }
     const meta = EVENT_META[e.type] || { icon: "•", label: e.type?.replace(/_/g, " ") || "Activity" };
     items.push({
       id: `ev-${e.id}`,
+      kind: "event",
+      sourceId: e.id,
       at: e.timestamp || e.stopped_at || e.created_at,
       icon: meta.icon,
       label: meta.label,
@@ -27,30 +29,37 @@ export function buildActivityFeed({ events, fuelLogs, issues, machines, siteId }
       detail: e.type === "STOP" || e.type === "CLOCK_OUT"
         ? [e.reason, e.note].filter(Boolean).join(" — ")
         : (e.note || e.reason || ""),
+      source: e,
     });
   }
 
   for (const f of fuelLogs.filter((x) => x.site_id === siteId)) {
     items.push({
       id: `fuel-${f.id}`,
+      kind: "fuel",
+      sourceId: f.id,
       at: f.timestamp || f.created_at,
       icon: "⛽",
       label: "Diesel logged",
       operator: f.operator_name,
       machine: machineName(f.machine_id),
       detail: `${Number(f.litres || 0).toFixed(1)} L · meter ${f.hour_meter}h · tank ${f.tank_level || "—"}`,
+      source: f,
     });
   }
 
   for (const i of issues.filter((x) => x.site_id === siteId)) {
     items.push({
       id: `iss-${i.id}`,
+      kind: "issue",
+      sourceId: i.id,
       at: i.created_at,
       icon: "⚠",
       label: "Issue reported",
       operator: i.reporter_name,
       machine: machineName(i.machine_id),
       detail: `${i.area} · ${i.priority} — ${(i.description || "").slice(0, 120)}`,
+      source: i,
     });
   }
 

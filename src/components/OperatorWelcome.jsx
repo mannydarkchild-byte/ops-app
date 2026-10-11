@@ -1,5 +1,5 @@
-import { IconReports } from "./FieldIcons.jsx";
 import { Button } from "./ui/Button.jsx";
+import { OperatorDayTools } from "./OperatorDayTools.jsx";
 
 function greeting(now = new Date()) {
   const hour = now.getHours();
@@ -14,6 +14,7 @@ export function OperatorWelcome({
   reportsAttention = 0,
   onReady,
   onMyReports,
+  onPulse,
 }) {
   const firstName = (name || "Operator").split(/\s+/)[0];
   const today = new Date().toLocaleDateString("en-ZA", {
@@ -24,27 +25,21 @@ export function OperatorWelcome({
 
   return (
     <div className="operator-welcome">
-      <p className="operator-welcome-kicker font-logo">{greeting()}</p>
-      <h2 className="operator-welcome-name font-logo">{firstName}</h2>
+      <p className="operator-welcome-kicker font-ui">{greeting()}</p>
+      <h2 className="operator-welcome-name font-ui">{firstName}</h2>
       <p className="operator-welcome-date font-body">{today}</p>
       <p className="operator-welcome-copy font-body">
-        You record every machine{siteName ? ` on ${siteName}` : ""}. Clock in once, then choose a machine. That starts your time, not the machine.
+        Clock in once{siteName ? ` on ${siteName}` : ""}, then pick a machine.
       </p>
-      <Button type="button" variant="primary" size="lg" className="w-full font-logo operator-welcome-go" onClick={onReady}>
+      <Button type="button" variant="primary" size="lg" className="w-full min-h-14 text-lg" onClick={onReady}>
         Start my day
       </Button>
-      <button
-        type="button"
-        onClick={onMyReports}
-        className="operator-welcome-reports font-logo"
-      >
-        <IconReports /> My reports
-        {reportsAttention > 0 && (
-          <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#F5C518] text-black text-xs font-bold flex items-center justify-center">
-            {reportsAttention}
-          </span>
-        )}
-      </button>
+      <OperatorDayTools
+        className="mt-3"
+        onPulse={onPulse}
+        onReports={onMyReports}
+        reportsAttention={reportsAttention}
+      />
     </div>
   );
 }

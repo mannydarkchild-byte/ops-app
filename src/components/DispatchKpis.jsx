@@ -11,7 +11,7 @@ export function DispatchKpis({ records, siteId, period, factors = {}, onOpen }) 
 
   return (
     <div className="space-y-2">
-      <p className="font-logo text-[10px] tracking-wider text-[#F5C518]">DISPATCH · {period?.label || "THIS CYCLE"}</p>
+      <p className="font-ui text-xs font-semibold text-[#F5C518]">Dispatch - {period?.label || "This cycle"}</p>
       <p className="font-body text-xs text-[#F2F0EA]/50">Site totals from the dispatch report. Today: {today}. Floor is the latest closing stock: previous floor + FEL tonnes − dispatched tonnes.</p>
       <div className="grid grid-cols-2 gap-3">
         <DashboardKpi label="Weighbridge" value={tonnesLabel(summary.weighbridge)} sub="This cycle" color="#F5C518" onClick={() => onOpen(summary.details.weighbridge)} />

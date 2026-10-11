@@ -70,6 +70,28 @@ export function getBillingPeriod(ref = new Date(), cycleStartDay = 26) {
   return { start, end, label: lbl };
 }
 
+/** Inclusive calendar days in a billing period. */
+export function daysInPeriod(period) {
+  if (!period?.start || !period?.end) return 0;
+  const start = new Date(period.start);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(period.end);
+  end.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+}
+
+/** Days from period start through today, capped at the cycle length. */
+export function daysElapsedInPeriod(period, now = new Date()) {
+  const total = daysInPeriod(period);
+  if (!total || !period?.start) return 0;
+  const start = new Date(period.start);
+  start.setHours(0, 0, 0, 0);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const elapsed = Math.round((today.getTime() - start.getTime()) / 86400000) + 1;
+  return Math.min(total, Math.max(0, elapsed));
+}
+
 /** Local calendar day as YYYY-MM-DD. */
 export function localDayKey(value = new Date()) {
   const d = value instanceof Date ? value : new Date(value);

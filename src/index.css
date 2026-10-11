@@ -6,7 +6,7 @@
   --ops-bg: #0B0B0B;
   --ops-card: #16140F;
   --ops-elevated: #1C1A14;
-  --ops-border: #5C5340;
+  --ops-border: #C4A15A;
   --ops-text: #F2F0EA;
   --ops-muted: rgba(242, 240, 234, 0.72);
   --ops-ink: #0B0B0B;
@@ -20,7 +20,7 @@ html.theme-light {
   --ops-bg: #F7F4EC;
   --ops-card: #FFFFFF;
   --ops-elevated: #FFFBF2;
-  --ops-border: #E4D7B4;
+  --ops-border: #C4A15A;
   --ops-text: #14120E;
   --ops-muted: rgba(20, 18, 14, 0.68);
   --ops-ink: #14120E;
@@ -33,6 +33,14 @@ html.theme-light {
 /* ═══════════════════════════════════════════════════════════════
    BASE
    ═══════════════════════════════════════════════════════════════ */
+html {
+  color-scheme: dark;
+}
+
+html.theme-light {
+  color-scheme: light;
+}
+
 html,
 body,
 #root {
@@ -52,6 +60,19 @@ body {
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: constant(safe-area-inset-bottom);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Keep a black strip under the phone clock / signal in both themes. */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: #0A0A0A;
+  z-index: 80;
+  pointer-events: none;
 }
 
 /* Full-screen sheets are position:fixed, so body padding does not move them. */
@@ -238,7 +259,7 @@ select {
   border-radius: 0;
 }
 
-select {
+select:not(.ops-select) {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%23F5C518' d='M1 1.2h10L6 7z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.75rem center;
@@ -246,8 +267,12 @@ select {
   padding-right: 2.25rem !important;
 }
 
-html.theme-light select {
+html.theme-light select:not(.ops-select) {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%238A5A00' d='M1 1.2h10L6 7z'/%3E%3C/svg%3E");
+}
+
+.ops-select {
+  background-image: none;
 }
 
 button {
@@ -443,17 +468,19 @@ button,
 }
 
 .operator-welcome-kicker {
-  font-size: 1rem;
-  letter-spacing: 0.14em;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
   color: #F5C518;
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.25rem;
 }
 
 .operator-welcome-name {
-  font-size: 1.75rem;
+  font-size: 2rem;
+  font-weight: 650;
   line-height: 1.15;
   color: var(--ops-text);
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.35rem;
 }
 
 .operator-welcome-date {
@@ -470,22 +497,8 @@ button,
 }
 
 .operator-welcome-go {
-  min-height: 48px !important;
-  font-size: 1rem !important;
-}
-
-.operator-welcome-reports {
-  width: 100%;
-  min-height: 60px;
-  margin-top: 0.85rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border-radius: 1rem;
-  border: 2px solid #F5C518;
-  color: #F5C518;
-  font-size: 1.05rem;
+  min-height: 56px !important;
+  font-size: 1.05rem !important;
 }
 
 .operator-time-bar {
@@ -501,78 +514,98 @@ button,
   background: var(--ops-card);
 }
 
-.ops-fab {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
-  z-index: 40;
-  width: min(32rem, calc(100% - 2rem));
-  min-height: 3.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border: 0;
-  border-radius: 999px;
-  font-size: 1rem;
-  font-weight: 650;
-  letter-spacing: 0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+.ops-field-label {
+  display: block;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ops-text);
+  margin: 0 0 0.45rem;
 }
 
-.ops-fab-start {
-  background: var(--ops-gold);
-  color: var(--ops-ink);
+.ops-select-wrap {
+  position: relative;
 }
 
-.ops-fab-stop {
-  background: #EF4444;
-  color: #fff;
+.ops-select-wrap::after {
+  content: "";
+  position: absolute;
+  right: 1.1rem;
+  top: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2.5px solid #F5C518;
+  border-bottom: 2.5px solid #F5C518;
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
 }
 
-.ops-fab:disabled {
-  opacity: 0.65;
-  cursor: default;
+.ops-select {
+  width: 100%;
+  min-height: 56px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
+  padding: 0.85rem 2.75rem 0.85rem 1rem;
+  border: 2px solid var(--ops-border);
+  border-radius: 0.75rem;
+  background: var(--ops-bg);
+  color: var(--ops-text);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 500;
 }
 
-.operator-clock-out {
-  flex-shrink: 0;
-  min-height: 2.25rem;
-  padding: 0 0.25rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  border: 0;
-  background: transparent;
-  color: var(--ops-muted);
-  font-size: 0.875rem;
-  letter-spacing: 0;
-  text-transform: none;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.ops-select:focus {
+  outline: none;
+  border-color: #F5C518;
+}
+
+.ops-select:disabled {
+  opacity: 0.5;
+}
+
+.ops-date-wrap::after {
+  display: none;
+}
+
+.ops-date {
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.ops-date::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-right: 0.15rem;
+  filter: invert(78%) sepia(72%) saturate(650%) hue-rotate(4deg) brightness(1.05);
+}
+
+html.theme-light .ops-date {
+  color-scheme: light;
+}
+
+html.theme-light .ops-date::-webkit-calendar-picker-indicator {
+  filter: none;
 }
 
 .operator-group-label {
   font-family: Inter, system-ui, sans-serif;
-  font-size: 0.75rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   text-transform: none;
-  color: var(--ops-muted);
+  color: var(--ops-text);
   margin: 0 0 0.35rem;
 }
 
 .operator-group-explain {
-  font-size: 1.08rem;
+  font-size: 1rem;
   line-height: 1.4;
   color: var(--ops-muted);
   margin: 0 0 1rem;
-}
-
-html.theme-light .operator-clock-out {
-  color: rgba(20, 18, 14, 0.7);
 }
 
 /* Hardcoded card borders follow the same warm edge in both themes */
@@ -844,6 +877,10 @@ html.theme-light .ops-tab-on .ops-tab-icon {
 
 html.theme-light .ops-menu-chevron {
   color: #8A5A00;
+}
+
+html.theme-light .ops-select-wrap::after {
+  border-color: #8A5A00;
 }
 
 .operator-outdoor input,

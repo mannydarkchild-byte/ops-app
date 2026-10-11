@@ -119,15 +119,15 @@ export function MechanicInspectionWizard({
     return (
       <div className="ops-sheet fixed inset-0 z-50 bg-[#0A0A0A] text-[#F2F0EA] flex flex-col">
         <header className="px-4 pt-4 pb-3 border-b border-[#2A2A2A]">
-          <p className="font-logo text-[10px] text-[#00A4A6] tracking-wider">REVIEW BEFORE SUBMIT</p>
-          <h1 className="font-logo text-lg text-[#F5C518] mt-1">{machineName || "Inspection"}</h1>
+          <p className="font-ui text-xs font-semibold text-[#00A4A6]">Review before submit</p>
+          <h1 className="font-ui text-lg font-semibold text-[#F5C518] mt-1">{machineName || "Inspection"}</h1>
           <p className="text-xs text-[#F2F0EA]/50 mt-1">{doneCount} of {items.length} items answered</p>
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {incomplete.length > 0 && (
-            <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl p-3">
-              <p className="font-logo text-xs text-[#EF4444] mb-2">{incomplete.length} item(s) still need an answer</p>
+            <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-2xl p-3">
+              <p className="font-ui text-xs font-semibold text-[#EF4444] mb-2">{incomplete.length} item(s) still need an answer</p>
               {incomplete.slice(0, 6).map((i) => (
                 <button
                   key={i.item_name}
@@ -135,15 +135,15 @@ export function MechanicInspectionWizard({
                   onClick={() => { setMode("walk"); setStep(items.findIndex((x) => x.item_name === i.item_name)); }}
                   className="block w-full text-left text-xs text-[#F2F0EA]/80 py-1 underline"
                 >
-                  {i.category} · {i.item_name}
+                  {i.category} - {i.item_name}
                 </button>
               ))}
             </div>
           )}
 
           {flagged.length > 0 && (
-            <div className="bg-[#F97316]/10 border border-[#F97316]/30 rounded-xl p-3">
-              <p className="font-logo text-xs text-[#F97316] mb-2">{flagged.length} flagged for attention</p>
+            <div className="bg-[#F97316]/10 border border-[#F97316]/30 rounded-2xl p-3">
+              <p className="font-ui text-xs font-semibold text-[#F97316] mb-2">{flagged.length} flagged for attention</p>
               {flagged.map((i) => (
                 <p key={i.item_name} className="text-xs text-[#F2F0EA]/70 py-0.5">
                   {i.item_name} — <span className="text-[#F97316]">{results[i.item_name]}</span>
@@ -153,16 +153,16 @@ export function MechanicInspectionWizard({
           )}
 
           <div>
-            <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-2 tracking-wider">BY SECTION</p>
+            <p className="font-ui text-xs font-semibold text-[#F2F0EA]/50 mb-2">By section</p>
             <div className="space-y-2">
               {categoryProgress.map((g) => (
                 <button
                   key={g.category}
                   type="button"
                   onClick={() => jumpToCategory(g.category)}
-                  className="w-full flex items-center justify-between bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-2.5 active:border-[#00A4A6]"
+                  className="w-full flex items-center justify-between bg-[#141414] border border-[#2A2A2A] rounded-2xl px-3 py-2.5 active:border-[#00A4A6]"
                 >
-                  <span className="font-logo text-xs">{g.icon} {g.category}</span>
+                  <span className="font-ui text-xs font-semibold">{g.icon} {g.category}</span>
                   <span className={`text-[10px] font-logo ${g.done === g.total ? "text-[#22C55E]" : "text-[#F2F0EA]/50"}`}>
                     {g.done}/{g.total}
                   </span>
@@ -173,16 +173,16 @@ export function MechanicInspectionWizard({
         </div>
 
         <footer className="p-4 border-t border-[#2A2A2A] bg-[#0A0A0A] grid grid-cols-2 gap-3">
-          <button type="button" onClick={goPrev} className="border border-[#2A2A2A] py-4 rounded-xl font-logo text-sm">
-            ← BACK
+          <button type="button" onClick={goPrev} className="border border-[#2A2A2A] py-4 rounded-2xl font-ui text-sm font-semibold">
+            Back
           </button>
           <button
             type="button"
             onClick={onComplete}
             disabled={busy || incomplete.length > 0}
-            className="bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold disabled:opacity-40"
+            className="bg-[#00A4A6] text-white py-4 rounded-2xl font-ui font-semibold disabled:opacity-40"
           >
-            {busy ? "SUBMITTING…" : "SUBMIT"}
+            {busy ? "Submitting..." : "Submit"}
           </button>
         </footer>
       </div>
@@ -194,7 +194,7 @@ export function MechanicInspectionWizard({
       <header className="px-4 pt-4 pb-2 border-b border-[#2A2A2A]">
         <div className="flex justify-between items-start gap-2 mb-2">
           <div className="min-w-0">
-            <p className="font-logo text-[10px] text-[#00A4A6] tracking-wider truncate">{current?.category}</p>
+            <p className="font-ui text-xs font-semibold text-[#00A4A6] truncate">{current?.category}</p>
             <p className="text-[10px] text-[#F2F0EA]/40 mt-0.5">{machineName}</p>
           </div>
           <button type="button" onClick={onCancel} className="text-[#F2F0EA]/40 text-xl leading-none px-2">×</button>
@@ -210,14 +210,14 @@ export function MechanicInspectionWizard({
       <main className="flex-1 overflow-y-auto px-4 py-5">
         <p className="font-body text-lg leading-snug mb-6">{currentName}</p>
 
-        <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-3 tracking-wider">TAP ONE ANSWER</p>
+        <p className="font-ui text-xs font-semibold text-[#F2F0EA]/50 mb-3">Tap one answer</p>
         <div className="grid grid-cols-1 gap-2 mb-4">
           {current?.options.map((opt) => (
             <button
               key={opt}
               type="button"
               onClick={() => pickStatus(opt)}
-              className={`w-full min-h-[52px] px-4 py-3 rounded-xl border-2 font-logo text-sm tracking-wide active:scale-[0.98] transition-transform ${statusTone(opt, currentStatus)}`}
+              className={`w-full min-h-[52px] px-4 py-3 rounded-2xl border-2 font-ui text-sm font-semibold active:scale-[0.98] transition-transform ${statusTone(opt, currentStatus)}`}
             >
               {opt}
               {currentStatus === opt && <span className="ml-2">✓</span>}
@@ -230,9 +230,9 @@ export function MechanicInspectionWizard({
             <button
               type="button"
               onClick={() => setShowExtras(!showExtras)}
-              className="w-full text-left font-logo text-[10px] text-[#F2F0EA]/50 tracking-wider py-2"
+              className="w-full text-left font-ui text-xs text-[#F2F0EA]/50 py-2"
             >
-              {showExtras ? "▾" : "▸"} NOTE OR PHOTO {currentPhoto?.preview ? "· photo attached" : ""}
+              {showExtras ? "Hide" : "Add"} note or photo{currentPhoto?.preview ? " - photo attached" : ""}
             </button>
             {showExtras && (
               <div className="space-y-2 pb-4">
@@ -245,13 +245,13 @@ export function MechanicInspectionWizard({
                 <button
                   type="button"
                   onClick={attachPhoto}
-                  className={`w-full py-3 rounded-xl font-logo text-xs border ${
+                  className={`w-full py-3 rounded-2xl font-ui text-sm font-semibold border ${
                     currentPhoto?.preview
                       ? "bg-[#22C55E]/15 border-[#22C55E] text-[#22C55E]"
                       : "border-[#2A2A2A] text-[#F2F0EA]/60"
                   }`}
                 >
-                  {currentPhoto?.preview ? "✓ PHOTO ATTACHED — TAP TO REPLACE" : "📷 ADD PHOTO"}
+                  {currentPhoto?.preview ? "Photo attached - tap to replace" : "Add photo"}
                 </button>
                 {currentPhoto?.preview && (
                   <img src={currentPhoto.preview} alt="" className="w-full max-h-40 object-contain rounded-xl border border-[#2A2A2A]" />
@@ -268,24 +268,24 @@ export function MechanicInspectionWizard({
             type="button"
             onClick={goPrev}
             disabled={step === 0}
-            className="border border-[#2A2A2A] py-3 rounded-xl font-logo text-xs disabled:opacity-30"
+            className="border border-[#2A2A2A] py-3 rounded-2xl font-ui text-sm font-semibold disabled:opacity-30"
           >
-            ← PREV
+            Back
           </button>
           <button
             type="button"
             onClick={() => setMode("review")}
-            className="font-logo text-[10px] text-[#F5C518] px-2 py-1"
+            className="font-ui text-xs font-semibold text-[#F5C518] px-2 py-1"
           >
-            REVIEW ({doneCount}/{items.length})
+            Review ({doneCount}/{items.length})
           </button>
           <button
             type="button"
             onClick={goNext}
             disabled={!currentStatus}
-            className="bg-[#F5C518] text-black py-3 rounded-xl font-logo font-bold text-xs disabled:opacity-40"
+            className="bg-[#F5C518] text-black py-3 rounded-2xl font-ui text-sm font-semibold disabled:opacity-40"
           >
-            {isLast ? "REVIEW →" : "NEXT →"}
+            {isLast ? "Review" : "Next"}
           </button>
         </div>
         <p className="text-center text-[10px] text-[#F2F0EA]/30 font-logo">

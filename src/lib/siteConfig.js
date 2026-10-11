@@ -27,6 +27,8 @@ export function defaultSiteSettings(siteId) {
     client_site_name: "Site / operations",
     excavator_bucket_tonnes: null,
     fel_bucket_tonnes: null,
+    daily_dispatch_target_tonnes: 1000,
+    cycle_dispatch_target_tonnes: null,
     prestart_items: [...PRESTART_INSPECTION_ITEMS],
     earthmoving_prestart_items: [...EARTHMOVING_PRESTART_ITEMS],
     prestart_status_options: [...PRESTART_STATUS_OPTIONS],
@@ -56,6 +58,27 @@ export function resolveSiteSettings(row) {
     stop_reasons: normalizeStopReasons(row?.stop_reasons),
     billing_cycle_start_day: clampCycleDay(row?.billing_cycle_start_day),
   };
+}
+
+export const MACHINE_LINE = [
+  { id: "screener", label: "Screener" },
+  { id: "fel", label: "FEL" },
+  { id: "excavator", label: "Excavator" },
+];
+
+export function machineLineRole(machine) {
+  const text = `${machine?.name || ""} ${machine?.code || ""} ${machine?.type || ""}`.toLowerCase();
+  if (/\bexcavator\b/.test(text)) return "excavator";
+  if (/\bfel\b/.test(text) || /front[\s-]*end/.test(text) || /\bloader\b/.test(text)) return "fel";
+  if (/screen|warrior|crusher/.test(text)) return "screener";
+  return null;
+}
+
+export function pickLineFleet(fleetStatus = []) {
+  return MACHINE_LINE.map((line) => ({
+    ...line,
+    fleet: fleetStatus.find((f) => machineLineRole(f.machine) === line.id) || null,
+  }));
 }
 
 /** Excavator and front end loader share one list. The screen keeps the site pre-start. */

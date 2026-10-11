@@ -1,9 +1,26 @@
+import { Button } from "./ui/Button.jsx";
+import { FieldSelect } from "./ui/FieldSelect.jsx";
 import { buildSupervisorVerifyWhatsApp, openWhatsApp } from "../lib/whatsapp.js";
 
 const BAND_LABEL = { day: "Day shift", night: "Night shift", any: "All shifts" };
 
-/** Large tap targets — pick supervisor on duty for this shift */
-export function SupervisorPicker({ supervisors, value, onChange, suggestedId = null, title = "WHO IS SUPERVISING THIS SHIFT?" }) {
+function optionText(sup, suggestedId) {
+  const band = BAND_LABEL[sup.shift_band] || "";
+  const suggested = sup.id === suggestedId ? "suggested" : "";
+  const extra = [band, suggested].filter(Boolean).join(" · ");
+  return extra ? `${sup.name} — ${extra}` : sup.name;
+}
+
+/** Visible dropdown — pick the supervisor who will sign this shift. */
+export function SupervisorPicker({
+  supervisors,
+  value,
+  onChange,
+  suggestedId = null,
+  label = "Supervisor",
+  title,
+}) {
+  const fieldLabel = label || title || "Supervisor";
   if (!supervisors.length) {
     return (
       <p className="font-body text-sm text-ops-text py-2">
@@ -12,39 +29,29 @@ export function SupervisorPicker({ supervisors, value, onChange, suggestedId = n
     );
   }
 
+  const selected = supervisors.find((s) => s.id === value) || null;
+  const hasPhone = !!String(selected?.phone || "").replace(/\D/g, "");
+
   return (
-    <div className="space-y-2">
-      <p className="font-logo text-xs text-[#F2F0EA]/90 tracking-wider mb-2">{title}</p>
-      {supervisors.map((sup) => {
-        const selected = value === sup.id;
-        const suggested = sup.id === suggestedId;
-        const hasPhone = !!String(sup.phone || "").replace(/\D/g, "");
-        return (
-          <button
-            key={sup.id}
-            type="button"
-            onClick={() => onChange(sup.id)}
-            className={`w-full text-left p-5 rounded-xl border-2 transition-all active:scale-[0.99] min-h-[72px] ${
-              selected ? "border-[#F5C518] bg-[#F5C518]/10" : "border-[#2A2A2A] bg-[#0A0A0A]"
-            }`}
-          >
-            <div className="flex justify-between items-start gap-2">
-              <div>
-                <p className="font-logo text-lg text-[#F2F0EA]">{sup.name}</p>
-                <p className="font-body text-sm text-[#F2F0EA]/80 mt-0.5">
-                  {BAND_LABEL[sup.shift_band] || BAND_LABEL.any}
-                  {suggested && !selected && <span className="text-[#F5C518] ml-2">· suggested</span>}
-                </p>
-              </div>
-              {selected && <span className="text-[#F5C518] text-lg">✓</span>}
-            </div>
-            {!hasPhone && (
-              <p className="font-body text-[10px] text-[#EF4444] mt-2">No WhatsApp number — admin must add phone</p>
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <label className="block">
+      {fieldLabel ? <span className="ops-field-label">{fieldLabel}</span> : null}
+      <FieldSelect
+        value={value}
+        onChange={onChange}
+        placeholder="Select supervisor…"
+      >
+        {supervisors.map((sup) => (
+          <option key={sup.id} value={sup.id}>
+            {optionText(sup, suggestedId)}
+          </option>
+        ))}
+      </FieldSelect>
+      {selected && !hasPhone && (
+        <p className="font-body text-sm text-ops-red mt-2">
+          No WhatsApp number — admin must add a phone.
+        </p>
+      )}
+    </label>
   );
 }
 
@@ -56,7 +63,7 @@ export function SupervisorWhatsAppButtons({ supervisors, shift, machine, site, a
 
   if (!targets.length) {
     return (
-      <p className="font-body text-sm text-[#EF4444]">
+      <p className="font-body text-sm text-ops-red">
         No supervisor with a phone number. Add phone in admin profiles.
       </p>
     );
@@ -77,9 +84,6 @@ export function SupervisorWhatsAppButtons({ supervisors, shift, machine, site, a
           onSent={onSent}
         />
       ))}
-      {!assignedSupervisorId && targets.length > 1 && (
-        <p className="font-body text-[10px] text-[#F2F0EA]/40 text-center mt-2">Tap the supervisor on duty today</p>
-      )}
     </div>
   );
 }
@@ -88,13 +92,15 @@ function SupervisorWhatsAppButton({ supervisor, shift, machine, site, recordedBy
   const url = buildSupervisorVerifyWhatsApp(supervisor.phone, shift, machine, site, { recordedBy, events, siteSettings });
 
   return (
-    <button
+    <Button
       type="button"
+      variant="whatsapp"
+      size="lg"
+      className="w-full"
       disabled={!url}
       onClick={() => { if (openWhatsApp(url)) onSent?.(supervisor); }}
-      className="w-full bg-[#25D366] text-white py-4 rounded-2xl font-logo font-bold text-sm tracking-wider active:scale-95 disabled:opacity-40"
     >
-      📱 WHATSAPP {supervisor.name.toUpperCase()}
-    </button>
+      WhatsApp {supervisor.name}
+    </Button>
   );
 }

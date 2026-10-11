@@ -63,7 +63,7 @@ export function VoiceInput({ value, onChange, placeholder, rows = 3, allowRecord
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className="w-full min-h-[120px] bg-[#0A0A0A] border-2 border-[#2A2A2A] p-4 rounded-2xl focus:border-[#F5C518] outline-none font-body pr-24 text-[#F2F0EA] text-xl"
+        className="w-full min-h-[120px] bg-ops-inset border-2 border-ops-gold p-4 rounded-2xl focus:border-ops-gold outline-none font-body pr-24 text-ops-text text-xl"
       />
       <div className="absolute right-2 bottom-2 flex gap-1">
         {recognitionRef.current && (

@@ -39,13 +39,16 @@ function buildPayload(table, row) {
   return sanitizePayload(table, payload);
 }
 
-/** Never send local *_ref columns or MEDIA ids to PostgREST */
+/** Drop local-only refs and MEDIA ids. Keep schema *_ref columns when they are HTTP URLs. */
 function sanitizePayload(table, payload) {
   const allowed = ALLOWED_COLUMNS[table];
   const out = {};
   for (const [key, val] of Object.entries(payload)) {
-    if (key.endsWith("_ref")) continue;
     if (typeof val === "string" && val.startsWith("MEDIA_")) continue;
+    if (key.endsWith("_ref")) {
+      const keep = allowed?.includes(key) && typeof val === "string" && val.startsWith("http");
+      if (!keep) continue;
+    }
     if (allowed && !allowed.includes(key)) continue;
     out[key] = val;
   }

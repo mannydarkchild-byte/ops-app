@@ -1,138 +1,116 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-
 import { useOps } from "../context/OpsContext.jsx";
-
-import { useLiveTimer } from "../hooks/useLiveTimer.js";
-
 import { AppPage } from "../components/AppShell.jsx";
-
-import { ActivityFeed } from "../components/ActivityFeed.jsx";
-
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
-
 import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
-
-import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
-import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
-import { DashboardKpi, KpiDetailModal, MachineSelect } from "../components/DashboardKpi.jsx";
-import { DispatchKpis } from "../components/DispatchKpis.jsx";
+import { formatDurationMinutes } from "../lib/shiftMetrics.js";
+import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
 import { DispatchSignoffList } from "../components/DispatchSignoffList.jsx";
-
-import { fmtDateShort, getBillingPeriod, getDatePresets, getShiftStatus, hoursBetween, inPeriod, isLiveShift, isLiveSince, onSiteRecord, shiftBillableValue, dedupeShifts } from "../lib/utils.js";
-
-import { formatSyncErrorMessage } from "../lib/labels.js";
-import { shiftNameLines } from "../lib/shiftPeople.js";
+import {
+  getBillingPeriod,
+  getDatePresets,
+  getShiftStatus,
+  inPeriod,
+  isLiveShift,
+  isLiveSince,
+  localDayKey,
+  dedupeShifts,
+} from "../lib/utils.js";
 import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
-import { siteSignLink, siteSignShareText, whatsappShareUrl } from "../lib/shiftAgreement.js";
-
-import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
-import { buildTimesheetRows } from "../lib/timesheet.js";
-import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
-import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
+import { needsBerlingtonSign, siteSignLink, siteSignShareText, whatsappShareUrl } from "../lib/shiftAgreement.js";
+import { openWhatsApp } from "../lib/whatsapp.js";
+import { openShiftDailyReport } from "../services/reports.js";
+import { RolePulse } from "../components/RolePulse.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { SupervisorReports } from "../components/SupervisorReports.jsx";
 import { dispatchDayReport } from "../lib/dispatchReport.js";
-import { DISPATCH_STATUS, dispatchStatus } from "../lib/dispatchMetrics.js";
-import { MoreMenu } from "../components/MoreMenu.jsx";
-import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
-
+import {
+  DISPATCH_STATUS,
+  cycleDispatchTargetTonnes,
+  dispatchStatus,
+  summarizeDispatch,
+  tonnesLabel,
+} from "../lib/dispatchMetrics.js";
+import { pickLineFleet } from "../lib/siteConfig.js";
 import * as wf from "../services/workflows.js";
-
+import { Button } from "../components/ui/Button.jsx";
+import { FieldSelect } from "../components/ui/FieldSelect.jsx";
 import { AlertModal, Modal } from "../components/ui/Modal.jsx";
-
 import { SignaturePad } from "../components/ui/SignaturePad.jsx";
-
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
-import { ShiftPhotoFix } from "../components/ShiftPhotoFix.jsx";
-
-
+import { SupervisorShiftEdit } from "../components/SupervisorShiftEdit.jsx";
 
 const TABS = [
-  { id: "today", label: "Today" },
-  { id: "verify", label: "Sign off" },
   { id: "issues", label: "Problems" },
+  { id: "home", label: "Home" },
+  { id: "pulse", label: "Pulse" },
+  { id: "reports", label: "Reports" },
 ];
-
-
 
 const REPORT_FILTERS = [
-
   { id: "cycle", label: "This cycle" },
-
   { id: "month", label: "This month" },
-
   { id: "all", label: "All" },
-
 ];
 
+const REPORT_GROUPS = [
+  { id: "operators", label: "Operators" },
+  { id: "dispatch", label: "Dispatch" },
+];
 
-
-export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVerifyConsumed }) {
-
-  const { shifts, events, issues, issueMessages, workSessions, machines, profiles, fuelLogs, expenses, inspections, hourReadings, siteDispatch, activeSite, user, refreshLocal, syncNow, syncState, getSettingsForSite } = useOps();
+export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken = null, onVerifyConsumed }) {
+  const {
+    shifts, events, issues, issueMessages, workSessions, machines, profiles,
+    fuelLogs, expenses, inspections, hourReadings, siteDispatch, activeSite,
+    user, refreshLocal, syncNow, getSettingsForSite,
+  } = useOps();
 
   const siteConfig = useMemo(
     () => getSettingsForSite(user?.site_id || activeSite?.id),
     [getSettingsForSite, user?.site_id, activeSite?.id]
   );
 
-  const [tab, setTab] = useState(verifyShiftId ? "verify" : "today");
-  const [recordsView, setRecordsView] = useState(null);
-
+  const [tab, setTab] = useState(verifyShiftId ? "reports" : "home");
   const [verifyBusy, setVerifyBusy] = useState(null);
-
   const [verifyTarget, setVerifyTarget] = useState(null);
-
   const [verifyScope, setVerifyScope] = useState("mine");
-
   const [signature, setSignature] = useState(null);
-
   const [reportFilter, setReportFilter] = useState("cycle");
+  const [reportGroup, setReportGroup] = useState("operators");
   const [focusMachineId, setFocusMachineId] = useState("");
-  const [timesheetFilter, setTimesheetFilter] = useState("cycle");
-
   const [delegateIssueId, setDelegateIssueId] = useState(null);
-
   const [delegateTargetId, setDelegateTargetId] = useState("");
-
   const [delegateNote, setDelegateNote] = useState("");
-
   const [delegateBusy, setDelegateBusy] = useState(false);
-
   const [mechanicIssueId, setMechanicIssueId] = useState(null);
-
   const [mechanicTargetId, setMechanicTargetId] = useState("");
-
   const [mechanicNote, setMechanicNote] = useState("");
-
   const [mechanicBusy, setMechanicBusy] = useState(false);
-
   const [showReportIssue, setShowReportIssue] = useState(false);
-
   const [reasonModal, setReasonModal] = useState(null);
-
   const [alert, setAlert] = useState({ isOpen: false });
   const [justSigned, setJustSigned] = useState(null);
   const [resendBusy, setResendBusy] = useState(null);
   const [kpiDetail, setKpiDetail] = useState(null);
   const [reportPreview, setReportPreview] = useState(null);
   const [dispatchBusy, setDispatchBusy] = useState(null);
-  const [showExpenses, setShowExpenses] = useState(false);
   const [closeShift, setCloseShift] = useState(null);
   const [closeMeter, setCloseMeter] = useState("");
   const [closeBusy, setCloseBusy] = useState(false);
+  const [editShift, setEditShift] = useState(null);
+  const [pulseMachineId, setPulseMachineId] = useState("");
 
-  const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
+  const showAlert = (title, message, type = "info") => setAlert({
+    isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }),
+  });
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) return undefined;
     let cancelled = false;
     const refreshTick = async () => {
       if (document.visibilityState !== "visible") return;
-      if (navigator.onLine) {
-        await hydrateOpenShiftsFromServer().catch(() => {});
-      }
+      if (navigator.onLine) await hydrateOpenShiftsFromServer().catch(() => {});
       if (!cancelled) await refreshLocal().catch(() => {});
     };
     refreshTick();
@@ -141,1484 +119,713 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   }, [user?.id, refreshLocal]);
 
   const siteMachines = useMemo(
-
     () => machines.filter((m) => m.site_id === user?.site_id && m.active !== false),
-
     [machines, user?.site_id]
-
   );
-
   const selectedMachine = useMemo(
     () => siteMachines.find((machine) => machine.id === focusMachineId) || siteMachines[0] || null,
     [siteMachines, focusMachineId]
   );
-
-
-
-  const siteIssues = useMemo(
-
-    () => issues.filter((i) => i.site_id === user?.site_id),
-
-    [issues, user?.site_id]
-
-  );
-
-
-
-  const openSiteIssues = useMemo(
-
-    () => siteIssues.filter((i) => i.status !== ISSUE.RESOLVED),
-
-    [siteIssues]
-
-  );
-
-
+  const siteIssues = useMemo(() => issues.filter((i) => i.site_id === user?.site_id), [issues, user?.site_id]);
+  const openSiteIssues = useMemo(() => siteIssues.filter((i) => i.status !== ISSUE.RESOLVED), [siteIssues]);
 
   const fleetStatus = useMemo(() => siteMachines.map((machine) => {
-
     const runningShift = shifts.find((s) => s.machine_id === machine.id && getShiftStatus(s) === SHIFT.RUNNING && isLiveShift(s)) || null;
-
     const openStop = runningShift
       ? events.find((e) => e.shift_id === runningShift.id && e.type === "STOP" && e.status === "open")
       : null;
-
     const activeSession = workSessions.find((s) => s.status === "active" && isLiveSince(s.clock_in) && (
       s.machine_id === machine.id || (runningShift && s.operator_id === runningShift.operator_id)
     ));
-
     return {
-
       machine,
-
       runningShift,
-
       openStop,
-
       activeSession,
-
       isRunning: !!runningShift && !openStop,
-
       isStopped: !!openStop,
-
     };
-
   }), [siteMachines, shifts, events, workSessions]);
 
-  const openShiftsToClose = useMemo(() => {
-    return dedupeShifts(shifts.filter((shift) => getShiftStatus(shift) === SHIFT.RUNNING))
-      .sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0));
-  }, [shifts]);
-
-
+  const openShiftsToClose = useMemo(() => (
+    dedupeShifts(shifts.filter((shift) => getShiftStatus(shift) === SHIFT.RUNNING))
+      .sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0))
+  ), [shifts]);
 
   const pendingShifts = dedupeShifts(shifts
-
     .filter((r) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(getShiftStatus(r)) && r.site_id === user?.site_id))
-
     .sort((a, b) => {
-
       const aMine = a.assigned_supervisor_id === user?.id ? 0 : 1;
-
       const bMine = b.assigned_supervisor_id === user?.id ? 0 : 1;
-
       return aMine - bMine || new Date(b.ended_at || 0) - new Date(a.ended_at || 0);
-
     });
 
   const awaitingSiteShifts = useMemo(() => dedupeShifts(shifts
-    .filter((r) => getShiftStatus(r) === SHIFT.MACHINE_SIGNED && r.site_id === user?.site_id))
-    .sort((a, b) => new Date(b.machine_signed_at || b.updated_at || 0) - new Date(a.machine_signed_at || a.updated_at || 0)),
+    .filter((r) => r.site_id === user?.site_id && needsBerlingtonSign(r)))
+    .sort((a, b) => new Date(b.machine_signed_at || b.verified_at || b.updated_at || 0) - new Date(a.machine_signed_at || a.verified_at || a.updated_at || 0)),
   [shifts, user?.site_id]);
 
-
-
   const displayedPendingShifts = useMemo(() => {
-
     const list = verifyScope === "all"
       ? pendingShifts
       : pendingShifts.filter((s) => s.assigned_supervisor_id === user?.id);
     if (!verifyShiftId) return list;
     return [...list].sort((a, b) => (a.id === verifyShiftId ? -1 : b.id === verifyShiftId ? 1 : 0));
-
   }, [pendingShifts, verifyScope, user?.id, verifyShiftId]);
 
-
-
   const awaitingCorrectionShifts = useMemo(
-
     () => shifts
-
       .filter((r) => getShiftStatus(r) === SHIFT.CORRECTION_REQUIRED && r.site_id === user?.site_id)
-
       .sort((a, b) => new Date(b.updated_at || b.ended_at || 0) - new Date(a.updated_at || a.ended_at || 0)),
-
     [shifts, user?.site_id]
-
   );
-
-
-
-  const displayedAwaitingCorrection = useMemo(() => {
-
-    if (verifyScope === "all") return awaitingCorrectionShifts;
-
-    return awaitingCorrectionShifts.filter((s) => s.assigned_supervisor_id === user?.id);
-
-  }, [awaitingCorrectionShifts, verifyScope, user?.id]);
-
-
+  const displayedAwaitingCorrection = useMemo(() => (
+    verifyScope === "all"
+      ? awaitingCorrectionShifts
+      : awaitingCorrectionShifts.filter((s) => s.assigned_supervisor_id === user?.id)
+  ), [awaitingCorrectionShifts, verifyScope, user?.id]);
 
   const myPendingVerify = pendingShifts.filter((s) => s.assigned_supervisor_id === user?.id).length;
   const dispatchWaiting = (siteDispatch || []).filter((row) => row.site_id === user?.site_id && row.assigned_supervisor_id === user?.id && dispatchStatus(row) === DISPATCH_STATUS.WAITING).length;
 
-  const myAwaitingCorrection = awaitingCorrectionShifts.filter((s) => s.assigned_supervisor_id === user?.id).length;
-
-  const criticalIssues = openSiteIssues.filter((i) => i.priority === "Critical").length;
-
-  const stoppedMachines = fleetStatus.filter((f) => f.isStopped).length;
-
-
-
   const reportPeriod = useMemo(() => {
-
     if (reportFilter === "all") return null;
-
     if (reportFilter === "cycle") return getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
-
     const preset = getDatePresets(siteConfig.billing_cycle_start_day).find((p) => p.id === reportFilter);
-
     return preset ? { start: preset.start, end: preset.end, label: preset.label } : getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
+  }, [reportFilter, siteConfig.billing_cycle_start_day]);
 
-  }, [reportFilter]);
-
-  const timesheetPeriod = useMemo(() => {
-    if (timesheetFilter === "all") return null;
-    if (timesheetFilter === "cycle") return getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
-    const preset = getDatePresets(siteConfig.billing_cycle_start_day).find((p) => p.id === timesheetFilter);
-    return preset ? { start: preset.start, end: preset.end, label: preset.label } : getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
-  }, [timesheetFilter, siteConfig.billing_cycle_start_day]);
-
-  const timesheetRows = useMemo(
-    () => buildTimesheetRows(workSessions, { siteId: user?.site_id, period: timesheetPeriod }),
-    [workSessions, user?.site_id, timesheetPeriod]
-  );
-
-
-
-  const signedReports = useMemo(() => {
-
-    return dedupeShifts(shifts
-
-      .filter((s) =>
-
+  const signedReports = useMemo(() => (
+    dedupeShifts(shifts
+      .filter((s) => (
         getShiftStatus(s) === SHIFT.VERIFIED &&
-
         s.site_id === user?.site_id &&
-
         s.machine_id === selectedMachine?.id &&
-
         (s.supervisor_signature_ref || s.supervisor_signature_name || s.verified_at)
-
-      )
-
+      ))
       .filter((s) => !reportPeriod || inPeriod(s.verified_at || s.ended_at, reportPeriod)))
-
-      .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0));
-
-  }, [shifts, user?.site_id, reportPeriod, selectedMachine?.id]);
-
-
-
-  const signedHours = useMemo(
-
-    () => sumMeterHours(signedReports),
-
-    [signedReports]
-
-  );
-
-  const signedBillable = useMemo(
-
-    () => signedReports.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0),
-
-    [signedReports, events, siteConfig]
-
-  );
-
-
-
-  const signedRuntimeMin = useMemo(
-
-    () => signedReports.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0),
-
-    [signedReports]
-
-  );
-
-
-
-  const signedDowntimeMin = useMemo(
-
-    () => signedReports.reduce((sum, s) => sum + Number(s.downtime_minutes || 0), 0),
-
-    [signedReports]
-
-  );
-
-
+      .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0))
+  ), [shifts, user?.site_id, reportPeriod, selectedMachine?.id]);
 
   const billingPeriod = useMemo(
     () => getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day),
     [siteConfig.billing_cycle_start_day]
   );
 
-
-
-  const dashboardShifts = useMemo(
-
-    () => shiftsStartedInPeriod(
-
-      shifts.filter((s) => s.machine_id === selectedMachine?.id),
-
-      billingPeriod
-
-    ),
-
-    [shifts, selectedMachine?.id, billingPeriod]
-
-  );
-
-
-
-  const dashboardStats = useMemo(() => {
-
-    const machineHours = sumMeterHours(dashboardShifts);
-    const meterShiftCount = dashboardShifts.filter((shift) => shift.end_hour_meter != null && shift.start_hour_meter != null).length;
-
-    const billableHours = dashboardShifts.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0);
-
-    const revenue = dashboardShifts.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
-
-    const litres = (fuelLogs || []).filter((f) => f.machine_id === selectedMachine?.id && inPeriod(f.timestamp, billingPeriod))
-
-      .reduce((sum, f) => sum + Number(f.litres || 0), 0);
-
-    const siteExpenses = (expenses || []).filter((e) => e.machine_id === selectedMachine?.id);
-
-    const cycleExpenses = siteExpenses.filter((e) => inPeriod(e.date || e.created_at, billingPeriod));
-
-    const expenseTotal = cycleExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-
-    return {
-
-      machineHours,
-
-      billableHours,
-
-      revenue,
-
-      litres,
-
-      expenseTotal,
-
-      earlierExpenses: Math.max(0, siteExpenses.length - cycleExpenses.length),
-
-      runtimeMin: dashboardShifts.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0),
-
-      downtimeMin: dashboardShifts.reduce((sum, s) => sum + Number(s.downtime_minutes || 0), 0),
-
-      reports: dashboardShifts.length,
-
-      shiftCount: dashboardShifts.length,
-
-      meterShiftCount,
-
-    };
-
-  }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, selectedMachine?.id, billingPeriod]);
-
-
-
   const machineName = (machineId) => machines.find((m) => m.id === machineId)?.name || machineId;
+  const berlingtonName = siteConfig?.equipment_owner_name || "Berlington";
 
-  const dashboardDetails = useMemo(() => {
-    const scope = `${selectedMachine?.name || "This machine"} · ${billingPeriod.label}`;
-    const withScope = (detail) => ({ ...detail, scope });
-    const cycleFuel = (fuelLogs || []).filter((row) => row.machine_id === selectedMachine?.id && inPeriod(row.timestamp, billingPeriod));
-    const cycleExpenses = (expenses || []).filter((row) => row.machine_id === selectedMachine?.id && inPeriod(row.date || row.created_at, billingPeriod));
+  const homeKpis = useMemo(() => {
+    const summary = summarizeDispatch(siteDispatch, user?.site_id, billingPeriod, siteConfig);
+    const cycleTarget = cycleDispatchTargetTonnes(siteConfig, billingPeriod);
+    const cycleTonnes = summary.weighbridge || 0;
+    const todayKey = localDayKey();
+    const todayRow = summary.todayRow;
+    const trucksToday = todayRow?.trucks_dispatched ?? 0;
     return {
-      billable: withScope(billableDetail(dashboardShifts, events, siteConfig, machineName)),
-      machine: withScope(machineHourDetail(dashboardShifts, machineName)),
-      revenue: withScope(revenueDetail(dashboardShifts, machines, events, siteConfig, machineName)),
-      expenses: withScope(expenseDetail(cycleExpenses, machineName)),
-      diesel: withScope(dieselDetail(cycleFuel, machineName)),
-      downtime: withScope(downtimeDetail(dashboardShifts, machineName)),
+      cycleTonnes,
+      cycleTarget,
+      cycleProgress: cycleTarget > 0 ? cycleTonnes / cycleTarget : 0,
+      trucksToday,
+      trucksCycle: summary.trucks || 0,
+      screened: summary.screened,
+      floor: summary.floor,
+      details: summary.details,
+      line: pickLineFleet(fleetStatus),
+      todayKey,
     };
-  }, [dashboardShifts, events, siteConfig, machines, fuelLogs, expenses, selectedMachine?.id, selectedMachine?.name, billingPeriod]);
-
-  const signedDetails = useMemo(() => {
-    const scope = `${selectedMachine?.name || "This machine"} · signed · ${reportPeriod?.label || "All time"}`;
-    const withScope = (detail) => ({ ...detail, scope });
-    return {
-      billable: withScope(billableDetail(signedReports, events, siteConfig, machineName)),
-      machine: withScope(machineHourDetail(signedReports, machineName)),
-    };
-  }, [signedReports, events, siteConfig, machines, reportPeriod, selectedMachine?.name]);
-
-
-
-  const delegateCandidates = useMemo(
-
-    () => (profiles || []).filter(
-
-      (p) => p.site_id === user?.site_id && p.active !== false && [ROLES.OPERATOR, ROLES.MANAGER].includes(p.role)
-
-    ),
-
-    [profiles, user?.site_id]
-
-  );
-
-
-
-  const mechanicCandidates = useMemo(
-
-    () => (profiles || []).filter(
-
-      (p) => p.site_id === user?.site_id && p.active !== false && p.role === ROLES.MECHANIC
-
-    ),
-
-    [profiles, user?.site_id]
-
-  );
-
-
+  }, [user?.site_id, siteDispatch, siteConfig, billingPeriod, fleetStatus]);
 
   const reportContext = useMemo(() => ({
-
     events, inspections, fuelLogs, expenses, site: activeSite, shifts, hourReadings, siteSettings: siteConfig, profiles, workSessions, siteDispatch,
-
   }), [events, inspections, fuelLogs, expenses, activeSite, shifts, hourReadings, siteConfig, profiles, workSessions, siteDispatch]);
 
-
-
   const handleViewReport = async (shift) => {
-
     const machine = machines.find((m) => m.id === shift.machine_id);
-
     try {
-
-      const doc = await openShiftDailyReport(shift, { ...reportContext, machine });
-      setReportPreview(doc);
-
+      setReportPreview(await openShiftDailyReport(shift, { ...reportContext, machine }));
     } catch (e) {
-
       showAlert("Could not open report", e.message, "error");
-
     }
-
   };
 
+  const openBerlingtonWhatsApp = (shift) => {
+    if (!shift?.site_token) return;
+    const link = siteSignLink(shift);
+    openWhatsApp(whatsappShareUrl("", siteSignShareText(shift, machineName(shift.machine_id), link, berlingtonName)));
+  };
 
+  const sendToBerlington = async (shift) => {
+    setResendBusy(shift.id);
+    try {
+      const updated = await wf.requestSiteSign(user, shift);
+      await refreshLocal();
+      setJustSigned(updated);
+      openBerlingtonWhatsApp(updated);
+    } catch (e) {
+      showAlert("Could not send", e.message, "error");
+    } finally {
+      setResendBusy(null);
+    }
+  };
 
-  const handleDownloadReport = (shift) => handleViewReport(shift);
-
-  const handleShareReport = (shift) => handleViewReport(shift);
-
-
+  const delegateCandidates = useMemo(
+    () => (profiles || []).filter((p) => p.site_id === user?.site_id && p.active !== false && [ROLES.OPERATOR, ROLES.MANAGER].includes(p.role)),
+    [profiles, user?.site_id]
+  );
+  const mechanicCandidates = useMemo(
+    () => (profiles || []).filter((p) => p.site_id === user?.site_id && p.active !== false && p.role === ROLES.MECHANIC),
+    [profiles, user?.site_id]
+  );
 
   const handleDelegate = async () => {
-
     const issue = openSiteIssues.find((i) => i.id === delegateIssueId);
-
     const assignee = delegateCandidates.find((p) => p.id === delegateTargetId);
-
     if (!issue || !assignee) {
-
       showAlert("Select person", "Choose an operator or manager to send this to.", "warning");
-
       return;
-
     }
-
     setDelegateBusy(true);
-
     try {
-
       await wf.delegateIssue(user, issue, assignee, delegateNote);
-
       await refreshLocal();
-
       setDelegateIssueId(null);
-
       setDelegateTargetId("");
-
       setDelegateNote("");
-
       showAlert("Sent", `Problem sent to ${assignee.name}.`, "success");
-
     } catch (e) {
-
       showAlert("Failed", e.message, "error");
-
     }
-
     setDelegateBusy(false);
-
   };
-
-
 
   const handleSendToMechanic = async () => {
-
     const issue = openSiteIssues.find((i) => i.id === mechanicIssueId);
-
     const mechanic = mechanicCandidates.find((p) => p.id === mechanicTargetId);
-
     const machine = siteMachines.find((m) => m.id === issue?.machine_id) || siteMachines[0];
-
     if (!issue || !mechanic) {
-
       showAlert("Select mechanic", "Choose a mechanic for this repair.", "warning");
-
       return;
-
     }
-
     setMechanicBusy(true);
-
     try {
-
       await wf.sendToMechanic(user, issue, mechanic, machine, activeSite, mechanicNote);
-
       await refreshLocal();
-
       setMechanicIssueId(null);
-
       setMechanicTargetId("");
-
       setMechanicNote("");
-
       showAlert("Sent", `Repair job sent to ${mechanic.name}.`, "success");
-
     } catch (e) {
-
       showAlert("Failed", e.message, "error");
-
     }
-
     setMechanicBusy(false);
-
   };
 
-
-
-  const [linkShiftId] = useState(verifyShiftId);
   const verifyOpened = useRef(false);
-
   useEffect(() => {
     if (!verifyShiftId || verifyOpened.current) return;
     verifyOpened.current = true;
-    setTab("verify");
+    setTab("reports");
+    setReportGroup("operators");
     setVerifyScope("all");
     onVerifyConsumed?.();
   }, [verifyShiftId, onVerifyConsumed]);
 
-
-
   const openVerifyModal = (shift) => {
-
     setVerifyTarget(shift);
-
     setSignature(null);
-
   };
-
-
 
   const openReasonModal = (shift, action) => {
-
     setReasonModal({
-
       shift,
-
       action,
-
       reason: "",
-
       title: action === "correct" ? "Why are you sending this back?" : "Why escalate?",
-
-      placeholder: action === "correct" ? "Tell the operator what to fix…" : "Explain the problem…",
-
+      placeholder: action === "correct" ? "Tell the operator what to fix" : "Explain the problem",
     });
-
   };
-
-
 
   const handleReasonConfirm = async () => {
-
     const reason = reasonModal?.reason?.trim();
-
     if (!reason || !reasonModal?.shift) return;
-
     const { shift, action } = reasonModal;
-
     setReasonModal(null);
-
     setVerifyBusy(shift.id);
-
     try {
-
-      if (navigator.onLine) {
-
-        await wf.verifyShift(shift, user, { action, reason, signatureDataUrl: null });
-
-        await syncNow();
-
-      } else {
-
+      if (!navigator.onLine) {
         showAlert("Offline", "This action requires connection.", "warning");
-
         setVerifyBusy(null);
-
         return;
-
       }
-
+      await wf.verifyShift(shift, user, { action, reason, signatureDataUrl: null });
+      await syncNow();
       await refreshLocal();
-
-      showAlert("Sent Back", action === "correct" ? "Operator will see your note and must fix their shift report before starting again." : "Escalated to manager.", "success");
-
+      showAlert("Sent back", "The operator will see your note and can fix the report.", "success");
     } catch (e) {
-
       showAlert("Failed", e.message, "error");
-
     }
-
     setVerifyBusy(null);
-
   };
-
-
 
   const handleVerify = async (action) => {
-
     if (!verifyTarget) return;
-
     if (action !== "machine_sign") {
-
       openReasonModal(verifyTarget, action);
-
       return;
-
     }
-
     if (!signature) {
-
-      showAlert("Signature Required", "Draw your signature before signing the machine side.", "warning");
-
+      showAlert("Signature required", "Draw your signature before signing.", "warning");
       return;
-
     }
-
-
-
     setVerifyBusy(verifyTarget.id);
-
     try {
-
-      if (navigator.onLine) {
-
-        const signed = await wf.verifyShift(verifyTarget, user, { action: "machine_sign", reason: null, signatureDataUrl: signature });
-
-        await syncNow();
-        setJustSigned(signed || { ...verifyTarget, shift_status: SHIFT.MACHINE_SIGNED });
-
-      } else {
-
-        showAlert("Offline", "Machine sign-off needs a connection — the locked version and site link must reach the server.", "warning");
-
+      if (!navigator.onLine) {
+        showAlert("Offline", "Sign-off needs a connection so the link can reach the server.", "warning");
         setVerifyBusy(null);
-
         return;
-
       }
-
+      const signed = await wf.verifyShift(verifyTarget, user, { action: "machine_sign", reason: null, signatureDataUrl: signature });
+      await syncNow();
+      const locked = signed || { ...verifyTarget, shift_status: SHIFT.MACHINE_SIGNED };
+      setJustSigned(locked);
+      openBerlingtonWhatsApp(locked);
       await refreshLocal();
-
       setVerifyTarget(null);
-
       setSignature(null);
-
-      showAlert("Machine signed", "Version locked. Share the site link over WhatsApp so the site supervisor can agree.", "success");
-
     } catch (e) {
-
       showAlert("Failed", e.message, "error");
-
     }
-
     setVerifyBusy(null);
-
   };
 
+  const handleSignDispatch = async (row) => {
+    setDispatchBusy(row.id);
+    try {
+      await wf.signSiteDispatch(user, row);
+      await refreshLocal();
+      setReportPreview({
+        ...(await dispatchDayReport(row, activeSite)),
+        startShareOpen: true,
+      });
+    } catch (e) {
+      showAlert("Could not sign", e.message, "error");
+    } finally {
+      setDispatchBusy(null);
+    }
+  };
 
+  const handleReturnDispatch = async (row) => {
+    const note = window.prompt("What should Dispatch correct?");
+    if (note == null) return;
+    setDispatchBusy(row.id);
+    try {
+      await wf.returnSiteDispatch(user, row, note);
+      await refreshLocal();
+      showAlert("Sent back", "Dispatch can edit that day again.", "success");
+    } catch (e) {
+      showAlert("Could not send back", e.message, "error");
+    } finally {
+      setDispatchBusy(null);
+    }
+  };
 
-  const tabItems = useMemo(
-    () => TABS.map((t) => ({
-      ...t,
-      badge: t.id === "today" ? openShiftsToClose.length : t.id === "verify" ? myPendingVerify + dispatchWaiting + awaitingSiteShifts.length : t.id === "issues" ? openSiteIssues.length : 0,
-    })),
-    [openShiftsToClose.length, myPendingVerify, dispatchWaiting, awaitingSiteShifts.length, openSiteIssues.length]
+  const assignedDispatch = useMemo(
+    () => (siteDispatch || []).filter((row) => row.site_id === user?.site_id && row.assigned_supervisor_id === user?.id),
+    [siteDispatch, user?.site_id, user?.id]
   );
 
-  const beginCloseShift = (shift) => {
-    setCloseShift(shift);
-    setCloseMeter(String(shift.start_hour_meter ?? ""));
+  const openPulse = (machineId) => {
+    setPulseMachineId(machineId || "");
+    setTab("pulse");
   };
 
-  const headerContext = `${activeSite?.name || "Site"} · ${billingPeriod.label}`;
+  const tabItems = useMemo(() => TABS.map((t) => ({
+    ...t,
+    badge: t.id === "reports"
+      ? myPendingVerify + dispatchWaiting + awaitingSiteShifts.length
+      : t.id === "issues" ? openSiteIssues.length : 0,
+  })), [myPendingVerify, dispatchWaiting, awaitingSiteShifts.length, openSiteIssues.length]);
+
+  const viewTab = tab === "live" || tab === "today" ? "home" : tab === "verify" || tab === "dispatch" ? "reports" : tab;
+  const headerContext = `${activeSite?.name || "Site"} - ${billingPeriod.label}`;
 
   return (
-
     <AppPage
       subtitle="Supervisor"
       context={headerContext}
       showSite={false}
       tabs={tabItems}
-      activeTab={tab}
+      activeTab={viewTab}
       onTabChange={setTab}
       onSync={syncNow}
       maxWidth="max-w-2xl"
-      leaveApp
+      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
-
-        {(myPendingVerify > 0 || awaitingSiteShifts.length > 0 || criticalIssues > 0 || stoppedMachines > 0 || openShiftsToClose.length > 0) && (
-
-          <div className="bg-[#1a1212] border border-[#EF4444]/30 rounded-xl px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1">
-
-            <span className="font-logo text-sm text-[#EF4444]">Needs attention</span>
-
-            {myPendingVerify > 0 && (
-
-              <button type="button" onClick={() => setTab("verify")} className="ops-chip font-logo text-sm text-[#F5C518] hover:underline">
-
-                {myPendingVerify} to sign (machine)
-
-              </button>
-
-            )}
-
-            {awaitingSiteShifts.length > 0 && (
-
-              <button type="button" onClick={() => setTab("verify")} className="ops-chip font-logo text-sm text-[#00A4A6] hover:underline">
-
-                {awaitingSiteShifts.length} awaiting site sign
-
-              </button>
-
-            )}
-
-            {criticalIssues > 0 && (
-
-              <button type="button" onClick={() => setTab("issues")} className="ops-chip font-logo text-sm text-[#EF4444] hover:underline">
-
-                {criticalIssues} critical issue{criticalIssues !== 1 ? "s" : ""}
-
-              </button>
-
-            )}
-
-            {openShiftsToClose.length > 0 && (
-
-              <button type="button" onClick={() => setTab("today")} className="ops-chip font-logo text-sm text-[#F5C518] hover:underline">
-
-                {openShiftsToClose.length} open shift{openShiftsToClose.length !== 1 ? "s" : ""} to close
-
-              </button>
-
-            )}
-
-            {stoppedMachines > 0 && (
-
-              <button type="button" onClick={() => setTab("today")} className="ops-chip font-logo text-sm text-[#F97316] hover:underline">
-
-                {stoppedMachines} machine{stoppedMachines !== 1 ? "s" : ""} stopped
-
-              </button>
-
-            )}
-
-          </div>
-
-        )}
-
-
-
-        {tab === "today" && (
-          <div className="space-y-3 mb-4">
-            <WorkHoursPanel variant="clock" />
-            <p className="font-body text-sm text-[#F2F0EA]/70">Start here. Close open shifts, then sign off what is waiting for you.</p>
-            <div className="grid grid-cols-2 gap-3">
-            <DashboardKpi
-              label="On site now"
-              value={String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length)}
-              sub={`${fleetStatus.filter((f) => f.runningShift).length} machines running`}
-              color="#F5C518"
-              onClick={() => setKpiDetail({
-                title: "On site now",
-                scope: activeSite?.name || "This site",
-                note: "People clocked in during this shift window. Machines still running are listed separately.",
-                total: String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length),
-                rows: [
-                  { id: "people", title: "Clocked in", detail: "People on site", value: String(workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length), emphasis: true },
-                  ...workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).map((s) => ({
-                    id: s.id,
-                    title: s.operator_name || "Person",
-                    detail: "Clocked in",
-                    value: s.clock_in ? new Date(s.clock_in).toLocaleTimeString() : "",
-                  })),
-                  { id: "machines", title: "Machines running", detail: "Not added into the people count", value: String(fleetStatus.filter((f) => f.runningShift).length), emphasis: true },
-                  ...fleetStatus.filter((f) => f.runningShift).map((f) => ({
-                    id: f.machine?.id || f.runningShift.id,
-                    title: f.machine?.name || "Machine",
-                    detail: f.runningShift.operator_name || "Running",
-                    value: "Running",
-                  })),
-                ],
-              })}
-            />
-            <DashboardKpi
-              label="To sign off"
-              value={String(myPendingVerify)}
-              sub="Assigned to you"
-              color="#22C55E"
-              onClick={() => setKpiDetail({
-                title: "To sign off",
-                scope: "Assigned to you",
-                note: "These shifts are waiting for your signature. The daily dispatch report is signed off in the same tab.",
-                total: String(myPendingVerify),
-                rows: pendingShifts.filter((s) => s.assigned_supervisor_id === user?.id).map((s) => ({
-                  id: s.id,
-                  title: `${machineName(s.machine_id)} · ${s.operator_name || "Operator"}`,
-                  detail: s.started_at ? new Date(s.started_at).toLocaleString() : "",
-                  value: "Waiting",
-                })),
-              })}
-            />
-            </div>
-          </div>
-        )}
-
-        {tab === "today" && (
-
-          <div className="space-y-4">
-
-            {openShiftsToClose.length > 0 && (
-              <div className="border-2 border-[#F5C518] bg-[#2a2208] rounded-2xl p-4 space-y-3">
-                <p className="font-logo text-xl text-[#F5C518]">Open shifts — close these</p>
-                <p className="font-body text-base text-[#F2F0EA]/80">
-                  An operator cannot start until a supervisor closes the leftover shift.
-                </p>
-                {openShiftsToClose.map((shift) => {
-                  const machine = machines.find((m) => m.id === shift.machine_id);
-                  return (
-                    <div key={shift.id} className="bg-[#0A0A0A] rounded-xl p-4">
-                      <p className="font-logo text-lg text-[#F2F0EA]">{shift.operator_name || "Operator"}</p>
-                      <p className="font-body text-base text-[#F2F0EA]/70 mt-1">
-                        {machine?.name || shift.machine_id || "Machine"}
-                        {shift.started_at ? ` · started ${new Date(shift.started_at).toLocaleString()}` : ""}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => beginCloseShift(shift)}
-                        className="w-full mt-3 min-h-12 bg-[#F5C518] text-black rounded-xl font-ui text-sm font-semibold"
-                      >
-                        Close this shift
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-              <p className="font-logo text-sm text-[#F5C518] mb-2">Who is clocked in</p>
-              {workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).length === 0
-                && !fleetStatus.some((f) => f.runningShift) ? (
-                <p className="font-body text-sm text-[#F2F0EA]/70">No operator is clocked in on this site. Ask them to tap Update on their phone, then tap Update here.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {workSessions.filter((s) => s.status === "active" && s.site_id === user?.site_id && isLiveSince(s.clock_in)).map((s) => (
-                    <li key={s.id} className="font-body text-sm text-[#F2F0EA]">
-                      {s.operator_name || "Operator"} · clocked in {s.clock_in ? new Date(s.clock_in).toLocaleTimeString() : ""}
-                    </li>
-                  ))}
-                  {fleetStatus.filter((f) => f.runningShift).map((f) => (
-                    <li key={f.runningShift.id} className="font-body text-sm text-[#F5C518]">
-                      {f.runningShift.operator_name || "Operator"} still has an open shift on {f.machine.name}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div>
-
-              <p className="font-logo text-xl text-[#F2F0EA] mb-3">Machines on this site</p>
-
-              <div className="grid grid-cols-1 gap-3">
-
-                {fleetStatus.length === 0 ? (
-
-                  <p className="text-sm text-[#F2F0EA]/40 col-span-full text-center py-6">No machines on this site.</p>
-
-                ) : fleetStatus.map((f) => (
-
-                  <FleetMachineCard key={f.machine.id} fleet={f} onCloseShift={beginCloseShift} workSessions={workSessions} profiles={profiles} />
-
-                ))}
-
-              </div>
-
-            </div>
-
-
-
-            <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4">
-
-              <p className="font-logo text-xl text-[#F2F0EA] mb-3">What happened today</p>
-
-              <ActivityFeed
-
-                events={events}
-
-                fuelLogs={fuelLogs}
-
-                issues={issues}
-
-                machines={machines}
-
-                siteId={user?.site_id}
-
+      {viewTab !== "pulse" && (
+        <div className="mb-4">
+          <WorkHoursPanel variant="clock" />
+        </div>
+      )}
+      {viewTab === "home" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            {homeKpis.line.map((line) => (
+              <LineStatusCard
+                key={line.id}
+                line={line}
+                onOpen={() => line.fleet?.machine?.id && openPulse(line.fleet.machine.id)}
               />
-
-            </div>
-
-          </div>
-
-        )}
-
-
-
-        {tab === "verify" && (
-
-          <div className="space-y-3">
-
-            <DispatchSignoffList
-              rows={(siteDispatch || []).filter((row) => row.site_id === user?.site_id && row.assigned_supervisor_id === user?.id)}
-              busyId={dispatchBusy}
-              onPreview={async (row) => setReportPreview(await dispatchDayReport(row, activeSite))}
-              onSign={async (row) => {
-                setDispatchBusy(row.id);
-                try {
-                  await wf.signSiteDispatch(user, row);
-                  await refreshLocal();
-                  showAlert("Signed", `Dispatch for ${String(row.dispatch_date).slice(0, 10)} is signed off.`, "success");
-                } catch (e) {
-                  showAlert("Could not sign", e.message, "error");
-                } finally {
-                  setDispatchBusy(null);
-                }
-              }}
-              onReturn={async (row) => {
-                const note = window.prompt("What should Dispatch correct?");
-                if (note == null) return;
-                setDispatchBusy(row.id);
-                try {
-                  await wf.returnSiteDispatch(user, row, note);
-                  await refreshLocal();
-                  showAlert("Sent back", "Dispatch can edit that day again.", "success");
-                } catch (e) {
-                  showAlert("Could not send back", e.message, "error");
-                } finally {
-                  setDispatchBusy(null);
-                }
-              }}
-            />
-
-            <div className="flex gap-1 mb-2">
-
-              <button type="button" onClick={() => setVerifyScope("mine")}
-
-                className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${verifyScope === "mine" ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}>
-
-                Assigned to me
-
-              </button>
-
-              <button type="button" onClick={() => setVerifyScope("all")}
-
-                className={`ops-chip px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${verifyScope === "all" ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}>
-
-                All site
-
-              </button>
-
-            </div>
-
-
-
-            {linkShiftId && pendingShifts.some((s) => s.id === linkShiftId) && (
-
-              <div className="bg-[#F5C518]/10 border border-[#F5C518]/30 rounded-xl p-3 mb-2">
-
-                <p className="font-logo text-xs text-[#F5C518]">Opened from operator WhatsApp link — review and sign below.</p>
-
-              </div>
-
-            )}
-
-            {displayedAwaitingCorrection.length > 0 && (
-
-              <div className="mb-4">
-
-                <p className="font-logo text-sm text-[#F97316] mb-2">With operator — fixing ({displayedAwaitingCorrection.length})</p>
-
-                <div className="space-y-2">
-
-                  {displayedAwaitingCorrection.map((r) => (
-
-                    <div key={r.id} className="bg-[#F97316]/5 border border-[#F97316]/40 rounded-xl p-4">
-
-                      <p className="font-logo text-sm text-[#F97316] mb-1">Sent back to operator</p>
-
-                      <p className="text-base text-[#F2F0EA]">{fmtDateShort(r.started_at)} · {r.operator_name} · {machineName(r.machine_id)}</p>
-
-                      <p className="text-sm text-[#F2F0EA]/60 mt-1">
-
-                        Meter: {r.start_hour_meter}h → {r.end_hour_meter}h · {Number(r.hours_worked || 0).toFixed(1)}h machine · {shiftBillableHours(r, events, siteConfig).toFixed(1)}h billable
-
-                      </p>
-
-                      {r.supervisor_comment && (
-
-                        <p className="text-sm text-[#F2F0EA]/75 mt-2 leading-relaxed">
-
-                          Your note: {r.supervisor_comment}
-
-                        </p>
-
-                      )}
-
-                      <button type="button" onClick={() => handleViewReport(r)} className="w-full mt-3 border border-[#00A4A6] text-[#00A4A6] py-3 rounded-lg font-logo text-sm">
-
-                        VIEW REPORT
-
-                      </button>
-
-                    </div>
-
-                  ))}
-
-                </div>
-
-              </div>
-
-            )}
-
-
-
-            <p className="font-logo text-sm text-[#F5C518] mb-2">Needs machine sign-off ({displayedPendingShifts.length})</p>
-
-
-
-            {displayedPendingShifts.length === 0 ? <p className="text-sm text-[#F2F0EA]/40">No shifts waiting for sign-off{verifyScope === "mine" ? " on your name" : ""}.</p> : displayedPendingShifts.map((r) => (
-
-              <div
-
-                key={r.id}
-
-                className={`bg-[#141414] border rounded-xl p-4 ${
-
-                  getShiftStatus(r) === SHIFT.RESUBMITTED
-
-                    ? "border-[#F97316] bg-[#F97316]/5"
-
-                    : r.id === linkShiftId
-
-                      ? "border-[#F5C518]"
-
-                      : "border-[#2A2A2A]"
-
-                }`}
-
-              >
-
-                {getShiftStatus(r) === SHIFT.RESUBMITTED && (
-
-                  <p className="font-logo text-sm text-[#F97316] mb-2">Operator fixed this — check again</p>
-
-                )}
-
-                <p className="font-logo text-sm">{fmtDateShort(r.started_at)} · {r.operator_name} · {machineName(r.machine_id)}</p>
-
-                <p className="text-[10px] text-[#F2F0EA]/40">
-
-                  Meter: {r.start_hour_meter}h → {r.end_hour_meter}h · <strong>{Number(r.hours_worked || 0).toFixed(1)}h machine · {shiftBillableHours(r, events, siteConfig).toFixed(1)}h billable</strong>
-
-                </p>
-
-                {(r.runtime_minutes > 0 || r.downtime_minutes > 0) && (
-
-                  <p className="text-[10px] text-[#F2F0EA]/35">Runtime {formatDurationMinutes(r.runtime_minutes || 0)} · Downtime {formatDurationMinutes(r.downtime_minutes || 0)}</p>
-
-                )}
-
-                {r.assigned_supervisor_name && (
-
-                  <p className="text-[10px] text-[#F5C518]/80 mt-1">
-
-                    {r.assigned_supervisor_id === user?.id ? "Assigned to you" : `Assigned: ${r.assigned_supervisor_name}`}
-
-                  </p>
-
-                )}
-
-                <div className="grid grid-cols-1 gap-2 mt-4">
-
-                  <button onClick={() => openVerifyModal(r)} disabled={verifyBusy === r.id} className="w-full bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold">Sign machine side</button>
-
-                  <button onClick={() => openReasonModal(r, "correct")} disabled={verifyBusy === r.id} className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold">Send back</button>
-
-                  <button type="button" onClick={() => handleViewReport(r)} className="w-full border border-[#2A2A2A] text-[#F2F0EA] py-4 rounded-xl font-logo">Open report</button>
-
-                  <ShiftPhotoFix shift={r} user={user} onDone={() => refreshLocal()} />
-
-                </div>
-
-              </div>
-
             ))}
-
-            {justSigned?.site_token && (
-              <SiteSignShareCard
-                shift={shifts.find((s) => s.id === justSigned.id) || justSigned}
-                machineName={machineName(justSigned.machine_id)}
-                onDismiss={() => setJustSigned(null)}
-              />
-            )}
-
-            {awaitingSiteShifts.length > 0 && (
-              <div className="mt-4">
-                <p className="font-logo text-sm text-[#00A4A6] mb-2">Awaiting site sign-off ({awaitingSiteShifts.length}) — version locked, on their desk</p>
-                <div className="space-y-2">
-                  {awaitingSiteShifts.map((r) => (
-                    <SiteSignShareCard
-                      key={r.id}
-                      shift={r}
-                      machineName={machineName(r.machine_id)}
-                      compact
-                      onResend={async () => {
-                        setResendBusy(r.id);
-                        try {
-                          await wf.resendSiteLink(user, r);
-                          await refreshLocal();
-                          showAlert("Link resent", "A fresh 7-day site link was created. Share it over WhatsApp.", "success");
-                        } catch (e) {
-                          showAlert("Could not resend", e.message, "error");
-                        } finally {
-                          setResendBusy(null);
-                        }
-                      }}
-                      resending={resendBusy === r.id}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
           </div>
-
-        )}
-
-
-
-        {tab === "today" && (
-          <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-2">
-            <p className="font-logo text-sm text-[#F5C518]">Next: records & history</p>
-            <p className="font-body text-sm text-[#F2F0EA]/70">Only open this when Today is clear. Signed reports, team hours and pulse live here.</p>
-            <div className="grid grid-cols-1 gap-2">
-              <button type="button" onClick={() => setRecordsView(recordsView === "reports" ? null : "reports")} className="w-full py-3 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-logo text-sm">1 · Signed reports & performance</button>
-              <button type="button" onClick={() => setRecordsView(recordsView === "team" ? null : "team")} className="w-full py-3 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-logo text-sm">2 · Team hours, expenses & timesheets</button>
-              <button type="button" onClick={() => setRecordsView(recordsView === "pulse" ? null : "pulse")} className="w-full py-3 rounded-xl border border-[#2A2A2A] text-[#F2F0EA] font-logo text-sm">3 · Machine pulse</button>
-            </div>
-            {recordsView === "reports" && (
-              <div className="pt-2">
-                {selectedMachine && (
-                  <MachineSelect machines={siteMachines} value={selectedMachine.id} onChange={setFocusMachineId} />
-                )}
-                <SupervisorReports
-                  machines={siteMachines}
-                  machineId={selectedMachine?.id}
-                  onMachine={setFocusMachineId}
-                  period={reportPeriod}
-                  periodLabel={reportPeriod?.label || "All time"}
-                  filter={reportFilter}
-                  filters={REPORT_FILTERS}
-                  onFilter={setReportFilter}
-                  signedReports={signedReports}
-                  signedBillable={signedBillable}
-                  signedHours={signedHours}
-                  signedDetails={signedDetails}
-                  onOpenDetail={setKpiDetail}
-                  dispatches={(siteDispatch || []).filter((row) => row.site_id === user?.site_id)}
-                  machineName={machineName}
-                  events={events}
-                  siteConfig={siteConfig}
-                  onView={handleViewReport}
-                  onDownload={handleDownloadReport}
-                  onShare={handleShareReport}
-                  onOpenDispatch={async (row) => setReportPreview(await dispatchDayReport(row, activeSite))}
-                />
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <DashboardKpi label={HOUR_LABELS.billable} value={`${dashboardStats.billableHours.toFixed(1)}h`} sub={`${dashboardStats.shiftCount} shifts`} color="#22C55E" onClick={() => setKpiDetail(dashboardDetails.billable)} />
-                  <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Stopped time" color="#EF4444" onClick={() => setKpiDetail(dashboardDetails.downtime)} />
-                </div>
-                <DispatchKpis records={siteDispatch} siteId={user?.site_id} period={billingPeriod} factors={siteConfig} onOpen={setKpiDetail} />
-              </div>
-            )}
-            {recordsView === "team" && (
-              <div className="pt-2 space-y-3">
-                <WorkHoursPanel />
-                {showExpenses ? (
-                  <div className="space-y-3">
-                    <button type="button" onClick={() => setShowExpenses(false)} className="font-ui text-sm text-[#F5C518]">Back</button>
-                    <SiteExpensesPanel expenses={expenses} machines={siteMachines} siteId={user?.site_id} cycleStartDay={siteConfig.billing_cycle_start_day} scopeLabel={activeSite?.name || "This site"} canEdit onSaved={refreshLocal} />
-                  </div>
-                ) : (
-                  <MoreMenu items={[{ label: "Expenses", onClick: () => setShowExpenses(true) }]} />
-                )}
-                <TimesheetPanel rows={timesheetRows} periodLabel={timesheetPeriod?.label || "All time"} filter={timesheetFilter} onFilter={setTimesheetFilter} machines={machines} onPreview={async () => { try { const doc = await printTimesheetReport(workSessions, timesheetPeriod, activeSite, machines); setReportPreview(doc); } catch (e) { showAlert("Could not open timesheet", e.message, "error"); } }} />
-              </div>
-            )}
-            {recordsView === "pulse" && <ProductivityPulseScreen embedded />}
-          </div>
-        )}
-
-
-
-
-        {tab === "issues" && (
 
           <div className="space-y-3">
-
-            <button
-
-              type="button"
-
-              onClick={() => setShowReportIssue(true)}
-
-              className="w-full bg-[#EF4444] text-white py-4 rounded-xl font-logo font-bold"
-
-            >
-
-              Report a problem
-
-            </button>
-
-            <p className="text-[#F2F0EA]/60 text-center">
-              Machine faults, strikes, suppliers, staffing — site-wide or per machine.
-            </p>
-
-            <IssueInboxModal
-
-              variant="inline"
-
-              user={user}
-
-              issues={siteIssues}
-
-              issueMessages={issueMessages}
-
-              onDone={refreshLocal}
-
-              scope="site"
-
-              siteId={user?.site_id}
-
-              onSendTo={(issue) => { setDelegateIssueId(issue.id); setDelegateTargetId(""); setDelegateNote(""); }}
-
-              onSendToMechanic={(issue) => { setMechanicIssueId(issue.id); setMechanicTargetId(""); setMechanicNote(""); }}
-
-              machines={siteMachines}
-
+            <p className="font-ui text-sm font-semibold text-ops-muted">Production</p>
+            <DashboardKpi
+              label="Dispatch this cycle"
+              value={tonnesLabel(homeKpis.cycleTonnes)}
+              sub={`${Math.round(homeKpis.cycleProgress * 100)}% of ${tonnesLabel(homeKpis.cycleTarget)} - ${billingPeriod.label}`}
+              color={homeKpis.cycleProgress >= 1 ? "#22C55E" : "#F5C518"}
+              progress={homeKpis.cycleProgress}
+              onClick={() => setKpiDetail({
+                title: "Dispatch this cycle",
+                scope: `${activeSite?.name || "This site"} - ${billingPeriod.label}`,
+                note: "Weighbridge tonnes against the cycle target.",
+                total: `${tonnesLabel(homeKpis.cycleTonnes)} / ${tonnesLabel(homeKpis.cycleTarget)}`,
+                rows: homeKpis.details?.weighbridge?.rows || [],
+              })}
             />
-
+            <div className="grid grid-cols-2 gap-2">
+              <DashboardKpi
+                label="Trucks today"
+                value={String(homeKpis.trucksToday)}
+                sub={`${homeKpis.trucksCycle} this cycle`}
+                color="#F5C518"
+                onClick={() => setKpiDetail(homeKpis.details?.trucks)}
+              />
+              <DashboardKpi
+                label="Screened"
+                value={tonnesLabel(homeKpis.screened)}
+                sub="This cycle"
+                color="#22C55E"
+                onClick={() => setKpiDetail(homeKpis.details?.screened)}
+              />
+            </div>
+            <DashboardKpi
+              label="On the floor"
+              value={tonnesLabel(homeKpis.floor)}
+              sub="Latest closing stock"
+              color="#00A4A6"
+              onClick={() => setKpiDetail(homeKpis.details?.floor)}
+            />
           </div>
 
-        )}
+          {openShiftsToClose.length > 0 && (
+            <div className="space-y-2">
+              <p className="font-ui text-sm font-semibold text-ops-muted">Open shifts</p>
+              {openShiftsToClose.map((shift) => (
+                <button
+                  key={shift.id}
+                  type="button"
+                  onClick={() => { setCloseShift(shift); setCloseMeter(String(shift.start_hour_meter ?? "")); }}
+                  className="w-full text-left bg-ops-card border border-ops-gold rounded-2xl p-4"
+                >
+                  <p className="font-ui font-semibold text-ops-text">{machineName(shift.machine_id)}</p>
+                  <p className="font-body text-sm text-ops-muted mt-1">{shift.operator_name || "Operator"} - still open</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
+      {viewTab === "pulse" && (
+        <RolePulse initialMachineId={pulseMachineId} />
+      )}
 
+      {viewTab === "reports" && (
+        <div className="space-y-4">
+          <FieldSelect value={reportGroup} onChange={setReportGroup}>
+            {REPORT_GROUPS.map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
+            ))}
+          </FieldSelect>
+
+          {reportGroup === "operators" && (
+            <div className="space-y-4">
+              <FieldSelect value={verifyScope} onChange={setVerifyScope}>
+                <option value="mine">Assigned to me</option>
+                <option value="all">Everyone on site</option>
+              </FieldSelect>
+
+              {displayedPendingShifts.length === 0 && awaitingSiteShifts.length === 0 && (
+                <p className="font-body text-sm text-ops-muted">No operator reports waiting.</p>
+              )}
+
+              {displayedAwaitingCorrection.length > 0 && (
+                <p className="font-body text-sm text-[#F5C518]">
+                  {displayedAwaitingCorrection.length} sent back for correction
+                </p>
+              )}
+
+              {displayedPendingShifts.map((r) => (
+                <div key={r.id} className="bg-ops-card border-2 border-ops-gold rounded-2xl p-4">
+                  <p className="font-ui font-semibold text-ops-text">{machineName(r.machine_id)}</p>
+                  <p className="font-body text-sm text-ops-muted mt-1">
+                    {r.operator_name || "Operator"} - {Number(r.hours_worked || 0).toFixed(1)}h
+                  </p>
+                  {(r.runtime_minutes > 0 || r.downtime_minutes > 0) && (
+                    <p className="text-sm text-[#F2F0EA]/45">
+                      Runtime {formatDurationMinutes(r.runtime_minutes || 0)} - Downtime {formatDurationMinutes(r.downtime_minutes || 0)}
+                    </p>
+                  )}
+                  {r.assigned_supervisor_name && (
+                    <p className="text-sm text-[#F5C518]/80 mt-1">
+                      {r.assigned_supervisor_id === user?.id ? "Assigned to you" : `Assigned: ${r.assigned_supervisor_name}`}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 gap-2 mt-4">
+                    <Button className="w-full" size="lg" disabled={verifyBusy === r.id} onClick={() => openVerifyModal(r)}>
+                      Sign
+                    </Button>
+                    <Button className="w-full" size="lg" variant="secondary" disabled={verifyBusy === r.id} onClick={() => openReasonModal(r, "correct")}>
+                      Send back
+                    </Button>
+                    <Button className="w-full" size="lg" variant="secondary" onClick={() => handleViewReport(r)}>
+                      Open report
+                    </Button>
+                    <Button className="w-full" size="lg" variant="secondary" onClick={() => setEditShift(r)}>
+                      Edit report
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {awaitingSiteShifts.length > 0 && (
+                <div>
+                  <p className="font-ui text-sm font-semibold text-[#25D366] mb-2">Send to {berlingtonName} ({awaitingSiteShifts.length})</p>
+                  <div className="space-y-2">
+                    {awaitingSiteShifts.map((r) => (
+                      <SiteSignShareCard
+                        key={r.id}
+                        shift={r}
+                        machineName={machineName(r.machine_id)}
+                        ownerName={berlingtonName}
+                        compact
+                        sending={resendBusy === r.id}
+                        onSend={() => sendToBerlington(r)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="font-ui text-sm font-semibold text-ops-text pt-2">Signed</p>
+              <SupervisorReports
+                machines={siteMachines}
+                machineId={selectedMachine?.id}
+                onMachine={setFocusMachineId}
+                period={reportPeriod}
+                periodLabel={reportPeriod?.label || "All time"}
+                filter={reportFilter}
+                filters={REPORT_FILTERS}
+                onFilter={setReportFilter}
+                signedReports={signedReports.filter((s) => !needsBerlingtonSign(s))}
+                machineName={machineName}
+                events={events}
+                siteConfig={siteConfig}
+                onView={handleViewReport}
+              />
+            </div>
+          )}
+
+          {reportGroup === "dispatch" && (
+            <div className="space-y-4">
+              <DispatchSignoffList
+                rows={assignedDispatch}
+                busyId={dispatchBusy}
+                emptyHint="No dispatch day is waiting to sign."
+                onPreview={async (row) => setReportPreview(await dispatchDayReport(row, activeSite))}
+                onSign={handleSignDispatch}
+                onReturn={handleReturnDispatch}
+              />
+              <p className="font-ui text-sm font-semibold text-ops-text pt-2">Signed</p>
+              <SupervisorReports
+                group="dispatch"
+                period={reportPeriod}
+                periodLabel={reportPeriod?.label || "All time"}
+                filter={reportFilter}
+                filters={REPORT_FILTERS}
+                onFilter={setReportFilter}
+                dispatches={(siteDispatch || []).filter((row) => row.site_id === user?.site_id)}
+                onOpenDispatch={async (row) => setReportPreview(await dispatchDayReport(row, activeSite))}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {viewTab === "issues" && (
+        <div className="space-y-3">
+          <Button className="w-full" size="lg" variant="danger" onClick={() => setShowReportIssue(true)}>
+            Report a problem
+          </Button>
+          <IssueInboxModal
+            variant="inline"
+            user={user}
+            issues={siteIssues}
+            issueMessages={issueMessages}
+            onDone={refreshLocal}
+            scope="site"
+            siteId={user?.site_id}
+            onSendTo={(issue) => { setDelegateIssueId(issue.id); setDelegateTargetId(""); setDelegateNote(""); }}
+            onSendToMechanic={(issue) => { setMechanicIssueId(issue.id); setMechanicTargetId(""); setMechanicNote(""); }}
+            machines={siteMachines}
+          />
+        </div>
+      )}
 
       {showReportIssue && (
-
         <ReportIssueModal
-
           onClose={() => setShowReportIssue(false)}
-
           user={user}
-
           machines={siteMachines}
-
           site={activeSite}
-
           profiles={profiles}
-
           onDone={refreshLocal}
-
         />
-
       )}
-
-
 
       {delegateIssueId && (
-
-        <Modal title="SEND TO…" color="blue" onClose={() => { setDelegateIssueId(null); setDelegateTargetId(""); setDelegateNote(""); }}>
-
-          <p className="text-sm text-[#F2F0EA]/70 mb-4">
-
-            Send this problem to someone on site to action.
-
-          </p>
-
-          <select
-
-            value={delegateTargetId}
-
-            onChange={(e) => setDelegateTargetId(e.target.value)}
-
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded mb-3 text-[#F2F0EA]"
-
-          >
-
-            <option value="">Select person…</option>
-
+        <Modal title="Send to" color="blue" onClose={() => { setDelegateIssueId(null); setDelegateTargetId(""); setDelegateNote(""); }}>
+          <p className="font-body text-sm text-ops-muted mb-4">Send this problem to someone on site.</p>
+          <FieldSelect value={delegateTargetId} onChange={setDelegateTargetId}>
+            <option value="">Select person</option>
             {delegateCandidates.map((p) => (
-
               <option key={p.id} value={p.id}>{p.name} ({p.role})</option>
-
             ))}
-
-          </select>
-
+          </FieldSelect>
           <textarea
-
             value={delegateNote}
-
             onChange={(e) => setDelegateNote(e.target.value)}
-
-            placeholder="Instructions (optional)…"
-
+            placeholder="Instructions (optional)"
             rows={3}
-
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded mb-4 text-[#F2F0EA] text-sm"
-
+            className="w-full mt-3 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA] text-sm"
           />
-
-          <button
-
-            type="button"
-
-            onClick={handleDelegate}
-
-            disabled={delegateBusy || !delegateTargetId}
-
-            className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold disabled:opacity-40"
-
-          >
-
-            {delegateBusy ? "SENDING…" : "CONFIRM"}
-
-          </button>
-
+          <Button className="w-full mt-4" size="lg" disabled={delegateBusy || !delegateTargetId} onClick={handleDelegate}>
+            {delegateBusy ? "Sending..." : "Send"}
+          </Button>
         </Modal>
-
       )}
-
-
 
       {mechanicIssueId && (
-
-        <Modal title="SEND TO MECHANIC" color="yellow" onClose={() => { setMechanicIssueId(null); setMechanicTargetId(""); setMechanicNote(""); }}>
-
-          <p className="text-sm text-[#F2F0EA]/70 mb-4">
-
-            Create a repair job for the mechanic. They will see it in their app.
-
-          </p>
-
-          <select
-
-            value={mechanicTargetId}
-
-            onChange={(e) => setMechanicTargetId(e.target.value)}
-
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded mb-3 text-[#F2F0EA]"
-
-          >
-
-            <option value="">Select mechanic…</option>
-
+        <Modal title="Send to mechanic" color="blue" onClose={() => { setMechanicIssueId(null); setMechanicTargetId(""); setMechanicNote(""); }}>
+          <FieldSelect value={mechanicTargetId} onChange={setMechanicTargetId}>
+            <option value="">Select mechanic</option>
             {mechanicCandidates.map((p) => (
-
               <option key={p.id} value={p.id}>{p.name}</option>
-
             ))}
-
-          </select>
-
+          </FieldSelect>
           <textarea
-
             value={mechanicNote}
-
             onChange={(e) => setMechanicNote(e.target.value)}
-
-            placeholder="Instructions for the mechanic (optional)…"
-
+            placeholder="What should they look at?"
             rows={3}
-
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded mb-4 text-[#F2F0EA] text-sm"
-
+            className="w-full mt-3 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA] text-sm"
           />
-
-          <button
-
-            type="button"
-
-            onClick={handleSendToMechanic}
-
-            disabled={mechanicBusy || !mechanicTargetId}
-
-            className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40"
-
-          >
-
-            {mechanicBusy ? "SENDING…" : "SEND REPAIR JOB"}
-
-          </button>
-
+          <Button className="w-full mt-4" size="lg" disabled={mechanicBusy || !mechanicTargetId} onClick={handleSendToMechanic}>
+            {mechanicBusy ? "Sending..." : "Send"}
+          </Button>
         </Modal>
-
       )}
-
-
 
       {reasonModal && (
-
         <Modal title={reasonModal.title} color="yellow" onClose={() => setReasonModal(null)}>
-
           <textarea
-
             value={reasonModal.reason}
-
-            onChange={(e) => setReasonModal((m) => ({ ...m, reason: e.target.value }))}
-
+            onChange={(e) => setReasonModal({ ...reasonModal, reason: e.target.value })}
             placeholder={reasonModal.placeholder}
-
             rows={4}
-
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded mb-4 text-[#F2F0EA] text-sm"
-
-            autoFocus
-
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA]"
           />
-
-          <div className="flex gap-3">
-
-            <button type="button" onClick={() => setReasonModal(null)} className="flex-1 border border-[#2A2A2A] py-3 rounded-xl font-logo text-sm">CANCEL</button>
-
-            <button type="button" onClick={handleReasonConfirm} disabled={!reasonModal.reason?.trim() || verifyBusy}
-
-              className="flex-1 bg-[#F5C518] text-black py-3 rounded-xl font-logo font-bold text-sm disabled:opacity-40">
-
-              CONFIRM
-
-            </button>
-
-          </div>
-
+          <Button className="w-full mt-4" size="lg" disabled={!reasonModal.reason.trim()} onClick={handleReasonConfirm}>
+            Send back
+          </Button>
         </Modal>
-
       )}
 
-
-
       {verifyTarget && (
-
-        <Modal title="Sign — machine side" color="green" onClose={() => { setVerifyTarget(null); setSignature(null); }}>
-
-          <p className="font-body text-sm text-[#F2F0EA]/70 mb-4">
-
-            {verifyTarget.operator_name} · {Number(verifyTarget.hours_worked || 0).toFixed(1)}h machine · {shiftBillableHours(verifyTarget, events, siteConfig).toFixed(1)}h billable · {verifyTarget.start_hour_meter}h → {verifyTarget.end_hour_meter}h
-
+        <Modal title="Sign" color="green" onClose={() => { setVerifyTarget(null); setSignature(null); }}>
+          <p className="font-body text-sm text-ops-muted mb-3">
+            {machineName(verifyTarget.machine_id)} - {verifyTarget.operator_name || "Operator"} - {Number(verifyTarget.hours_worked || 0).toFixed(1)}h
           </p>
-
           <SignaturePad onChange={setSignature} />
-
-          <button onClick={() => handleVerify("machine_sign")} disabled={verifyBusy || !signature}
-
-            className="w-full mt-4 bg-[#22C55E] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40">
-
-            {verifyBusy ? "Signing…" : "Sign machine side"}
-
-          </button>
-
+          <Button className="w-full mt-4" size="lg" disabled={verifyBusy || !signature} onClick={() => handleVerify("machine_sign")}>
+            {verifyBusy ? "Signing..." : "Sign"}
+          </Button>
         </Modal>
+      )}
 
+      {editShift && (
+        <SupervisorShiftEdit
+          shift={editShift}
+          user={user}
+          onClose={() => setEditShift(null)}
+          onDone={async () => {
+            await refreshLocal();
+            showAlert("Saved", "Report updated. Sign it when you are happy with it.", "success");
+          }}
+        />
       )}
 
       {closeShift && (
-        <Modal title="Close open shift" color="yellow" onClose={() => setCloseShift(null)}>
-          <p className="font-body text-sm text-[#F2F0EA]/80 mb-3">
-            {closeShift.operator_name || "This operator"} left this shift open
-            {closeShift.started_at ? ` (started ${new Date(closeShift.started_at).toLocaleString()})` : ""}.
-            Enter the closing meter, then the next operator can start.
+        <Modal title="Close shift" color="yellow" onClose={() => setCloseShift(null)}>
+          <p className="font-body text-sm text-ops-muted mb-3">
+            {closeShift.operator_name || "Operator"} on {machineName(closeShift.machine_id)}
           </p>
-          <input
-            type="number"
-            step="0.1"
-            value={closeMeter}
-            onChange={(e) => setCloseMeter(e.target.value)}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA] mb-4"
-          />
-          <button
-            type="button"
-            disabled={closeBusy}
+          <label className="block">
+            <span className="ops-field-label">Closing meter</span>
+            <input
+              value={closeMeter}
+              onChange={(e) => setCloseMeter(e.target.value)}
+              className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA]"
+            />
+          </label>
+          <Button
+            className="w-full mt-4"
+            size="lg"
+            disabled={closeBusy || closeMeter === ""}
             onClick={async () => {
               setCloseBusy(true);
               try {
                 const machine = machines.find((m) => m.id === closeShift.machine_id);
                 await wf.closeOpenShift(user, machine, closeShift, { endHour: closeMeter });
-                setCloseShift(null);
-                try { await syncNow(); } catch {}
                 await refreshLocal();
-                showAlert("Shift closed", `${closeShift.operator_name || "The operator"}'s open shift is closed. It is waiting for sign-off.`, "success");
+                setCloseShift(null);
+                showAlert("Shift closed", "It is waiting for sign-off.", "success");
               } catch (e) {
                 showAlert("Could not close", e.message, "error");
               } finally {
                 setCloseBusy(false);
               }
             }}
-            className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40"
           >
-            {closeBusy ? "Closing…" : "Close shift"}
-          </button>
+            {closeBusy ? "Closing..." : "Close shift"}
+          </Button>
+        </Modal>
+      )}
+
+      {justSigned && (
+        <Modal title={`Send to ${berlingtonName}`} color="green" onClose={() => setJustSigned(null)}>
+          <SiteSignShareCard
+            shift={shifts.find((s) => s.id === justSigned.id) || justSigned}
+            machineName={machineName(justSigned.machine_id)}
+            ownerName={berlingtonName}
+            sending={resendBusy === justSigned.id}
+            onSend={() => sendToBerlington(justSigned)}
+            onDismiss={() => setJustSigned(null)}
+          />
         </Modal>
       )}
 
@@ -1629,151 +836,93 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
           html={reportPreview.html}
           title={reportPreview.title}
           sheets={reportPreview.sheets}
+          startShareOpen={reportPreview.startShareOpen}
           onClose={() => setReportPreview(null)}
         />
       )}
-
     </AppPage>
-
   );
-
 }
 
-
-
-function SiteSignShareCard({ shift, machineName, onDismiss, onResend, resending, compact }) {
+function SiteSignShareCard({ shift, machineName, ownerName = "Berlington", onDismiss, onSend, sending, compact }) {
   const link = shift?.site_token ? siteSignLink(shift) : "";
   const expiry = shift?.site_token_expires_at ? new Date(shift.site_token_expires_at).toLocaleDateString() : "";
-  const shareText = shift?.site_token ? siteSignShareText(shift, machineName, link) : "";
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(link);
-    } catch {
-      window.prompt("Copy this site sign-off link:", link);
-    }
-  };
   return (
-    <div className="bg-[#00A4A6]/5 border border-[#00A4A6]/40 rounded-xl p-4">
-      <p className="font-logo text-sm text-[#00A4A6] mb-1">
-        {compact ? "Site link ready" : "Machine signed — send this to the site supervisor"}
+    <div className={compact ? "bg-[#141414] border border-[#25D366]/40 rounded-xl p-4" : ""}>
+      <p className="font-ui text-sm font-semibold text-[#25D366] mb-1">
+        {compact ? `Needs ${ownerName} sign` : `WhatsApp this report to ${ownerName}`}
       </p>
       <p className="text-base text-[#F2F0EA]">
-        {machineName} · {shift?.operator_name || "Operator"} · {Number(shift?.hours_worked || 0).toFixed(1)}h machine
+        {machineName} - {shift?.operator_name || "Operator"} - {Number(shift?.hours_worked || 0).toFixed(1)}h machine
       </p>
       <p className="text-sm text-[#F2F0EA]/60 mt-1">
-        Signed machine side by {shift?.machine_signature_name || shift?.supervisor_signature_name || "supervisor"}
-        {shift?.shift_version ? ` · v${shift.shift_version} locked` : ""}
-        {expiry ? ` · link expires ${expiry}` : ""}
+        Signed by {shift?.machine_signature_name || shift?.supervisor_signature_name || "you"}
+        {expiry ? ` - link expires ${expiry}` : ""}
       </p>
-      <div className="grid grid-cols-2 gap-2 mt-3">
-        <button type="button" onClick={copyLink} disabled={!link} className="w-full border border-[#00A4A6] text-[#00A4A6] py-3 rounded-xl font-logo text-sm disabled:opacity-40">
-          Copy site link
-        </button>
-        <a href={link ? whatsappShareUrl("", shareText) : undefined} target="_blank" rel="noreferrer" className={`w-full text-center py-3 rounded-xl font-logo text-sm ${link ? "bg-[#22C55E] text-black" : "bg-[#2A2A2A] text-[#F2F0EA]/40 pointer-events-none"}`}>
-          WhatsApp site
-        </a>
-      </div>
-      <div className="flex gap-2 mt-2">
-        {onResend && (
-          <button type="button" onClick={onResend} disabled={resending} className="flex-1 border border-[#2A2A2A] text-[#F2F0EA] py-2 rounded-xl font-logo text-sm disabled:opacity-40">
-            {resending ? "Resending…" : "Resend fresh link"}
-          </button>
-        )}
-        {onDismiss && (
-          <button type="button" onClick={onDismiss} className="flex-1 border border-[#2A2A2A] text-[#F2F0EA]/60 py-2 rounded-xl font-logo text-sm">
-            Dismiss
-          </button>
-        )}
-      </div>
+      <Button className="w-full mt-3" variant="whatsapp" disabled={sending} onClick={onSend}>
+        {sending ? "Opening..." : link ? `WhatsApp ${ownerName}` : `Create link & WhatsApp ${ownerName}`}
+      </Button>
+      {onDismiss && (
+        <Button className="w-full mt-2" variant="ghost" onClick={onDismiss}>
+          Done
+        </Button>
+      )}
     </div>
   );
 }
 
-function FleetMachineCard({ fleet, onCloseShift, workSessions = [], profiles = [] }) {
+function lineStatus(fleet) {
+  if (!fleet) {
+    return { label: "Off site", color: "#F2F0EA", sub: "No machine", wash: "rgba(242,240,234,0.06)", border: "rgba(242,240,234,0.2)" };
+  }
+  if (fleet.isStopped) {
+    return {
+      label: "Stopped",
+      color: "#EF4444",
+      sub: fleet.openStop?.reason || fleet.runningShift?.operator_name || "Stopped",
+      wash: "rgba(239,68,68,0.14)",
+      border: "rgba(239,68,68,0.55)",
+    };
+  }
+  if (fleet.isRunning) {
+    return {
+      label: "Running",
+      color: "#22C55E",
+      sub: fleet.runningShift?.operator_name || "Running",
+      wash: "rgba(34,197,94,0.14)",
+      border: "rgba(34,197,94,0.55)",
+    };
+  }
+  if (fleet.activeSession) {
+    return {
+      label: "Idle",
+      color: "#F5C518",
+      sub: fleet.activeSession.operator_name || "On site",
+      wash: "rgba(245,197,24,0.12)",
+      border: "rgba(245,197,24,0.45)",
+    };
+  }
+  return {
+    label: "Idle",
+    color: "#F2F0EA",
+    sub: "Nothing running",
+    wash: "rgba(242,240,234,0.06)",
+    border: "rgba(242,240,234,0.2)",
+  };
+}
 
-  const { machine, runningShift, openStop, activeSession, isRunning, isStopped } = fleet;
-  const names = runningShift ? shiftNameLines(runningShift, { workSessions, profiles }) : null;
-
-  const runningSeconds = useLiveTimer(runningShift?.started_at, isRunning);
-
-  const downtimeSeconds = useLiveTimer(openStop?.stopped_at, isStopped);
-
-
-
-  const statusColor = isStopped ? "#EF4444" : isRunning ? "#22C55E" : "#F2F0EA";
-
-  const statusLabel = isStopped ? "STOPPED" : isRunning ? "RUNNING" : "IDLE";
-
-
-
+function LineStatusCard({ line, onOpen }) {
+  const status = lineStatus(line.fleet);
   return (
-
-    <div className={`bg-[#141414] border rounded-xl p-4 ${isStopped ? "border-[#EF4444]/50 bg-[#2a1616]/40" : "border-[#2A2A2A]"}`}>
-
-      <div className="flex justify-between items-start gap-2 mb-2">
-
-        <p className="font-logo text-sm text-[#F2F0EA]">{machine.name}</p>
-
-        <p className="font-logo text-xs" style={{ color: statusColor }}>{statusLabel}</p>
-
-      </div>
-
-      {isRunning && (
-
-        <p className="text-sm text-[#F2F0EA]/70">
-
-          {Math.floor(runningSeconds / 3600)}h {Math.floor((runningSeconds % 3600) / 60)}m · {names?.machineOperator}
-          {names && !names.samePerson ? ` · recorded by ${names.recordedBy}` : ""}
-
-        </p>
-
-      )}
-
-      {isStopped && (
-
-        <div>
-
-          <p className="font-logo text-sm text-[#EF4444]">{openStop.reason}</p>
-
-          <p className="text-sm text-[#F2F0EA]/70 mt-1">
-
-            {formatDurationSeconds(downtimeSeconds)} · {openStop.operator_name}
-
-          </p>
-
-        </div>
-
-      )}
-
-      {!isRunning && !isStopped && activeSession && (
-
-        <p className="text-sm text-[#F2F0EA]/50">{activeSession.operator_name} on site · {hoursBetween(activeSession.clock_in).toFixed(1)}h</p>
-
-      )}
-
-      {!isRunning && !isStopped && !activeSession && (
-
-        <p className="text-sm text-[#F2F0EA]/40">No active shift</p>
-
-      )}
-
-      {runningShift && (
-        <button
-          type="button"
-          onClick={() => onCloseShift?.(runningShift)}
-          className="mt-3 w-full min-h-[64px] bg-[#F5C518] text-black py-3 rounded-xl font-logo text-base"
-        >
-          Close {runningShift.operator_name || "operator"}&apos;s shift
-        </button>
-      )}
-
-    </div>
-
+    <button
+      type="button"
+      onClick={onOpen}
+      className="rounded-2xl p-3 text-left border min-h-[96px]"
+      style={{ background: status.wash, borderColor: status.border }}
+    >
+      <p className="font-ui text-xs font-semibold text-[#F2F0EA]/70">{line.label}</p>
+      <p className="font-ui text-lg font-semibold mt-1" style={{ color: status.color }}>{status.label}</p>
+      <p className="font-body text-xs text-[#F2F0EA]/55 mt-1 truncate">{status.sub}</p>
+    </button>
   );
-
 }
-
-
-
-
-

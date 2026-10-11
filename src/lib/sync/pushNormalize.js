@@ -25,6 +25,7 @@ export function normalizeForSupabasePush(row, table) {
 
   if (table === "shifts") {
     setUrl("supervisor_signature_ref", out.supervisor_signature_ref, out.supervisor_signature);
+    setUrl("machine_signature_ref", out.machine_signature_ref, out.machine_signature);
   } else if (table === "work_sessions") {
     setUrl("supervisor_signature", out.supervisor_signature_ref, out.supervisor_signature);
   }
@@ -41,7 +42,7 @@ export function normalizeForSupabasePush(row, table) {
 
   for (const key of Object.keys(out)) {
     if (!key.endsWith("_ref")) continue;
-    if (table === "shifts" && key === "supervisor_signature_ref") continue;
+    if (table === "shifts" && (key === "supervisor_signature_ref" || key === "machine_signature_ref")) continue;
     delete out[key];
   }
 

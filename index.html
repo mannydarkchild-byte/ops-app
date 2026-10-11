@@ -7,16 +7,20 @@
       content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover, user-scalable=yes"
     />
     <meta name="theme-color" content="#0A0A0A" />
+    <meta name="color-scheme" content="dark" />
     <script>
       try {
         var t = localStorage.getItem("ops-theme");
-        if (t === "light") document.documentElement.classList.add("theme-light");
-        document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
-        if (t === "light") {
-          document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#F6F1DE");
-        }
+        var light = t === "light";
+        if (light) document.documentElement.classList.add("theme-light");
+        document.documentElement.dataset.theme = light ? "light" : "dark";
+        document.documentElement.style.colorScheme = light ? "light" : "dark";
+        document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", light ? "light" : "dark");
+        document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+          meta.setAttribute("content", "#0A0A0A");
+        });
         document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
-          ?.setAttribute("content", t === "light" ? "default" : "black");
+          ?.setAttribute("content", "black");
       } catch (e) {}
     </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />

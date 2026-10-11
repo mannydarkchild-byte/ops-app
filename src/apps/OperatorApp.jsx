@@ -12,10 +12,9 @@ import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
 import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
-import { ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS, EARLY_CLOCK_OUT_GUIDE, STOP_REASON_GUIDE } from "../lib/constants.js";
-import { stopReasonGroupsForMachine, ownerForStopReasonMachine } from "../lib/stopReasons.js";
-import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.jsx";
-import { ChoiceHint, statusGuide } from "../components/ui/ChoiceHint.jsx";
+import { ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS } from "../lib/constants.js";
+import { stopReasonLabels } from "../lib/stopReasons.js";
+import { RolePulse } from "../components/RolePulse.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus, sameOperatorId } from "../lib/utils.js";
 import { prestartItemsForMachine } from "../lib/siteConfig.js";
 import { rememberUsualOperator, usualOperatorName } from "../lib/shiftPeople.js";
@@ -29,12 +28,14 @@ import { FuelModal } from "../components/FuelModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { OperatorReportsModal, reportBucket } from "../components/OperatorReportsModal.jsx";
 import { OperatorWelcome } from "../components/OperatorWelcome.jsx";
+import { OperatorDayTools } from "../components/OperatorDayTools.jsx";
 import { OperatorShiftTools } from "../components/OperatorShiftTools.jsx";
+import { FieldSelect } from "../components/ui/FieldSelect.jsx";
 
 export function OperatorApp() {
   const {
     user, activeSite, machines, workSession, events,
-    shifts, profiles, issues, issueMessages, inspections, workSessions, fuelLogs, hourReadings, refreshLocal,
+    shifts, profiles, issues, issueMessages, inspections, workSessions, fuelLogs, hourReadings, refreshLocal, syncNow,
     getSettingsForSite,
   } = useOps();
 
@@ -69,6 +70,8 @@ export function OperatorApp() {
   const [endPhotoError, setEndPhotoError] = useState(false);
 
   const [submittedShift, setSubmittedShift] = useState(null);
+  const [clockedOutAfterSubmit, setClockedOutAfterSubmit] = useState(false);
+  const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
   const [clockInSupervisorId, setClockInSupervisorId] = useState("");
   const [pickedMachineId, setPickedMachineId] = useState("");
   const [cabName, setCabName] = useState("");
@@ -94,7 +97,7 @@ export function OperatorApp() {
     [siteMachines, pickedMachineId]
   );
 
-  const stopGroups = useMemo(() => stopReasonGroupsForMachine(workMachine, siteConfig), [workMachine, siteConfig]);
+  const stopReasons = useMemo(() => stopReasonLabels(siteConfig), [siteConfig]);
 
   const prestartItems = useMemo(
     () => prestartItemsForMachine(siteConfig, workMachine),
@@ -134,6 +137,11 @@ export function OperatorApp() {
       workSession && user?.id && shiftBelongsToWorkSession(s, workSession, user.id) && getShiftStatus(s) === SHIFT.RUNNING
     ),
     [shifts, workSession, user?.id]
+  );
+
+  const otherOpenShifts = useMemo(
+    () => myOpenShifts.filter((s) => !sessionShift || s.id !== sessionShift.id),
+    [myOpenShifts, sessionShift]
   );
 
   const sessionDowntime = useMemo(() => {
@@ -184,13 +192,14 @@ export function OperatorApp() {
     [shifts, user?.id]
   );
 
-  const operatorMenu = useMemo(() => [
-    { label: "Pulse", onClick: () => setSheet("pulse") },
-    { label: "Reports", onClick: () => setSheet("reports"), badge: reportsAttention },
-    { label: "Inbox", onClick: () => setSheet("inbox"), badge: inboxCount },
-    { label: "Log diesel", onClick: () => setShowFuel(true) },
-    { label: "Report a problem", onClick: () => setShowReportIssue(true) },
-  ], [reportsAttention, inboxCount]);
+  const operatorTabs = useMemo(() => [
+    { id: "diesel", label: "Diesel" },
+    { id: "inbox", label: "Inbox", badge: inboxCount },
+    { id: "issues", label: "Problem" },
+    { id: "pulse", label: "Pulse" },
+  ], [inboxCount]);
+
+  const operatorTab = showFuel ? "diesel" : sheet === "inbox" ? "inbox" : showReportIssue ? "issues" : sheet === "pulse" ? "pulse" : "";
 
   const leftoverOpen = useMemo(
     () => (shifts || []).filter((s) =>
@@ -345,7 +354,7 @@ export function OperatorApp() {
       });
       clearPrestartDraft();
       await refreshLocal();
-      showAlert("Pre-start complete", "Tap Start machine at the bottom.", "success");
+      showAlert("Pre-start complete", "Photo the hour meter, then tap Start machine.", "success");
     } catch (e) { showAlert("Incomplete", e.message, "warning"); }
   };
 
@@ -353,7 +362,7 @@ export function OperatorApp() {
     if (actionBusy) return;
     const name = cabName.trim();
     if (!name) {
-      showAlert("Who is in the cab?", "Enter the person operating this machine. Your login is saved separately as the person who recorded the shift.", "warning");
+      showAlert("Operator name", "Enter the name of the person in the cab.", "warning");
       return;
     }
     if (!startPhotoRef) {
@@ -430,7 +439,7 @@ export function OperatorApp() {
     finally { setActionBusy(""); }
   };
 
-  const handleEndDay = async () => {
+  const handleEndDay = async (clockOutAfter = true) => {
     if (actionBusy) return;
     const sup = shiftSupervisor;
     if (!sup?.id) {
@@ -451,9 +460,26 @@ export function OperatorApp() {
       setShowRestart(false);
       setShowStop(false);
       setEndHour(""); setEndPhotoRef(null); setEndPhotoPreview(null);
-      setSubmittedShift(ended);
       setPickedMachineId("");
+      let didClockOut = false;
+      const others = myOpenShifts.filter((s) => s.id !== sessionShift?.id);
+      if (clockOutAfter && !others.length && workSession) {
+        try {
+          await wf.clockOut(user, workSession, { note: "Clocked out with shift" });
+          didClockOut = true;
+        } catch (clockErr) {
+          setClockedOutAfterSubmit(false);
+          setSubmittedShift(ended);
+          await refreshLocal();
+          if (navigator.onLine) await syncNow();
+          showAlert("Shift sent", `Clock out failed: ${clockErr.message}. Tap Clock out below.`, "warning");
+          return;
+        }
+      }
+      setClockedOutAfterSubmit(didClockOut);
+      setSubmittedShift(ended);
       await refreshLocal();
+      if (navigator.onLine) await syncNow();
     } catch (e) { showAlert("Could not finish shift", e.message, "error"); }
     finally { setActionBusy(""); }
   };
@@ -466,17 +492,16 @@ export function OperatorApp() {
     setShowEndDay(true);
   };
 
-  const dismissSubmitted = () => setSubmittedShift(null);
+  const dismissSubmitted = () => {
+    setSubmittedShift(null);
+    setClockedOutAfterSubmit(false);
+  };
 
   const handleClockOutAfterShift = async () => {
     if (!workSession) return;
-    try {
-      await wf.clockOut(user, workSession, { note: "Clocked out after shift sent" });
-      setPickedMachineId("");
-      await refreshLocal();
-    } catch (e) {
-      showAlert("Could not clock out", e.message, "error");
-    }
+    await wf.clockOut(user, workSession, { note: "Clocked out after shift sent" });
+    setPickedMachineId("");
+    await refreshLocal();
   };
 
   const handleClockOutTap = () => {
@@ -503,7 +528,21 @@ export function OperatorApp() {
       setShowEarlyClockOut(true);
       return;
     }
-    handleClockOutAfterShift();
+    setShowClockOutConfirm(true);
+  };
+
+  const confirmClockOut = async () => {
+    if (actionBusy) return;
+    setActionBusy("clockout");
+    try {
+      await handleClockOutAfterShift();
+      setShowClockOutConfirm(false);
+      if (submittedShift) setClockedOutAfterSubmit(true);
+    } catch (e) {
+      showAlert("Could not clock out", e.message, "error");
+    } finally {
+      setActionBusy("");
+    }
   };
 
   const machineStatus = sessionShift && sessionDowntime ? "stopped" : sessionShift ? "running" : null;
@@ -525,18 +564,26 @@ export function OperatorApp() {
       showSite={false}
       maxWidth="max-w-2xl"
       outdoor
-      menuItems={operatorMenu}
+      openHeaderTools
+      tabs={operatorTabs}
+      activeTab={operatorTab}
+      onTabChange={(id) => {
+        if (id === "diesel") setShowFuel(true);
+        if (id === "inbox") setSheet("inbox");
+        if (id === "issues") setShowReportIssue(true);
+        if (id === "pulse") setSheet("pulse");
+      }}
       alert={<AlertModal {...alert} confirmText="OK" />}
       banner={
         correctionShift && !submittedShift ? (
           <div className="bg-[#F97316]/15 border-b border-[#F97316]/40 px-4 py-3">
-            <p className="font-logo text-sm text-[#F97316] text-center">
+            <p className="font-ui text-sm font-semibold text-[#F97316] text-center">
               Supervisor sent a shift back — fix it below, or clock in to start a new one.
             </p>
           </div>
         ) : blocked && !submittedShift && !correctionShift ? (
           <div className="bg-[#EF4444]/10 border-b border-[#EF4444]/30 px-4 py-2.5">
-            <p className="font-logo text-sm text-[#EF4444] text-center">
+            <p className="font-ui text-sm font-semibold text-[#EF4444] text-center">
               {blockedByOther.operator_name} is running {workMachine?.name}
             </p>
           </div>
@@ -546,14 +593,14 @@ export function OperatorApp() {
         {workSession && (
           <div className="operator-time-bar mb-4">
             <div className="min-w-0">
-              <p className="font-ui text-xs tracking-wider text-[#F5C518]">YOUR TIME</p>
+              <p className="font-ui text-sm font-semibold text-[#F5C518]">On site</p>
               <p className="font-body text-sm text-ops-text truncate">
-                On site since {new Date(workSession.clock_in).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
+                Since {new Date(workSession.clock_in).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
-            <button type="button" onClick={handleClockOutTap} className="operator-clock-out font-ui text-sm">
+            <Button type="button" variant="secondary" size="md" onClick={handleClockOutTap}>
               <IconLeave /> Clock out
-            </button>
+            </Button>
           </div>
         )}
 
@@ -564,21 +611,20 @@ export function OperatorApp() {
             reportsAttention={reportsAttention}
             onReady={startDay}
             onMyReports={() => setSheet("reports")}
+            onPulse={() => setSheet("pulse")}
           />
         )}
 
         {!showWelcome && (
-          <OperatorFlowGuide currentStep={currentStep} />
-        )}
-
-        {workSession && workMachine && !showWelcome && (
-          <button
-            type="button"
-            onClick={() => setPickedMachineId("")}
-            className="mb-4 font-ui text-sm text-[#F5C518] underline underline-offset-2"
-          >
-            All machines
-          </button>
+          <>
+            <OperatorDayTools
+              className="mb-4"
+              onPulse={() => setSheet("pulse")}
+              onReports={() => setSheet("reports")}
+              reportsAttention={reportsAttention}
+            />
+            {!submittedShift && <OperatorFlowGuide currentStep={currentStep} />}
+          </>
         )}
 
         {correctionShift && !submittedShift && (
@@ -594,13 +640,13 @@ export function OperatorApp() {
 
         {leftoverOpen.length > 0 && !submittedShift && (
           <div className="mb-4 bg-[#1a1212] border border-[#EF4444]/40 rounded-2xl p-4">
-            <p className="font-logo text-[#EF4444] mb-2">A shift was left open</p>
+            <p className="font-ui font-semibold text-[#EF4444] mb-2">A shift was left open</p>
             <p className="font-body text-[#F2F0EA]/75 mb-3">
-              Close it before that machine can start again. Enter the closing meter and send it for sign-off, or delete it.
+              Close it before that machine can start again.
             </p>
             {leftoverOpen.map((shift) => (
               <div key={shift.id} className="mb-3 last:mb-0">
-                <p className="font-logo text-[#F2F0EA] mb-1">
+                <p className="font-ui font-semibold text-[#F2F0EA] mb-1">
                   {machines.find((m) => m.id === shift.machine_id)?.name || "Machine"} · {new Date(shift.started_at).toLocaleString("en-ZA")}
                 </p>
                 <OperatorShiftTools
@@ -617,30 +663,34 @@ export function OperatorApp() {
 
         {/* Day complete — WhatsApp supervisor */}
         {submittedShift && (
-          <div className={`bg-[#141414] border-2 rounded-2xl p-6 text-center ${
+          <div className={`bg-[#141414] border-2 rounded-2xl p-5 ${
             getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "border-[#F97316]" : "border-[#22C55E]"
           }`}>
-            <div className="text-5xl mb-3">{getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "↩" : "✅"}</div>
-            <h2 className={`font-logo text-2xl tracking-wider mb-2 ${
+            <h2 className={`font-ui text-2xl font-semibold mb-2 ${
               getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "text-[#F97316]" : "text-[#22C55E]"
             }`}>
-              {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "Sent Back to Supervisor" : "Shift Sent"}
+              {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "Sent back to supervisor" : "Shift sent"}
             </h2>
-            <p className="font-body text-sm text-[#F2F0EA]/70 mb-1">
+            <p className="font-body text-sm text-ops-text mb-1">
               Machine hours: {Number(submittedShift.hours_worked || 0).toFixed(1)}h ({submittedShift.start_hour_meter}h → {submittedShift.end_hour_meter}h)
             </p>
-            <p className="font-body text-sm text-[#F2F0EA]/70 mb-1">
-              Billable hours: {shiftBillableHours(submittedShift, events, siteConfig).toFixed(1)}h (8h shift minus Darkchild downtime)
+            <p className="font-body text-sm text-ops-text mb-1">
+              Billable hours: {shiftBillableHours(submittedShift, events, siteConfig).toFixed(1)}h
             </p>
             {(submittedShift.runtime_minutes > 0 || submittedShift.downtime_minutes > 0) && (
-              <p className="font-body text-xs text-[#F2F0EA]/45 mb-1">
+              <p className="font-body text-sm text-ops-muted mb-1">
                 Runtime {formatDurationMinutes(submittedShift.runtime_minutes || 0)} · Downtime {formatDurationMinutes(submittedShift.downtime_minutes || 0)}
               </p>
             )}
-            <p className="font-body text-sm text-[#F2F0EA]/60 mb-2">
+            <p className="font-body text-sm text-ops-muted mb-4">
               {getShiftStatus(submittedShift) === SHIFT.RESUBMITTED
                 ? "Waiting for supervisor to sign off."
-                : `Waiting for ${submittedShift.assigned_supervisor_name || "supervisor"} to sign this machine off. Choose the next machine below. Clock out when you leave site.`}
+                : `Waiting for ${submittedShift.assigned_supervisor_name || "supervisor"} to sign this machine off.`}
+              {clockedOutAfterSubmit
+                ? " You are clocked out."
+                : workSession
+                  ? " You are still on site."
+                  : ""}
             </p>
             <SupervisorWhatsAppButtons
               supervisors={siteSupervisors}
@@ -662,40 +712,40 @@ export function OperatorApp() {
                 refreshLocal();
               }}
             />
-            <button type="button" onClick={dismissSubmitted} className="w-full py-2 font-ui text-sm text-ops-muted">
-              Done
-            </button>
+            {clockedOutAfterSubmit || !workSession ? (
+              <Button type="button" variant="primary" size="lg" className="w-full mt-3 min-h-14 text-lg" onClick={dismissSubmitted}>
+                Done
+              </Button>
+            ) : (
+              <>
+                <Button type="button" variant="primary" size="lg" className="w-full mt-3 min-h-14 text-lg" onClick={() => setShowClockOutConfirm(true)}>
+                  <IconLeave /> Clock out
+                </Button>
+                <Button type="button" variant="secondary" size="lg" className="w-full mt-2" onClick={dismissSubmitted}>
+                  Next machine
+                </Button>
+              </>
+            )}
           </div>
         )}
 
         {!workSession && !showWelcome && (
-          <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
-            <div className="operator-group">
-              <p className="operator-group-label font-logo">Clock in</p>
-              <p className="operator-group-explain">This starts your time. It does not start a machine.</p>
-              <FormSection title="Supervisor on duty" description="Who will sign off the shifts you record today?" accent="#D4A017">
-                <SupervisorPicker
-                  supervisors={siteSupervisors}
-                  value={clockInSupervisorId}
-                  onChange={setClockInSupervisorId}
-                  suggestedId={suggestedSupervisor?.id}
-                />
-                {clockInSupervisorId && (
-                  <ChoiceHint>
-                    This person signs each machine. Clock in starts your time. Then you choose a machine.
-                  </ChoiceHint>
-                )}
-              </FormSection>
-              <FormSection title="Ready to work" description="Tap when you are on site." accent="#15803D">
-                <Button type="button" variant="primary" size="lg" className="w-full font-logo" onClick={handleClockIn} disabled={!!actionBusy || !clockInSupervisorId}>
-                  <IconClock /> {actionBusy === "clockin" ? "Clocking in…" : "Clock in"}
-                </Button>
-              </FormSection>
-            </div>
+          <div className="operator-work-panel rounded-2xl border border-ops-border bg-ops-card p-4 sm:p-5">
+            <p className="operator-group-explain">Starts your time. Does not start a machine.</p>
+            <SupervisorPicker
+              supervisors={siteSupervisors}
+              value={clockInSupervisorId}
+              onChange={setClockInSupervisorId}
+              suggestedId={suggestedSupervisor?.id}
+              label="Supervisor"
+            />
+            <Button type="button" variant="primary" size="lg" className="w-full min-h-14 text-lg mt-4" onClick={handleClockIn} disabled={!!actionBusy || !clockInSupervisorId}>
+              <IconClock /> {actionBusy === "clockin" ? "Clocking in…" : "Clock in"}
+            </Button>
           </div>
         )}
 
-        {workSession && !workMachine && !showWelcome && (
+        {workSession && !showWelcome && !submittedShift && (
           <OperatorMachineBoard
             machines={siteMachines}
             shifts={shifts}
@@ -704,12 +754,13 @@ export function OperatorApp() {
             workSession={workSession}
             inspections={inspections}
             siteConfig={siteConfig}
+            value={pickedMachineId}
             onPick={setPickedMachineId}
           />
         )}
 
         {workMachine && !submittedShift && !showWelcome && (
-          <div className="operator-work-panel rounded-3xl border border-ops-border bg-ops-card p-4 sm:p-5">
+          <div className="operator-work-panel rounded-2xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
                 machineStatus === "running"
@@ -735,54 +786,47 @@ export function OperatorApp() {
             )}
 
             {blocked && (
-              <p className="font-body text-base text-center text-ops-red">
-                {blockedByOther.operator_name} already has {workMachine.name} running. Choose another machine.
+              <p className="font-body text-base text-ops-red mb-2">
+                {blockedByOther.operator_name} already has {workMachine.name} running. Pick another machine above.
               </p>
             )}
 
-            {workSession && !blocked && !staleOwnShift && !sessionShift && !sessionDowntime && (
-              <FormSection
-                title="Who is in the cab?"
-                description="This name is the machine operator on the report. Your login is recorded separately."
-                accent="#F5C518"
-              >
-                <input
-                  value={cabName}
-                  onChange={(e) => setCabName(e.target.value)}
-                  onBlur={() => rememberUsualOperator(workMachine.id, cabName)}
-                  placeholder="Name of the person operating the machine"
-                  className="w-full bg-ops-black border border-ops-border p-4 rounded-xl text-ops-text text-lg"
-                />
-              </FormSection>
-            )}
-
             {workSession && !blocked && !staleOwnShift && !prestartDone && !sessionShift && !sessionDowntime && (
-              <>
-                <PreStartInspectionChecklist
-                  items={prestartItems}
-                  statusOptions={siteConfig.prestart_status_options}
-                  results={inspectionResults} remarks={inspectionRemarks} photos={inspectionPhotos}
-                  setResults={setInspectionResults} setRemarks={setInspectionRemarks} setPhotos={setInspectionPhotos}
-                  step={inspectionStep}
-                  setStep={setInspectionStep}
-                  onComplete={handleInspection}
-                  onReportProblem={({ item, remark }) => {
-                    setReportPrefill({
-                      area: "",
-                      description: remark ? `${item} — ${remark}` : item,
-                      priority: "High",
-                    });
-                    setShowReportIssue(true);
-                  }}
-                />
-              </>
+              <PreStartInspectionChecklist
+                items={prestartItems}
+                statusOptions={siteConfig.prestart_status_options}
+                results={inspectionResults} remarks={inspectionRemarks} photos={inspectionPhotos}
+                setResults={setInspectionResults} setRemarks={setInspectionRemarks} setPhotos={setInspectionPhotos}
+                step={inspectionStep}
+                setStep={setInspectionStep}
+                onComplete={handleInspection}
+                onReportProblem={({ item, remark }) => {
+                  setReportPrefill({
+                    area: "",
+                    description: remark ? `${item} — ${remark}` : item,
+                    priority: "High",
+                  });
+                  setShowReportIssue(true);
+                }}
+              />
             )}
 
             {workSession && !blocked && !staleOwnShift && prestartDone && !sessionShift && !sessionDowntime && (
               <div className="operator-group">
-                <p className="operator-group-label font-logo">Start machine</p>
-                <p className="operator-group-explain">Photo the hour meter, then tap Start machine. You can leave it running and choose another machine.</p>
-                <FormSection title="Opening hour meter" description={`Last signed-off reading: ${machineHourMeter}h.`} accent="#15803D">
+                <p className="operator-group-explain">Name the operator, photo the hour meter, then start.</p>
+                <label className="block mb-4">
+                  <span className="ops-field-label">Operator in the cab</span>
+                  <input
+                    value={cabName}
+                    onChange={(e) => setCabName(e.target.value)}
+                    onBlur={() => rememberUsualOperator(workMachine.id, cabName)}
+                    placeholder="Name on the report"
+                    className="w-full bg-ops-black border-2 border-ops-border p-4 rounded-xl text-ops-text text-lg"
+                  />
+                </label>
+                <label className="block mb-4">
+                  <span className="ops-field-label">Opening hour meter</span>
+                  <p className="font-body text-sm text-ops-muted mb-2">Last signed-off reading: {machineHourMeter}h</p>
                   <MeterPhoto
                     value={startHour}
                     onValue={setStartHour}
@@ -790,58 +834,55 @@ export function OperatorApp() {
                     onPhoto={(ref, preview) => { setStartPhotoRef(ref); setStartPhotoPreview(preview); setStartPhotoError(false); }}
                     showPhotoError={startPhotoError}
                   />
-                </FormSection>
+                </label>
+                {machineFab === "start" && (
+                  <Button type="button" variant="primary" size="lg" className="w-full min-h-14 text-lg" onClick={handleStart} disabled={actionBusy === "start"}>
+                    <IconPlay /> {actionBusy === "start" ? "Starting…" : "Start machine"}
+                  </Button>
+                )}
               </div>
             )}
 
             {sessionShift && !sessionDowntime && (
               <div className="operator-group">
-                <p className="operator-group-label font-logo">Machine running</p>
-                <p className="operator-group-explain">Leave it running and choose another machine, or finish this shift when the day on this machine is done.</p>
-                <FormSection title="Machine running" description="Your time is already running at the top." accent="#15803D">
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
-                      <p className="font-ui text-xs font-medium text-ops-muted">Opening meter</p>
-                      <p className="font-ui text-4xl font-bold text-ops-gold mt-1">{openingMeter}h</p>
-                    </div>
-                    <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
-                      <p className="font-ui text-xs font-medium text-ops-muted">Time running</p>
-                      <p className="font-ui text-4xl font-bold text-ops-green mt-1">{formatDurationSeconds(runningSeconds)}</p>
-                    </div>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
+                    <p className="font-ui text-sm text-ops-muted">Opening meter</p>
+                    <p className="font-ui text-3xl font-bold text-ops-gold mt-1">{openingMeter}h</p>
                   </div>
-                  {shiftDowntimeMin > 0 && (
-                    <p className="font-body text-sm text-ops-muted mb-3 text-center">Downtime this shift: {formatDurationMinutes(shiftDowntimeMin)}</p>
-                  )}
-                  <button type="button" onClick={() => setPickedMachineId("")} className="w-full mb-2 py-3 rounded-xl border border-[#F5C518] text-[#F5C518] font-logo">
-                    Choose another machine
-                  </button>
-                  <button type="button" onClick={openEndDay} className="w-full py-2 font-ui text-sm text-ops-muted underline underline-offset-2">
-                    Finish this shift
-                  </button>
-                </FormSection>
+                  <div className="bg-ops-black rounded-xl p-4 text-center border border-ops-border">
+                    <p className="font-ui text-sm text-ops-muted">Time running</p>
+                    <p className="font-ui text-3xl font-bold text-ops-green mt-1">{formatDurationSeconds(runningSeconds)}</p>
+                  </div>
+                </div>
+                {shiftDowntimeMin > 0 && (
+                  <p className="font-body text-sm text-ops-muted mb-3">Downtime this shift: {formatDurationMinutes(shiftDowntimeMin)}</p>
+                )}
+                <Button type="button" variant="stop" size="lg" className="w-full min-h-14 text-lg" onClick={() => setShowStop(true)}>
+                  <IconStop /> Stop machine
+                </Button>
+                <Button type="button" variant="secondary" size="lg" className="w-full mt-2" onClick={openEndDay}>
+                  Finish this shift
+                </Button>
               </div>
             )}
 
             {sessionShift && sessionDowntime && (
               <div className="operator-group">
-                <p className="operator-group-label font-logo">Machine stopped</p>
-                <p className="operator-group-explain">You are still on site. Restart the machine, or finish the shift.</p>
-                <FormSection title="Machine stopped" description={`Reason: ${sessionDowntime.reason}.`} accent="#B91C1C">
-                  <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{formatDurationSeconds(downtimeSeconds)} down</p>
-                  <button type="button" onClick={() => setPickedMachineId("")} className="w-full mb-2 py-3 rounded-xl border border-[#F5C518] text-[#F5C518] font-logo">
-                    Choose another machine
-                  </button>
-                  <button type="button" onClick={openEndDay} className="w-full py-2 font-ui text-sm text-ops-muted underline underline-offset-2">
-                    Finish this shift
-                  </button>
-                </FormSection>
+                <p className="font-ui text-3xl font-bold text-ops-text mb-4 text-center">{formatDurationSeconds(downtimeSeconds)} down</p>
+                <Button type="button" variant="primary" size="lg" className="w-full min-h-14 text-lg" onClick={() => setShowRestart(true)}>
+                  <IconPlay /> Restart machine
+                </Button>
+                <Button type="button" variant="secondary" size="lg" className="w-full mt-2" onClick={openEndDay}>
+                  Finish this shift
+                </Button>
               </div>
             )}
 
           </div>
         )}
 
-      {sheet === "pulse" && <ProductivityPulseScreen onClose={() => setSheet(null)} />}
+      {sheet === "pulse" && <RolePulse onClose={() => setSheet(null)} />}
 
       {sheet === "reports" && (
         <OperatorReportsModal
@@ -884,11 +925,10 @@ export function OperatorApp() {
             This looks like a mechanical stop. Report it as a problem so the supervisor and mechanic can track it?
           </p>
           <div className="grid grid-cols-2 gap-3">
-            <button type="button" onClick={() => setSuggestReport(null)} className="border border-[#2A2A2A] py-3 rounded-xl font-ui text-sm">Not now</button>
-            <button type="button" onClick={() => { setReportPrefill({ ...suggestReport, priority: "High" }); setSuggestReport(null); setShowReportIssue(true); }}
-              className="bg-[#EF4444] text-white py-3 rounded-xl font-ui font-semibold text-sm">
+            <Button type="button" variant="secondary" size="lg" className="w-full" onClick={() => setSuggestReport(null)}>Not now</Button>
+            <Button type="button" variant="stop" size="lg" className="w-full" onClick={() => { setReportPrefill({ ...suggestReport, priority: "High" }); setSuggestReport(null); setShowReportIssue(true); }}>
               Report a problem
-            </button>
+            </Button>
           </div>
         </Modal>
       )}
@@ -897,71 +937,77 @@ export function OperatorApp() {
       )}
       {showEarlyClockOut && (
         <Modal title="Clock out" color="yellow" onClose={() => { setShowEarlyClockOut(false); setEarlyClockOutReason(""); setEarlyClockOutNote(""); }}>
-          <FormSection step={1} title="Why are you leaving site?" description="This stops your working time. The machine was not started." accent="#F5C518">
-            <select
+          <label className="block mb-4">
+            <span className="ops-field-label">Reason</span>
+            <FieldSelect
               value={earlyClockOutReason}
-              onChange={(e) => setEarlyClockOutReason(e.target.value)}
-              className="w-full bg-[#0A0A0A] border p-4 rounded-xl text-[#F2F0EA] text-lg min-h-[60px]"
+              onChange={setEarlyClockOutReason}
+              placeholder="Select reason…"
             >
-              <option value="">Select reason…</option>
-              {EARLY_CLOCK_OUT_REASONS.map((r) => <option key={r}>{r}</option>)}
-            </select>
-            {earlyClockOutReason && (
-              <ChoiceHint>{statusGuide(EARLY_CLOCK_OUT_GUIDE, earlyClockOutReason)}</ChoiceHint>
-            )}
-          </FormSection>
-          <FormSection step={2} title="Details" description="Optional — add context for the supervisor." accent="#F5C518">
-            <VoiceInput value={earlyClockOutNote} onChange={setEarlyClockOutNote} placeholder="Details…" rows={2} />
-          </FormSection>
-          <button
+              {EARLY_CLOCK_OUT_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </FieldSelect>
+          </label>
+          <label className="block mb-4">
+            <span className="ops-field-label">Details</span>
+            <VoiceInput value={earlyClockOutNote} onChange={setEarlyClockOutNote} placeholder="Optional" rows={2} />
+          </label>
+          <Button
             type="button"
+            variant="primary"
+            size="lg"
+            className="w-full min-h-14 text-lg"
             onClick={handleEarlyClockOut}
             disabled={!earlyClockOutReason || !!actionBusy}
-            className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40"
           >
             {actionBusy === "clockout" ? "Clocking out…" : "Clock out"}
-          </button>
+          </Button>
         </Modal>
       )}
       {showStop && (
         <Modal title="Stop machine" color="red" onClose={() => setShowStop(false)}>
-          <FormSection step={1} title="Stop reason" description="Darkchild fixes the machine. Berlington covers wear. The site covers feed, weather, and waiting." accent="#EF4444">
-            <select value={stopReason} onChange={(e) => setStopReason(e.target.value)} className="w-full bg-[#0A0A0A] border p-4 rounded-xl text-[#F2F0EA] text-lg min-h-[60px]">
-              <option value="">Select reason…</option>
-              {stopGroups.map((group) => (
-                <optgroup key={group.owner} label={group.hint}>
-                  {group.reasons.map((x) => <option key={x} value={x}>{x}</option>)}
-                </optgroup>
+          <label className="block mb-4">
+            <span className="ops-field-label">Reason</span>
+            <FieldSelect
+              value={stopReason}
+              onChange={setStopReason}
+              placeholder="Select reason…"
+            >
+              {stopReasons.map((reason) => (
+                <option key={reason} value={reason}>{reason}</option>
               ))}
-            </select>
-            {stopReason && (
-              <ChoiceHint>
-                {statusGuide(STOP_REASON_GUIDE, stopReason)} Owner: {ownerForStopReasonMachine(stopReason, workMachine, siteConfig)}.
-              </ChoiceHint>
-            )}
-          </FormSection>
-          <FormSection step={2} title="Details" description="What happened? What was done?" accent="#EF4444">
-            <VoiceInput value={stopNote} onChange={setStopNote} placeholder="Details…" rows={2} />
-          </FormSection>
-          <button type="button" onClick={handleStop} disabled={!stopReason || !!actionBusy} className="w-full min-h-12 bg-[#EF4444] text-white rounded-xl font-ui font-semibold disabled:opacity-40">{actionBusy === "stop" ? "Stopping…" : "Stop machine"}</button>
+            </FieldSelect>
+          </label>
+          <label className="block mb-4">
+            <span className="ops-field-label">Details</span>
+            <VoiceInput value={stopNote} onChange={setStopNote} placeholder="What happened?" rows={2} />
+          </label>
+          <Button type="button" variant="stop" size="lg" className="w-full min-h-14 text-lg" onClick={handleStop} disabled={!stopReason || !!actionBusy}>
+            {actionBusy === "stop" ? "Stopping…" : "Stop machine"}
+          </Button>
         </Modal>
       )}
       {showRestart && (
         <Modal title="Restart machine" color="green" onClose={() => setShowRestart(false)}>
-          <FormSection step={1} title="Action taken" description="What was done to fix or resume work?" accent="#22C55E">
+          <FormSection title="Action taken" description="What was done to resume work?" accent="#22C55E">
             <VoiceInput value={restartNote} onChange={setRestartNote} placeholder="Action taken…" rows={3} />
           </FormSection>
-          <button type="button" onClick={handleRestart} disabled={!!actionBusy} className="w-full min-h-12 bg-[#22C55E] text-black rounded-xl font-ui font-semibold disabled:opacity-40">{actionBusy === "restart" ? "Restarting…" : "Restart machine"}</button>
+          <Button type="button" variant="primary" size="lg" className="w-full min-h-14 text-lg" onClick={handleRestart} disabled={!!actionBusy}>
+            {actionBusy === "restart" ? "Restarting…" : "Restart machine"}
+          </Button>
         </Modal>
       )}
       {showEndDay && (
         <Modal title="Finish shift" color="yellow" onClose={() => setShowEndDay(false)}>
-          <p className="font-body text-sm text-[#F2F0EA]/70 mb-4">This sends this machine’s shift for sign-off. You stay clocked in so you can record the next machine.</p>
+          <p className="font-body text-sm text-ops-muted mb-4">
+            {otherOpenShifts.length
+              ? "Send this machine for sign-off. Finish the other open machine before you clock out."
+              : "Send this machine, then clock out — same as you clocked in."}
+          </p>
           <div className="mb-4 px-4 py-3 rounded-xl bg-[#F5C518]/10 border border-[#F5C518]/40">
-            <p className="font-logo text-[10px] text-[#F5C518] tracking-wider mb-1">SUPERVISOR FOR THIS SHIFT</p>
-            <p className="font-logo text-base text-[#F2F0EA]">{shiftSupervisor?.name || "—"}</p>
+            <p className="font-ui text-sm font-semibold text-[#F5C518] mb-1">Supervisor</p>
+            <p className="font-ui text-base text-ops-text">{shiftSupervisor?.name || "—"}</p>
           </div>
-          <FormSection step={1} title="Closing hour meter" description="Photo of the meter is required. Type the reading from the photo." accent="#F5C518">
+          <FormSection title="Closing hour meter" description="Photo the meter, then type the reading." accent="#F5C518">
             <MeterPhoto
               value={endHour}
               onValue={setEndHour}
@@ -970,27 +1016,44 @@ export function OperatorApp() {
               showPhotoError={endPhotoError}
             />
           </FormSection>
-          <button type="button" onClick={handleEndDay} disabled={!!actionBusy || !shiftSupervisor?.id || !endHour || !endPhotoRef}
-            className="w-full min-h-12 bg-[#F5C518] text-black rounded-xl font-ui font-semibold disabled:opacity-40">
-            {actionBusy === "end" ? "Sending…" : "Send this machine’s shift"}
-          </button>
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            className="w-full min-h-14 text-lg"
+            onClick={() => handleEndDay(!otherOpenShifts.length)}
+            disabled={!!actionBusy || !shiftSupervisor?.id || !endHour || !endPhotoRef}
+          >
+            {actionBusy === "end" ? "Sending…" : otherOpenShifts.length ? "Send this machine’s shift" : "Send and clock out"}
+          </Button>
+          {!otherOpenShifts.length && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              className="w-full mt-2"
+              onClick={() => handleEndDay(false)}
+              disabled={!!actionBusy || !shiftSupervisor?.id || !endHour || !endPhotoRef}
+            >
+              Send, stay on site
+            </Button>
+          )}
         </Modal>
       )}
-      {machineFab && <div className="h-20" aria-hidden="true" />}
-      {machineFab === "start" && (
-        <button type="button" className="ops-fab ops-fab-start" onClick={handleStart} disabled={actionBusy === "start"}>
-          <IconPlay /> {actionBusy === "start" ? "Starting…" : "Start machine"}
-        </button>
-      )}
-      {machineFab === "stop" && (
-        <button type="button" className="ops-fab ops-fab-stop" onClick={() => setShowStop(true)}>
-          <IconStop /> Stop machine
-        </button>
-      )}
-      {machineFab === "restart" && (
-        <button type="button" className="ops-fab ops-fab-start" onClick={() => setShowRestart(true)}>
-          <IconPlay /> Restart machine
-        </button>
+      {showClockOutConfirm && (
+        <Modal title="Clock out" color="yellow" onClose={() => setShowClockOutConfirm(false)}>
+          <p className="font-body text-sm text-ops-muted mb-4">Stops your time on site.</p>
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            className="w-full min-h-14 text-lg"
+            onClick={confirmClockOut}
+            disabled={!!actionBusy}
+          >
+            <IconLeave /> {actionBusy === "clockout" ? "Clocking out…" : "Clock out"}
+          </Button>
+        </Modal>
       )}
     </AppPage>
   );

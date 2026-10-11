@@ -68,7 +68,7 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
         <select
           value={selected?.id || ""}
           onChange={(e) => setSelectedId(e.target.value)}
-          className="flex-1 min-w-[160px] bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl font-logo text-xs text-[#F2F0EA]"
+          className="flex-1 min-w-[160px] bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl font-logo text-xs text-[#F2F0EA]"
         >
           {sites.map((s) => (
             <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
@@ -77,31 +77,31 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
         <button
           type="button"
           onClick={() => setShowAdd(!showAdd)}
-          className="px-4 py-3 rounded-xl font-logo text-xs bg-[#22C55E] text-black font-bold"
+          className="px-4 py-3 rounded-2xl font-logo text-xs bg-[#22C55E] text-black font-bold"
         >
           + ADD SITE
         </button>
       </div>
 
       {showAdd && (
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 space-y-2">
+        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-2">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Site name"
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm"
           />
           <input
             value={newCode}
             onChange={(e) => setNewCode(e.target.value)}
             placeholder="Code (e.g. MLK)"
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm"
           />
           <button
             type="button"
             onClick={handleAddSite}
             disabled={busy || !newName || !newCode}
-            className="w-full bg-[#F5C518] text-black py-3 rounded-xl font-logo font-bold text-xs disabled:opacity-40"
+            className="w-full bg-[#F5C518] text-black py-3 rounded-2xl font-logo font-bold text-xs disabled:opacity-40"
           >
             CREATE SITE
           </button>
@@ -109,7 +109,7 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
       )}
 
       {selected && (
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 space-y-3">
+        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3">
           <p className="font-logo text-[10px] text-[#F5C518] tracking-wider">BUCKET SIZE</p>
           <BucketSizeEditor
             siteId={selected.id}
@@ -123,13 +123,13 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
           <input
             defaultValue={selected.name}
             onBlur={(e) => e.target.value !== selected.name && saveSite({ name: e.target.value })}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm"
           />
           <label className="block text-[10px] text-[#F2F0EA]/50">Code</label>
           <input
             defaultValue={selected.code}
             onBlur={(e) => e.target.value.toUpperCase() !== selected.code && saveSite({ code: e.target.value })}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm"
           />
           <label className="flex items-center gap-2 text-xs">
             <input
@@ -151,13 +151,13 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
               const v = Number(e.target.value);
               if (v !== settings.billing_cycle_start_day) saveSettings({ billing_cycle_start_day: v });
             }}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm"
           />
           <label className="block text-[10px] text-[#F2F0EA]/50">Primary machine (manager dashboard)</label>
           <select
             value={settings.primary_machine_id || ""}
             onChange={(e) => saveSettings({ primary_machine_id: e.target.value || null })}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
+            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA] text-sm"
           >
             <option value="">Auto (first / W2100)</option>
             {siteMachines.map((m) => (

@@ -1,5 +1,6 @@
 import { resolveMediaUrl } from "./media.js";
 import { DISPATCH_STATUS, dispatchStatus, tonnesLabel } from "./dispatchMetrics.js";
+import { reportPageStyles } from "../services/reports.js";
 
 function esc(value) {
   return String(value ?? "")
@@ -30,6 +31,22 @@ async function embedPhoto(ref) {
   }
 }
 
+async function resolveLogoDataUrl() {
+  try {
+    const res = await fetch("/logo.png");
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 function statusLine(row) {
   const status = dispatchStatus(row);
   if (status === DISPATCH_STATUS.SIGNED) return `Signed by ${row.signed_by_name || "supervisor"}`;
@@ -37,35 +54,110 @@ function statusLine(row) {
   return "Draft";
 }
 
-/** Printable daily dispatch report for the supervisor sign-off. */
+function dayLabel(row) {
+  const day = String(row?.dispatch_date || "").slice(0, 10);
+  if (!day) return "—";
+  const d = new Date(`${day}T12:00:00`);
+  return d.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Printable daily dispatch report — same page chrome as the operator daily report. */
 export async function dispatchDayReport(row, site) {
   const day = String(row?.dispatch_date || "").slice(0, 10);
-  const photo = await embedPhoto(row?.weighbridge_photo_ref || row?.weighbridge_photo);
+  const [photo, logoUrl] = await Promise.all([
+    embedPhoto(row?.weighbridge_photo_ref || row?.weighbridge_photo),
+    resolveLogoDataUrl(),
+  ]);
   const title = `Dispatch report · ${day}`;
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
-<style>
-  body { font-family: Inter, Arial, sans-serif; background: #fff; color: #1A1A1A; margin: 24px; }
-  h1 { font-size: 22px; letter-spacing: 0.08em; margin: 0 0 4px; }
-  .gold { color: #8A5A00; }
-  .muted { color: #5C5A54; font-size: 13px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
-  .cell { border: 1px solid #E8E6E0; border-radius: 12px; padding: 12px; }
-  .label { font-size: 11px; letter-spacing: 0.08em; color: #5C5A54; }
-  .value { font-size: 22px; margin-top: 4px; }
-  img { max-width: 100%; max-height: 360px; object-fit: contain; border: 1px solid #E8E6E0; border-radius: 12px; }
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Russo+One&display=swap" rel="stylesheet"/>
+<style>${reportPageStyles()}
+  .photos{display:grid;grid-template-columns:1fr;gap:16px;margin-top:10px}
+  .photos figure{margin:0;border:1px solid #D9D7D0}
+  .photos img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain;background:#fff}
+  .photos figcaption{padding:8px 10px;font-size:11px;color:#6B6960;background:#F2F0EA;border-top:1px solid #D9D7D0}
+  .signoff{margin-top:8px;padding:24px;background:#F2F0EA;border:1px solid #D9D7D0;border-top:3px solid #F5C518}
+  .signoff-head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:14px}
+  .signoff-head h2{margin:0;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#2A2A2A;font-weight:400}
+  .signoff-meta{font-size:12px;color:#57534E}
+  .signoff-meta p{margin:0 0 4px}
+  .signoff-meta strong{color:#2A2A2A;font-weight:600}
 </style></head><body>
-  <p class="gold">OPS · ${esc(site?.name || "Site")}</p>
-  <h1>DAILY DISPATCH</h1>
-  <p class="muted">${esc(day)} · ${esc(statusLine(row))} · Recorded by ${esc(row?.recorded_by_name || "Dispatch")}</p>
-  <div class="grid">
-    <div class="cell"><div class="label">WEIGHBRIDGE TONNES</div><div class="value">${esc(tonnesLabel(row?.tonnes_dispatched))}</div></div>
-    <div class="cell"><div class="label">TRUCKS</div><div class="value">${row?.trucks_dispatched ?? "—"}</div></div>
-    <div class="cell"><div class="label">SCREENED</div><div class="value">${esc(tonnesLabel(row?.tonnes_screened))}</div><div class="muted">${row?.excavator_buckets ?? "—"} excavator buckets${row?.excavator_bucket_tonnes ? ` × ${row.excavator_bucket_tonnes} t` : ""}</div></div>
-    <div class="cell"><div class="label">ON THE FLOOR</div><div class="value">${esc(tonnesLabel(row?.tonnes_on_floor))}</div><div class="muted">${row?.fel_buckets ?? "—"} FEL buckets${row?.fel_bucket_tonnes ? ` × ${row.fel_bucket_tonnes} t` : ""}, minus ${esc(tonnesLabel(row?.tonnes_dispatched))} dispatched</div></div>
-  </div>
-  ${photo ? `<img src="${photo}" alt="Weighbridge report"/>` : `<p class="muted">No weighbridge photo on this day.</p>`}
-  ${row?.supervisor_comment ? `<p>Supervisor note: ${esc(row.supervisor_comment)}</p>` : ""}
+<div class="page">
+  <header class="header">
+    <div class="header-row">
+      <div class="logo-wrap">
+        ${logoUrl
+    ? `<img src="${esc(logoUrl)}" alt="OPS" class="logo"/>`
+    : `<div class="logo-fallback">OPS</div>`}
+      </div>
+      <div class="header-text">
+        <h1 class="font-brand">Daily Dispatch Report</h1>
+        <p class="header-sub font-brand">${esc(site?.name || "Site")}</p>
+        <div class="header-meta">
+          <span>Recorded by · ${esc(row?.recorded_by_name || "Dispatch")}</span>
+          <span>${esc(statusLine(row))}</span>
+          <span>${esc(dayLabel(row))}</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="summary quad">
+      <div class="summary-cell highlight">
+        <div class="label">Weighbridge tonnes</div>
+        <div class="value font-brand">${esc(tonnesLabel(row?.tonnes_dispatched))}</div>
+        <div class="sub">${row?.trucks_dispatched == null ? "No trucks entered" : `${row.trucks_dispatched} trucks`}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">Trucks</div>
+        <div class="value font-brand">${row?.trucks_dispatched == null ? "—" : row.trucks_dispatched}</div>
+        <div class="sub">Weighbridge count</div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">Screened</div>
+        <div class="value font-brand">${esc(tonnesLabel(row?.tonnes_screened))}</div>
+        <div class="sub">${row?.excavator_buckets == null ? "No excavator buckets" : `${row.excavator_buckets} excavator buckets`}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">On the floor</div>
+        <div class="value font-brand">${esc(tonnesLabel(row?.tonnes_on_floor))}</div>
+        <div class="sub">${row?.fel_buckets == null ? "No FEL buckets" : `${row.fel_buckets} FEL buckets`} − dispatched</div>
+      </div>
+    </div>
+
+    <section>
+      <h2 class="font-brand">Weighbridge photo</h2>
+      ${photo
+    ? `<div class="photos"><figure><img src="${esc(photo)}" alt="Weighbridge report"/><figcaption>Weighbridge ticket · ${esc(day)}</figcaption></figure></div>`
+    : `<p class="note">No weighbridge photo on this day.</p>`}
+    </section>
+
+    <section>
+      <div class="signoff">
+        <div class="signoff-head">
+          <h2>Supervisor sign-off</h2>
+          <div class="signoff-meta">
+            <p><strong>Assigned:</strong> ${esc(row?.assigned_supervisor_name || "Supervisor")}</p>
+            <p><strong>Status:</strong> ${esc(statusLine(row))}</p>
+            ${row?.signed_at ? `<p><strong>Signed at:</strong> ${esc(new Date(row.signed_at).toLocaleString("en-ZA"))}</p>` : ""}
+          </div>
+        </div>
+        ${row?.supervisor_comment ? `<p class="note">Supervisor note: ${esc(row.supervisor_comment)}</p>` : ""}
+        <p class="note">Closing stock is the previous floor, plus FEL bucket tonnes, minus weighbridge tonnes dispatched. Days are not added together.</p>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>OPS Operations · ${esc(site?.name || "Site")}</span>
+      <span>Generated ${new Date().toLocaleString("en-ZA")}</span>
+    </footer>
+  </main>
+</div>
 </body></html>`;
+
   const sheets = [{
     name: "Dispatch",
     rows: [

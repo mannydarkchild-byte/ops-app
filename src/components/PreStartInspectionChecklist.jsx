@@ -71,8 +71,8 @@ export function PreStartInspectionChecklist({
 
   return (
     <FormSection
-      title="Pre-start check"
-      description="One check at a time. Walk the machine, mark this item, then tap Next."
+      title=""
+      description="Walk the machine. Mark this item, then tap Next."
       accent="#F5C518"
     >
       <p className="font-ui text-lg text-ops-text mb-2">
@@ -162,7 +162,7 @@ export function PreStartInspectionChecklist({
                 remark: remarks[item] || "",
                 photos: photoList,
               })}
-              className="mt-3 w-full min-h-[56px] py-3 rounded-2xl font-logo text-base bg-[#EF4444] text-white"
+              className="mt-3 w-full min-h-[56px] py-3 rounded-2xl font-ui text-base font-semibold bg-[#EF4444] text-white"
             >
               Report this as a problem
             </button>
@@ -174,7 +174,7 @@ export function PreStartInspectionChecklist({
         <Button type="button" variant="secondary" size="lg" onClick={goBack} disabled={index === 0}>
           Back
         </Button>
-        <Button type="button" variant="primary" size="lg" className="font-logo" onClick={goNext} disabled={!answered}>
+        <Button type="button" variant="primary" size="lg" onClick={goNext} disabled={!answered}>
           {last ? "Finish checks" : "Next"}
         </Button>
       </div>

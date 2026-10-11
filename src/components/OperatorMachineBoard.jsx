@@ -1,6 +1,15 @@
 import { SHIFT } from "../lib/constants.js";
 import { getShiftStatus, hasCompletedPrestart, shiftBelongsToWorkSession } from "../lib/utils.js";
 import { prestartItemsForMachine } from "../lib/siteConfig.js";
+import { FieldSelect } from "./ui/FieldSelect.jsx";
+
+const SHORT_STATUS = {
+  running: "Running",
+  stopped: "Stopped",
+  blocked: "In use",
+  ready: "Ready",
+  idle: "Needs pre-start",
+};
 
 function statusForMachine(machine, { shifts, user, workSession, inspections, siteConfig }) {
   const running = (shifts || []).find(
@@ -29,6 +38,11 @@ function statusForMachine(machine, { shifts, user, workSession, inspections, sit
   return { label: "Needs a pre-start", tone: "idle" };
 }
 
+function optionLabel(machine, status) {
+  const short = SHORT_STATUS[status.tone] || status.label;
+  return machine.code ? `${machine.name} (${machine.code}) — ${short}` : `${machine.name} — ${short}`;
+}
+
 export function OperatorMachineBoard({
   machines,
   shifts,
@@ -37,6 +51,7 @@ export function OperatorMachineBoard({
   workSession,
   inspections,
   siteConfig,
+  value,
   onPick,
 }) {
   if (!machines.length) {
@@ -47,49 +62,42 @@ export function OperatorMachineBoard({
     );
   }
 
+  const selected = machines.find((m) => m.id === value) || null;
+  const selectedStatus = selected
+    ? statusForMachine(selected, { shifts, user, workSession, inspections, siteConfig })
+    : null;
+
   return (
-    <div className="space-y-3">
-      <p className="font-body text-base text-ops-muted">
-        Tap a machine. Leave it running and choose the next one. Each machine gets its own report.
-      </p>
-      {machines.map((machine) => {
-        const status = statusForMachine(machine, {
-          shifts, user, workSession, inspections, siteConfig,
-        });
-        const running = (shifts || []).find(
-          (s) => s.machine_id === machine.id
-            && getShiftStatus(s) === SHIFT.RUNNING
-            && shiftBelongsToWorkSession(s, workSession, user?.id)
-        );
-        const stopped = running && (events || []).some(
-          (e) => e.shift_id === running.id && e.type === "STOP" && e.status === "open"
-        );
-        const label = stopped ? `Stopped · ${running.operator_name || "in the cab"}` : status.label;
-        const tone = stopped ? "stopped" : status.tone;
-        const toneClass = tone === "running"
-          ? "border-ops-green/50 text-ops-green"
-          : tone === "stopped"
-            ? "border-ops-red/50 text-ops-red"
-            : tone === "blocked"
-              ? "border-ops-red/40 text-ops-red"
-              : tone === "ready"
-                ? "border-[#F5C518]/50 text-[#F5C518]"
-                : "border-ops-border text-ops-muted";
-        return (
-          <button
-            key={machine.id}
-            type="button"
-            onClick={() => onPick(machine.id)}
-            className={`w-full text-left rounded-2xl border bg-ops-card p-4 active:border-[#F5C518] ${toneClass}`}
-          >
-            <p className="font-logo text-2xl text-ops-text">{machine.name}</p>
-            {machine.code && (
-              <p className="font-body text-sm text-ops-muted mt-0.5">{machine.code}</p>
-            )}
-            <p className="font-ui text-sm mt-2">{label}</p>
-          </button>
-        );
-      })}
-    </div>
+    <label className="block mb-4">
+      <span className="ops-field-label">Machine</span>
+      <FieldSelect
+        value={value || ""}
+        onChange={onPick}
+        placeholder="Choose a machine…"
+      >
+        {machines.map((machine) => {
+          const status = statusForMachine(machine, {
+            shifts, user, workSession, inspections, siteConfig,
+          });
+          const running = (shifts || []).find(
+            (s) => s.machine_id === machine.id
+              && getShiftStatus(s) === SHIFT.RUNNING
+              && shiftBelongsToWorkSession(s, workSession, user?.id)
+          );
+          const stopped = running && (events || []).some(
+            (e) => e.shift_id === running.id && e.type === "STOP" && e.status === "open"
+          );
+          const tone = stopped ? "stopped" : status.tone;
+          return (
+            <option key={machine.id} value={machine.id}>
+              {optionLabel(machine, { ...status, tone })}
+            </option>
+          );
+        })}
+      </FieldSelect>
+      {selectedStatus && (
+        <p className="font-body text-sm text-ops-muted mt-2">{selectedStatus.label}</p>
+      )}
+    </label>
   );
 }

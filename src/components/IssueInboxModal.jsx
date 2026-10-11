@@ -174,7 +174,7 @@ export function IssueInboxModal({
                 <button
                   type="button"
                   onClick={() => { setShowClose(false); setCloseNote(""); }}
-                  className={`${actionBtn} border border-[#2A2A2A] text-[#F2F0EA]`}
+                  className={`${actionBtn} border-2 border-ops-gold text-ops-text`}
                 >
                   CANCEL
                 </button>
@@ -203,7 +203,7 @@ export function IssueInboxModal({
               key={issue.id}
               type="button"
               onClick={() => setSelectedId(issue.id)}
-              className="block w-full text-left bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4 active:bg-[#1A1A1A]"
+              className="block w-full text-left bg-ops-inset border-2 border-ops-gold rounded-xl p-4 active:bg-ops-elevated"
             >
               <div className="flex justify-between items-start gap-3 mb-2">
                 <span className="font-logo text-base text-[#F2F0EA] leading-snug">{issue.area}</span>
@@ -224,7 +224,7 @@ export function IssueInboxModal({
   if (variant === "inline") return listContent;
 
   return (
-    <Modal title="PROBLEMS" color="red" onClose={onClose}>
+    <Modal title="Inbox" color="red" onClose={onClose}>
       {listContent}
     </Modal>
   );

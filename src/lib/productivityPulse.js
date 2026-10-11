@@ -1,7 +1,7 @@
 import { buildShiftActivityTimeline } from "./shiftMetrics.js";
 import { SHIFT } from "./constants.js";
 import { dedupeShifts, getShiftStatus } from "./utils.js";
-import { ownerForStopReasonMachine } from "./stopReasons.js";
+import { machineOwnerName, ownerForStopReasonMachine, stopOwnerRole } from "./stopReasons.js";
 
 function dayBounds(ref = new Date()) {
   const start = new Date(ref);
@@ -193,10 +193,33 @@ export function buildOwnerTotals(periods, machine, siteSettings) {
   const totals = {};
   for (const p of periods) {
     if (p.state !== "stopped") continue;
-    const owner = ownerForStopReasonMachine(p.reason, machine, siteSettings);
-    totals[owner] = (totals[owner] || 0) + Number(p.minutes || 0);
+    const role = stopOwnerRole(p.reason, siteSettings);
+    const owner = machineOwnerName(machine, role, siteSettings);
+    if (!totals[owner]) totals[owner] = { owner, role, minutes: 0 };
+    totals[owner].minutes += Number(p.minutes || 0);
   }
-  return Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  return Object.values(totals).sort((a, b) => b.minutes - a.minutes);
+}
+
+export function buildStopReasonTotals(periods, machine, siteSettings) {
+  const totals = {};
+  for (const p of periods) {
+    if (p.state !== "stopped" || Number(p.minutes || 0) < 1) continue;
+    const reason = p.reason || "Stop";
+    if (!totals[reason]) {
+      const role = stopOwnerRole(reason, siteSettings);
+      totals[reason] = {
+        reason,
+        owner: machineOwnerName(machine, role, siteSettings),
+        role,
+        minutes: 0,
+        count: 0,
+      };
+    }
+    totals[reason].minutes += Number(p.minutes || 0);
+    totals[reason].count += 1;
+  }
+  return Object.values(totals).sort((a, b) => b.minutes - a.minutes);
 }
 
 export function buildPulseSnapshot({
@@ -245,6 +268,7 @@ export function buildPulseSnapshot({
     periods,
     ...series,
     ownerTotals: buildOwnerTotals(periods, machine, siteSettings),
+    stopReasonTotals: buildStopReasonTotals(periods, machine, siteSettings),
     runningNow,
     openStop: openStop || null,
     latestStop: latestStop || null,

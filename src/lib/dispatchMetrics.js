@@ -1,4 +1,4 @@
-import { localDayKey } from "./utils.js";
+import { daysElapsedInPeriod, daysInPeriod, localDayKey } from "./utils.js";
 import { tonnesPerBucket } from "./siteConfig.js";
 
 export const DISPATCH_STATUS = {
@@ -200,6 +200,22 @@ export function summarizeDispatch(records, siteId, period, factors = {}) {
       ? `${tonnesLabel(todayRow.tonnes_dispatched)} · ${todayRow.trucks_dispatched ?? "—"} trucks`
       : "Nothing entered today",
   };
+}
+
+/** Cycle weighbridge target. An explicit cycle number wins; otherwise 1,000 t/day × days in the cycle. */
+export function cycleDispatchTargetTonnes(settings, period) {
+  const explicit = Number(settings?.cycle_dispatch_target_tonnes);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const daily = Number(settings?.daily_dispatch_target_tonnes);
+  const rate = Number.isFinite(daily) && daily > 0 ? daily : 1000;
+  const days = daysInPeriod(period);
+  return days > 0 ? rate * days : rate;
+}
+
+export function cycleDispatchPace(settings, period, now = new Date()) {
+  const daily = Number(settings?.daily_dispatch_target_tonnes);
+  const rate = Number.isFinite(daily) && daily > 0 ? daily : 1000;
+  return rate * daysElapsedInPeriod(period, now);
 }
 
 export { tonnesLabel, dayDetail };

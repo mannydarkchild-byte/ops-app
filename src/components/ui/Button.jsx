@@ -3,6 +3,8 @@ const VARIANT = {
   secondary: "bg-ops-card text-ops-text border border-ops-border hover:border-ops-gold/40",
   ghost: "bg-transparent text-ops-text/80 border border-transparent hover:bg-ops-card hover:border-ops-border",
   danger: "bg-ops-red/15 text-ops-red border border-ops-red/35 hover:bg-ops-red/25",
+  stop: "bg-ops-red text-white hover:bg-ops-red/90 border border-ops-red",
+  whatsapp: "bg-[#25D366] text-white hover:bg-[#1ebe5d] border border-[#25D366]",
   sync: "bg-ops-card text-ops-text border border-ops-border hover:border-ops-teal/50",
   teal: "bg-ops-teal text-white border border-ops-teal hover:bg-ops-teal/90",
 };

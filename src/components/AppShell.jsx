@@ -89,7 +89,7 @@ export function SyncDot() {
   );
 }
 
-function SyncButton({ roomy = false }) {
+function SyncButton({ roomy = false, compact = false }) {
   const { syncState, syncNow } = useOps();
   const meta = SYNC_META[syncState.status] || SYNC_META.idle;
   const caption = syncControlLabel(syncState);
@@ -99,7 +99,7 @@ function SyncButton({ roomy = false }) {
       variant="sync"
       size={roomy ? "md" : "sm"}
       onClick={() => syncNow()}
-      className={roomy ? "flex-1 min-h-12 text-base" : "max-w-[46vw] sm:max-w-none shrink-0"}
+      className={roomy ? "flex-1 min-h-12 text-base" : compact ? "shrink-0 max-w-[9.75rem]" : "max-w-[46vw] sm:max-w-none shrink-0"}
       title={err ? parseSyncError(err).body : (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Send and refresh from server")}
       aria-label={err ? "Sync failed. Tap to retry." : `${caption}. Tap to update.`}
     >
@@ -218,7 +218,7 @@ export function ThemeToggle({ className = "" }) {
   );
 }
 
-export function AppHeader({ right, subtitle, menuItems = [] }) {
+export function AppHeader({ right, subtitle, context, menuItems = [], openHeaderTools = false }) {
   const { user, signOut } = useOps();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -229,7 +229,7 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
   const displayName = (user?.name || user?.email?.split("@")[0] || "User").split(/\s+/)[0];
 
   useEffect(() => {
-    if (!menuOpen) return undefined;
+    if (!menuOpen || openHeaderTools) return undefined;
     const closeIfOutside = (event) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
@@ -261,24 +261,43 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
               {displayName}
               <span className={`ml-1.5 font-ui text-xs capitalize ${colors.text}`}>{roleLabel}</span>
             </p>
+            {context && (
+              <p className="font-body text-xs text-ops-muted truncate leading-tight">{context}</p>
+            )}
           </div>
         </div>
-        <button
-          ref={menuButtonRef}
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-expanded={menuOpen}
-          aria-label="Account menu"
-          className="w-10 h-10 rounded-xl border border-ops-border bg-ops-card text-ops-text flex items-center justify-center shrink-0"
-        >
-          <span className="flex flex-col gap-1" aria-hidden>
-            <span className="block w-4 h-0.5 bg-current" />
-            <span className="block w-4 h-0.5 bg-current" />
-            <span className="block w-4 h-0.5 bg-current" />
-          </span>
-        </button>
+        {openHeaderTools ? (
+          <div className="flex items-center gap-2 shrink-0">
+            <SyncButton compact />
+            <ThemeToggle className="!w-10 !h-10" />
+            <button
+              type="button"
+              onClick={signOut}
+              title="Leave the app — this is not clock out"
+              aria-label="Leave app"
+              className="w-10 h-10 rounded-xl border border-ops-border bg-ops-card text-ops-muted hover:text-ops-red flex items-center justify-center"
+            >
+              <IconOut />
+            </button>
+          </div>
+        ) : (
+          <button
+            ref={menuButtonRef}
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-label="Account menu"
+            className="w-10 h-10 rounded-xl border border-ops-border bg-ops-card text-ops-text flex items-center justify-center shrink-0"
+          >
+            <span className="flex flex-col gap-1" aria-hidden>
+              <span className="block w-4 h-0.5 bg-current" />
+              <span className="block w-4 h-0.5 bg-current" />
+              <span className="block w-4 h-0.5 bg-current" />
+            </span>
+          </button>
+        )}
       </div>
-      {menuOpen && (
+      {!openHeaderTools && menuOpen && (
         <div ref={menuRef} className="absolute right-3 top-full z-40 w-64 rounded-xl border border-ops-border bg-ops-card shadow-ops-sm p-2 space-y-1">
           {menuItems.length > 0 && (
             <div className="pb-1 mb-1 border-b border-ops-border">
@@ -321,8 +340,11 @@ export function AppHeader({ right, subtitle, menuItems = [] }) {
 
 function TabGlyph({ id }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
-  if (id === "stock" || id === "requests") {
+  if (id === "stock") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 8h16v12H4z" /><path d="M8 8V6a4 4 0 0 1 8 0v2" /></svg>;
+  }
+  if (id === "requests") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><rect x="4" y="6" width="16" height="12" rx="3" /><path d="m4 9 8 5 8-5" /></svg>;
   }
   if (id === "expenses") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M6 4h12v16H6z" /><path d="M9 8h6M9 12h6M9 16h4" /></svg>;
@@ -330,14 +352,32 @@ function TabGlyph({ id }) {
   if (id === "dispatch") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M3 7h13l5 5-5 5H3z" /><path d="M8 12h6" /></svg>;
   }
+  if (id === "live" || id === "home" || id === "dashboard") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 11.5 12 4l8 7.5V20H4z" /><path d="M9 20v-6h6v6" /></svg>;
+  }
+  if (id === "today") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /></svg>;
+  }
+  if (id === "money") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="12" cy="12" r="2.4" /></svg>;
+  }
+  if (id === "setup") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 7h16M4 12h16M4 17h16" /><path d="M8 5v4M15 10v4M10 15v4" /></svg>;
+  }
   if (id === "pulse") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M3 12h4l2-6 4 12 2-6h6" /></svg>;
   }
   if (id === "reports" || id === "inspections") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M7 3h8l4 4v14H7z" /><path d="M15 3v4h4M10 12h6M10 16h6" /></svg>;
   }
-  if (id === "inbox" || id === "issues") {
-    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 6h16v12H4z" /><path d="m4 8 8 6 8-6" /></svg>;
+  if (id === "diesel" || id === "fuel") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><rect x="4" y="4" width="11" height="16" rx="3" /><path d="M15 11h1.5a2 2 0 0 1 2 2v4a1.5 1.5 0 0 0 3 0V10L19 7.5" /><path d="M7 8h5" /></svg>;
+  }
+  if (id === "inbox") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><rect x="4" y="6" width="16" height="12" rx="3" /><path d="m4 9 8 5 8-5" /></svg>;
+  }
+  if (id === "issues") {
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M12 8v5" /><path d="M12 16.5h.01" /></svg>;
   }
   if (id === "more") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><circle cx="6" cy="12" r="1.2" fill="currentColor" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /><circle cx="18" cy="12" r="1.2" fill="currentColor" /></svg>;
@@ -349,7 +389,7 @@ function TabGlyph({ id }) {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><circle cx="9" cy="8" r="3" /><path d="M3 19c1-3 3.2-4.5 6-4.5S14 16 15 19" /><circle cx="17" cy="9" r="2.2" /><path d="M16 14.6c2.2.3 3.8 1.6 4.5 4.4" /></svg>;
   }
   if (id === "sites") {
-    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M4 20V9l8-5 8 5v11" /><path d="M9 20v-6h6v6" /></svg>;
+    return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M12 21s7-6.4 7-11.2A7 7 0 0 0 5 9.8C5 14.6 12 21 12 21z" /><circle cx="12" cy="10" r="2.2" /></svg>;
   }
   if (id === "repairs") {
     return <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...common}><path d="M14 7a4 4 0 0 0-5.7 5.5L4 17l3 3 4.5-4.3A4 4 0 0 0 17 10l-3 3-2-2 2-4z" /></svg>;
@@ -359,7 +399,7 @@ function TabGlyph({ id }) {
 
 /**
  * Fixed bottom navigation. tabs: { id, label, badge? }.
- * Supervisor uses six (Live, Pulse, Sign off, Problems, Reports, More).
+ * Supervisor uses four (Problems, Home, Pulse, Reports).
  */
 export function AppTabBar({ tabs, activeTab, onTabChange }) {
   if (!tabs?.length) return null;
@@ -410,12 +450,13 @@ export function AppPage({
   banner,
   outdoor = false,
   menuItems = [],
+  openHeaderTools = false,
 }) {
   const hasTabs = Boolean(tabs?.length);
   return (
     <div className={`min-h-screen bg-ops-black text-ops-text ${outdoor ? "operator-outdoor" : ""} ${hasTabs ? "pb-24" : "pb-8 mobile-safe-bottom"}`}>
       {alert}
-      <AppHeader subtitle={subtitle} context={context} showSite={showSite} menuItems={menuItems} />
+      <AppHeader subtitle={subtitle} context={context} showSite={showSite} menuItems={menuItems} openHeaderTools={openHeaderTools} />
       <OfflineBanner />
       <SyncQueueHint hasTabBar={hasTabs} />
       {banner}

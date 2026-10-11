@@ -4,6 +4,7 @@ import { getShiftStatus } from "../lib/utils.js";
 import { deleteOwnShift, replaceShiftMeterPhoto, submitOwnOpenShift, updateOwnShift } from "../services/workflows.js";
 import { MeterPhoto } from "./ui/MeterPhoto.jsx";
 import { SupervisorPicker } from "./SupervisorPicker.jsx";
+import { Button } from "./ui/Button.jsx";
 
 function toLocalInput(iso) {
   if (!iso) return "";
@@ -97,46 +98,47 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
   return (
     <div className="mt-3 space-y-2">
       {!open ? (
-        <div className="flex items-center justify-between gap-3">
-          <button
+        <div className="flex items-center gap-2">
+          <Button
             type="button"
+            variant={isOpenShift ? "primary" : "secondary"}
+            size="lg"
+            className="flex-1"
             onClick={() => setOpen(true)}
-            className={isOpenShift
-              ? "min-h-12 px-4 rounded-xl bg-[#F5C518] text-black font-ui text-sm font-semibold"
-              : "py-2 font-ui text-sm text-[#F5C518] underline underline-offset-2"}
           >
             {isOpenShift ? "Finish leftover" : "Edit shift"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="danger"
+            size="lg"
             onClick={remove}
             disabled={!!busy}
-            className="py-2 font-ui text-sm text-[#EF4444] disabled:opacity-40"
           >
             {busy === "delete" ? "Removing…" : "Delete"}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4 text-left">
-          <p className="font-logo text-[#F5C518] mb-3">{isOpenShift ? "Finish this leftover shift" : "Edit this shift"}</p>
+          <p className="font-ui font-semibold text-[#F5C518] mb-3">{isOpenShift ? "Finish this leftover shift" : "Edit this shift"}</p>
           <label className="block mb-3">
-            <span className="font-logo text-xs text-[#F2F0EA]/70">Opening meter</span>
+            <span className="ops-field-label">Opening meter</span>
             <input value={startMeter} onChange={(e) => setStartMeter(e.target.value)} inputMode="decimal" className="w-full mt-1 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA]" />
           </label>
           <label className="block mb-3">
-            <span className="font-logo text-xs text-[#F2F0EA]/70">Closing meter</span>
+            <span className="ops-field-label">Closing meter</span>
             <input value={endMeter} onChange={(e) => setEndMeter(e.target.value)} inputMode="decimal" className="w-full mt-1 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA]" />
           </label>
           <label className="block mb-3">
-            <span className="font-logo text-xs text-[#F2F0EA]/70">Started</span>
+            <span className="ops-field-label">Started</span>
             <input type="datetime-local" value={startedAt} onChange={(e) => setStartedAt(e.target.value)} className="w-full mt-1 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA]" />
           </label>
           <label className="block mb-3">
-            <span className="font-logo text-xs text-[#F2F0EA]/70">Ended</span>
+            <span className="ops-field-label">Ended</span>
             <input type="datetime-local" value={endedAt} onChange={(e) => setEndedAt(e.target.value)} className="w-full mt-1 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA]" />
           </label>
           <label className="block mb-3">
-            <span className="font-logo text-xs text-[#F2F0EA]/70">Notes</span>
+            <span className="ops-field-label">Notes</span>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full mt-1 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA]" />
           </label>
           {supervisors.length > 0 && (
@@ -146,13 +148,15 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
           )}
           <div className="mb-3">
             {!photoSide ? (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
+                className="w-full"
                 onClick={() => setPhotoSide("closing")}
-                className="font-ui text-sm text-[#F5C518] underline underline-offset-2"
               >
                 Replace a blurry meter photo
-              </button>
+              </Button>
             ) : (
               <>
                 <p className="font-ui text-xs text-[#F2F0EA]/70 mb-2">Clearer meter photo</p>
@@ -187,12 +191,12 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
             <p className="font-body text-[#EF4444] mb-2">No supervisor on this phone. Ask admin to add one before you send this.</p>
           )}
           {error && <p className="font-body text-[#EF4444] mb-2">{error}</p>}
-          <button type="button" disabled={!!busy} onClick={save} className="w-full bg-[#F5C518] text-black py-4 rounded-xl font-logo font-bold disabled:opacity-40">
+          <Button type="button" variant="primary" size="lg" className="w-full min-h-14 text-lg" disabled={!!busy} onClick={save}>
             {busy === "save" ? "Saving…" : isOpenShift ? "Send for sign-off" : "Save changes"}
-          </button>
-          <button type="button" onClick={() => setOpen(false)} className="w-full mt-2 border border-[#2A2A2A] text-[#F2F0EA]/70 py-3 rounded-xl font-logo">
+          </Button>
+          <Button type="button" variant="secondary" size="lg" className="w-full mt-2" onClick={() => setOpen(false)}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
       {!open && error && <p className="font-body text-[#EF4444]">{error}</p>}
