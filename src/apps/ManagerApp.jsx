@@ -305,11 +305,6 @@ export function ManagerApp() {
     [warriorShifts]
   );
 
-  const dualSignedCount = useMemo(
-    () => signedReports.filter((s) => s.site_signature_name || s.site_signed_at).length,
-    [signedReports]
-  );
-
   const currentShift = useMemo(() => currentShiftWindow(), []);
 
   const signedReports = useMemo(
@@ -322,6 +317,11 @@ export function ManagerApp() {
       .filter((s) => !signedPeriod || inPeriod(s.verified_at || s.ended_at, signedPeriod)))
       .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0)),
     [warriorShifts, signedPeriod]
+  );
+
+  const dualSignedCount = useMemo(
+    () => signedReports.filter((s) => s.site_signature_name || s.site_signed_at).length,
+    [signedReports]
   );
 
   const filteredExpenses = useMemo(
