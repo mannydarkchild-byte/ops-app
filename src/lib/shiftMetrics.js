@@ -266,8 +266,15 @@ export function buildShiftActivityTimeline(shift, events) {
       boundaries.push({ t: stopAt, state: "stopped", reason: e.reason, note: e.note });
       if (e.restarted_at) {
         boundaries.push({ t: new Date(e.restarted_at).getTime(), state: "running" });
-      } else if (e.status === "closed" && e.updated_at) {
-        boundaries.push({ t: new Date(e.updated_at).getTime(), state: "running" });
+      } else if (e.status === "closed") {
+        // Closed without a restart stamp (e.g. auto-closed at end of day):
+        // end it from its recorded downtime. Never use updated_at — that is
+        // a metadata touch (sync/backfill), not a machine event, and it once
+        // turned a 1-minute end-of-day stop into 332 phantom hours.
+        const mins = Number(e.downtime_minutes);
+        if (Number.isFinite(mins) && mins >= 0) {
+          boundaries.push({ t: stopAt + Math.round(mins * 60000), state: "running" });
+        }
       }
     }
   }
