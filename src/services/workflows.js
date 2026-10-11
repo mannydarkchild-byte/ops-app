@@ -1181,7 +1181,7 @@ async function writeDispatchRow(user, site, dispatch, factors, { requireComplete
   if (!site?.id) throw new Error("No site");
   const fields = readDispatch(dispatch, factors, { requireComplete });
   const day = dispatch.date || localDayKey();
-  const balance = previewFloor(await readTable("site_dispatch"), site.id, day, fields.fel_tonnes, fields.tonnes_dispatched);
+  const balance = previewFloor(await readTable("site_dispatch"), site.id, day, fields.fel_tonnes, fields.tonnes_dispatched, factors);
   fields.tonnes_on_floor = balance.closing;
   delete fields.fel_tonnes;
   const now = nowISO();

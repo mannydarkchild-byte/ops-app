@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createSite, updateSite, updateSiteSettings } from "../../services/admin.js";
 import { pickSiteSettings } from "../../lib/siteConfig.js";
+import { BucketSizeEditor } from "../BucketSizeEditor.jsx";
 
 export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAlert }) {
   const [selectedId, setSelectedId] = useState(sites[0]?.id || "");
@@ -109,7 +110,15 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
 
       {selected && (
         <div className="bg-[#141414] border border-[#2A2A2A] rounded-xl p-4 space-y-3">
-          <p className="font-logo text-[10px] text-[#F5C518] tracking-wider">SITE DETAILS</p>
+          <p className="font-logo text-[10px] text-[#F5C518] tracking-wider">BUCKET SIZE</p>
+          <BucketSizeEditor
+            siteId={selected.id}
+            settings={settings}
+            onSaved={onSaved}
+            showAlert={showAlert}
+          />
+
+          <p className="font-logo text-[10px] text-[#F5C518] tracking-wider pt-2">SITE DETAILS</p>
           <label className="block text-[10px] text-[#F2F0EA]/50">Name</label>
           <input
             defaultValue={selected.name}
@@ -156,39 +165,6 @@ export function AdminSitesPanel({ sites, machines, siteSettings, onSaved, showAl
             ))}
           </select>
           <p className="text-[10px] text-[#F2F0EA]/40">{siteMachines.length} active machine(s) on this site</p>
-
-          <p className="font-logo text-[10px] text-[#F5C518] tracking-wider pt-2">BUCKET SIZE</p>
-          <p className="text-[10px] text-[#F2F0EA]/40">Used by Dispatch to turn bucket counts into tonnes. Leave blank until you know the size. A later change does not rewrite days already saved.</p>
-          <label className="block text-[10px] text-[#F2F0EA]/50">Tonnes per excavator bucket</label>
-          <input
-            type="number"
-            min={0}
-            step="0.01"
-            placeholder="Not set"
-            defaultValue={settings.excavator_bucket_tonnes ?? ""}
-            key={`ex-${selected.id}-${settings.excavator_bucket_tonnes ?? ""}`}
-            onBlur={(e) => {
-              const raw = e.target.value.trim();
-              const next = raw === "" ? null : Number(raw);
-              if (next !== settings.excavator_bucket_tonnes) saveSettings({ excavator_bucket_tonnes: next });
-            }}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
-          />
-          <label className="block text-[10px] text-[#F2F0EA]/50">Tonnes per FEL bucket</label>
-          <input
-            type="number"
-            min={0}
-            step="0.01"
-            placeholder="Not set"
-            defaultValue={settings.fel_bucket_tonnes ?? ""}
-            key={`fel-${selected.id}-${settings.fel_bucket_tonnes ?? ""}`}
-            onBlur={(e) => {
-              const raw = e.target.value.trim();
-              const next = raw === "" ? null : Number(raw);
-              if (next !== settings.fel_bucket_tonnes) saveSettings({ fel_bucket_tonnes: next });
-            }}
-            className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded text-[#F2F0EA] text-sm"
-          />
         </div>
       )}
     </div>

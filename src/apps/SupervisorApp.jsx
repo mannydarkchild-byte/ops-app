@@ -905,7 +905,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
             <DashboardKpi label={HOUR_LABELS.diesel} value={`${dashboardStats.litres.toFixed(1)} L`} sub={dashboardStats.machineHours > 0 ? `${(dashboardStats.litres / dashboardStats.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(dashboardDetails.diesel)} />
             <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(dashboardStats.downtimeMin)} sub="Stopped time on this machine" color="#EF4444" onClick={() => setKpiDetail(dashboardDetails.downtime)} />
             </div>
-            <DispatchKpis records={siteDispatch} siteId={user?.site_id} period={billingPeriod} onOpen={setKpiDetail} />
+            <DispatchKpis records={siteDispatch} siteId={user?.site_id} period={billingPeriod} factors={siteConfig} onOpen={setKpiDetail} />
           </div>
         )}
 

@@ -67,7 +67,7 @@ export function DispatchDayForm({
   const screened = bucketTonnes(excavatorBuckets, factors.excavator_bucket_tonnes);
   const felTonnes = bucketTonnes(felBuckets, factors.fel_bucket_tonnes);
   const dispatchedNow = tonnes === "" || tonnes == null || !Number.isFinite(Number(tonnes)) ? null : Number(tonnes);
-  const floorPreview = previewFloor(records, siteId, date, felTonnes, dispatchedNow);
+  const floorPreview = previewFloor(records, siteId, date, felTonnes, dispatchedNow, factors);
   const floor = floorPreview.closing;
 
   const run = async (key, fn) => {
@@ -89,7 +89,7 @@ export function DispatchDayForm({
         <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">
           {factors.excavator_bucket_tonnes && factors.fel_bucket_tonnes
             ? `Excavator ${factors.excavator_bucket_tonnes} t a bucket · FEL ${factors.fel_bucket_tonnes} t a bucket.`
-            : "Bucket size is not on this phone yet. Tap Update after admin saves it."}
+            : "Set tonnes per excavator bucket and tonnes per FEL bucket in Admin or Manager, under More → Bucket size."}
         </p>
       </div>
 

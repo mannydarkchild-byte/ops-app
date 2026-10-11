@@ -36,6 +36,7 @@ import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.j
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
+import { BucketSizeEditor } from "../components/BucketSizeEditor.jsx";
 
 
 
@@ -293,7 +294,7 @@ export function AdminApp() {
               <DashboardKpi label={HOUR_LABELS.diesel} value={formatAdminMetric(machineDash.litres, "litres")} sub={machineDash.machineHours > 0 ? `${(machineDash.litres / machineDash.machineHours).toFixed(2)} L per machine hour` : "This cycle"} color="#F5C518" onClick={() => setKpiDetail(machineDash.details.diesel)} />
             </div>
 
-            <DispatchKpis records={siteDispatch} siteId={activeSite?.id} period={billingPeriod} onOpen={setKpiDetail} />
+            <DispatchKpis records={siteDispatch} siteId={activeSite?.id} period={billingPeriod} factors={getSettingsForSite(activeSite?.id)} onOpen={setKpiDetail} />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <DashboardKpi label="Pending sign-off" value={dashboard.overview.pendingVerify} sub="All machines · awaiting supervisor" color="#00A4A6" />
@@ -379,6 +380,7 @@ export function AdminApp() {
         {tab === "more" && !moreView && (
           <MoreMenu
             items={[
+              { label: "Bucket size", onClick: () => setMoreView("buckets") },
               { label: "Machines", onClick: () => setMoreView("machines") },
               { label: "Checklists", onClick: () => setMoreView("checklists") },
               { label: "Expenses", onClick: () => setMoreView("expenses") },
@@ -392,6 +394,15 @@ export function AdminApp() {
           <button type="button" onClick={() => setMoreView(null)} className="mb-3 font-ui text-sm text-[#F5C518]">
             Back
           </button>
+        )}
+
+        {tab === "more" && moreView === "buckets" && (
+          <BucketSizeEditor
+            siteId={activeSite?.id}
+            settings={getSettingsForSite(activeSite?.id)}
+            onSaved={refreshLocal}
+            showAlert={showAlert}
+          />
         )}
 
         {tab === "more" && moreView === "checklists" && (

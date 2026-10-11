@@ -2,10 +2,10 @@ import { useMemo } from "react";
 import { DashboardKpi } from "./DashboardKpi.jsx";
 import { summarizeDispatch, tonnesLabel } from "../lib/dispatchMetrics.js";
 
-export function DispatchKpis({ records, siteId, period, onOpen }) {
+export function DispatchKpis({ records, siteId, period, factors = {}, onOpen }) {
   const summary = useMemo(
-    () => summarizeDispatch(records, siteId, period),
-    [records, siteId, period]
+    () => summarizeDispatch(records, siteId, period, factors),
+    [records, siteId, period, factors]
   );
   const today = summary.todayLabel;
 

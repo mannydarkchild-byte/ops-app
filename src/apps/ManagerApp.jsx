@@ -28,6 +28,7 @@ import { ProductivityPulseScreen } from "../components/ProductivityPulseScreen.j
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
+import { BucketSizeEditor } from "../components/BucketSizeEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
 import * as wf from "../services/workflows.js";
 
@@ -73,6 +74,7 @@ export function ManagerApp() {
   const [kpiDetail, setKpiDetail] = useState(null);
   const [reportPreview, setReportPreview] = useState(null);
   const [showStopOwners, setShowStopOwners] = useState(false);
+  const [showBucketSize, setShowBucketSize] = useState(false);
   const [focusMachineId, setFocusMachineId] = useState("");
   const showAlert = (title, message, type = "info") =>
     setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
@@ -499,7 +501,7 @@ export function ManagerApp() {
               />
             </div>
 
-            <DispatchKpis records={siteDispatch} siteId={user?.site_id || activeSite?.id} period={billingPeriod} onOpen={setKpiDetail} />
+            <DispatchKpis records={siteDispatch} siteId={user?.site_id || activeSite?.id} period={billingPeriod} factors={siteConfig} onOpen={setKpiDetail} />
 
             {fleetStatus && <WarriorStatusCard fleet={fleetStatus} workSessions={workSessions} profiles={profiles} />}
 
@@ -565,6 +567,7 @@ export function ManagerApp() {
         {tab === "more" && (
           <MoreMenu
             items={[
+              { label: "Bucket size", onClick: () => setShowBucketSize(true) },
               { label: "Stop reasons and owners", onClick: () => setShowStopOwners(true) },
               { label: "Backdate hour reading", onClick: () => setShowBackdate(true) },
             ]}
@@ -826,6 +829,17 @@ export function ManagerApp() {
           sheets={reportPreview.sheets}
           onClose={() => setReportPreview(null)}
         />
+      )}
+
+      {showBucketSize && (
+        <Modal title="BUCKET SIZE" color="yellow" onClose={() => setShowBucketSize(false)}>
+          <BucketSizeEditor
+            siteId={user?.site_id || activeSite?.id}
+            settings={siteConfig}
+            onSaved={async () => { await refreshLocal(); setShowBucketSize(false); }}
+            showAlert={showAlert}
+          />
+        </Modal>
       )}
 
       {showStopOwners && (

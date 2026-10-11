@@ -1,4 +1,5 @@
 import { localDayKey } from "./utils.js";
+import { tonnesPerBucket } from "./siteConfig.js";
 
 export const DISPATCH_STATUS = {
   DRAFT: "draft",
@@ -24,12 +25,30 @@ function roundTonnes(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
+function eachFor(row, key, fallback) {
+  return tonnesPerBucket(row?.[key]) ?? tonnesPerBucket(fallback);
+}
+
+export function screenedTonnes(row, factors = {}) {
+  const computed = bucketTonnes(row?.excavator_buckets, eachFor(row, "excavator_bucket_tonnes", factors.excavator_bucket_tonnes));
+  if (computed != null) return computed;
+  const stored = Number(row?.tonnes_screened);
+  return row?.tonnes_screened == null || row?.tonnes_screened === "" || !Number.isFinite(stored) ? null : stored;
+}
+
+function sumKnown(values) {
+  const known = values.filter((n) => n != null && Number.isFinite(n));
+  if (!known.length) return null;
+  return Math.round(known.reduce((sum, n) => sum + n, 0) * 100) / 100;
+}
+
 /** Closing stock: previous floor + FEL tonnes − weighbridge tonnes. */
-export function runningFloor(rows) {
+export function runningFloor(rows, factors = {}) {
   const sorted = [...(rows || [])].sort((a, b) => dayKey(a.dispatch_date).localeCompare(dayKey(b.dispatch_date)));
   let opening = 0;
   return sorted.map((row) => {
-    const added = bucketTonnes(row.fel_buckets, row.fel_bucket_tonnes);
+    const felEach = eachFor(row, "fel_bucket_tonnes", factors.fel_bucket_tonnes);
+    const added = bucketTonnes(row.fel_buckets, felEach);
     const removed = row.tonnes_dispatched == null || row.tonnes_dispatched === "" ? null : Number(row.tonnes_dispatched);
     const canClose = added != null && Number.isFinite(removed);
     const closing = canClose ? roundTonnes(opening + added - removed) : null;
@@ -45,9 +64,10 @@ export function runningFloor(rows) {
   });
 }
 
-export function previewFloor(records, siteId, day, felTonnes, dispatchedTonnes) {
+export function previewFloor(records, siteId, day, felTonnes, dispatchedTonnes, factors = {}) {
   const prior = runningFloor(
-    (records || []).filter((row) => (!siteId || row.site_id === siteId) && dayKey(row.dispatch_date) < dayKey(day))
+    (records || []).filter((row) => (!siteId || row.site_id === siteId) && dayKey(row.dispatch_date) < dayKey(day)),
+    factors
   );
   const last = [...prior].reverse().find((row) => row.floor_added != null && row.floor_removed != null);
   const opening = last ? Number(last.tonnes_on_floor) || 0 : 0;
@@ -97,8 +117,8 @@ function dayDetail(row) {
 }
 
 /** Site dispatch totals for a dashboard. Floor is the latest day, not a sum. */
-export function summarizeDispatch(records, siteId, period) {
-  const balanced = runningFloor((records || []).filter((row) => !siteId || row.site_id === siteId));
+export function summarizeDispatch(records, siteId, period, factors = {}) {
+  const balanced = runningFloor((records || []).filter((row) => !siteId || row.site_id === siteId), factors);
   const rows = balanced
     .filter((row) => dispatchInPeriod(row, period))
     .sort((a, b) => dayKey(a.dispatch_date).localeCompare(dayKey(b.dispatch_date)));
@@ -109,7 +129,7 @@ export function summarizeDispatch(records, siteId, period) {
   const latest = rows[rows.length - 1] || null;
   const weighbridge = sumField(rows, "tonnes_dispatched");
   const trucks = sumField(rows, "trucks_dispatched");
-  const screened = sumField(rows, "tonnes_screened");
+  const screened = sumKnown(rows.map((row) => screenedTonnes(row, factors)));
   const floor = latest?.tonnes_on_floor ?? null;
 
   const details = {
@@ -147,8 +167,8 @@ export function summarizeDispatch(records, siteId, period) {
       rows: rows.map((row) => ({
         id: row.id,
         title: dayKey(row.dispatch_date),
-        detail: `${row.excavator_buckets ?? "—"} buckets${row.excavator_bucket_tonnes ? ` × ${row.excavator_bucket_tonnes} t` : ""}`,
-        value: tonnesLabel(row.tonnes_screened),
+        detail: `${row.excavator_buckets ?? "—"} buckets${eachFor(row, "excavator_bucket_tonnes", factors.excavator_bucket_tonnes) ? ` × ${eachFor(row, "excavator_bucket_tonnes", factors.excavator_bucket_tonnes)} t` : ""}`,
+        value: tonnesLabel(screenedTonnes(row, factors)),
         emphasis: dayKey(row.dispatch_date) === today,
       })),
     },
