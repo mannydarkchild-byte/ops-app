@@ -36,7 +36,7 @@ export function LogoMark({ size = "bar", src = "/logo.png" }) {
   const [imgFailed, setImgFailed] = useState(false);
   const dim = {
     sm: "w-16 h-16",
-    bar: "w-24 h-24",
+    bar: "w-12 h-12 sm:w-16 sm:h-16",
     md: "w-24 h-24",
     lg: "w-36 h-36",
     xl: "w-[min(16rem,72vw)] h-[min(16rem,72vw)]",
@@ -94,20 +94,27 @@ function SyncButton({ roomy = false, compact = false }) {
   const meta = SYNC_META[syncState.status] || SYNC_META.idle;
   const caption = syncControlLabel(syncState);
   const err = syncState.errors?.[0];
+  const pending = syncState.pending || 0;
   return (
     <Button
       variant="sync"
       size={roomy ? "md" : "sm"}
       onClick={() => syncNow()}
-      className={roomy ? "flex-1 min-h-12 text-base" : compact ? "shrink-0 max-w-[9.75rem]" : "max-w-[46vw] sm:max-w-none shrink-0"}
-      title={err ? parseSyncError(err).body : (syncState.pending > 0 ? `${syncState.pending} not uploaded yet` : "Send and refresh from server")}
+      className={
+        roomy
+          ? "flex-1 min-h-12 text-base"
+          : compact
+            ? "relative shrink-0 !w-10 !h-10 !min-w-10 !px-0 !max-w-none"
+            : "max-w-[46vw] sm:max-w-none shrink-0"
+      }
+      title={err ? parseSyncError(err).body : (pending > 0 ? `${pending} not uploaded yet` : "Send and refresh from server")}
       aria-label={err ? "Sync failed. Tap to retry." : `${caption}. Tap to update.`}
     >
       <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
-      <span className={`truncate ${meta.color}`}>{caption}</span>
-      {(syncState.pending || 0) > 0 && (
-        <span className="font-ui text-xs bg-ops-gold text-ops-ink rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shrink-0 font-bold">
-          {syncState.pending > 99 ? "99+" : syncState.pending}
+      {!compact && <span className={`truncate ${meta.color}`}>{caption}</span>}
+      {pending > 0 && (
+        <span className={`font-ui text-xs bg-ops-gold text-ops-ink rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0 font-bold ${compact ? "absolute -top-1 -right-1" : ""}`}>
+          {pending > 99 ? "99+" : pending}
         </span>
       )}
     </Button>
@@ -226,7 +233,7 @@ export function AppHeader({ right, subtitle, context, menuItems = [], openHeader
   const role = (user?.role || "operator").toLowerCase();
   const roleLabel = subtitle || role.charAt(0).toUpperCase() + role.slice(1);
   const colors = ROLE_COLORS[role] || ROLE_COLORS.operator;
-  const displayName = (user?.name || user?.email?.split("@")[0] || "User").split(/\s+/)[0];
+  const displayName = (user?.name || "").trim() || user?.email?.split("@")[0] || "User";
 
   useEffect(() => {
     if (!menuOpen || openHeaderTools) return undefined;
@@ -250,24 +257,24 @@ export function AppHeader({ right, subtitle, context, menuItems = [], openHeader
 
   return (
     <header className="sticky top-0 z-30 bg-ops-black border-b border-ops-border shadow-ops-sm">
-      <div className="px-3 sm:px-4 py-2 min-h-[7.25rem] flex items-center gap-3 max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className="px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 max-w-5xl mx-auto">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <LogoMark size="bar" src={user?.organization_logo_url || user?.logo_url || "/logo.png"} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <span className="font-logo ops-brand text-base leading-none text-ops-gold">
               {user?.organization_name || "OPS"}
             </span>
-            <p className="font-body text-sm text-ops-text truncate leading-tight">
+            <p className="font-body text-sm text-ops-text leading-tight break-words">
               {displayName}
-              <span className={`ml-1.5 font-ui text-xs capitalize ${colors.text}`}>{roleLabel}</span>
             </p>
+            <p className={`font-ui text-xs capitalize leading-tight ${colors.text}`}>{roleLabel}</p>
             {context && (
               <p className="font-body text-xs text-ops-muted truncate leading-tight">{context}</p>
             )}
           </div>
         </div>
         {openHeaderTools ? (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <SyncButton compact />
             <ThemeToggle className="!w-10 !h-10" />
             <button

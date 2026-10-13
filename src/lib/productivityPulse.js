@@ -1,7 +1,7 @@
 import { buildShiftActivityTimeline } from "./shiftMetrics.js";
 import { SHIFT } from "./constants.js";
 import { dedupeShifts, getShiftStatus } from "./utils.js";
-import { machineOwnerName, ownerForStopReasonMachine, stopOwnerRole } from "./stopReasons.js";
+import { canonicalStopReason, machineOwnerName, ownerForStopReasonMachine, stopOwnerRole } from "./stopReasons.js";
 
 function dayBounds(ref = new Date()) {
   const start = new Date(ref);
@@ -116,10 +116,13 @@ function flattenToSingleTimeline(periods, fromMs, toMs) {
       minutes: Math.max(0, Math.round((end - start) / 60000)),
     };
     const last = slices[slices.length - 1];
-    if (last && last.state === slice.state && Math.abs(slice.start - last.end) < 2) {
+    const sameReason = !last?.reason || !slice.reason
+      || canonicalStopReason(last.reason) === canonicalStopReason(slice.reason);
+    if (last && last.state === slice.state && Math.abs(slice.start - last.end) < 2 && (last.state === "running" || sameReason)) {
       last.end = slice.end;
       last.minutes = Math.max(0, Math.round((last.end - last.start) / 60000));
       if (!last.reason && slice.reason) last.reason = slice.reason;
+      else if (last.reason && slice.reason) last.reason = canonicalStopReason(last.reason);
       if (!last.operatorName && slice.operatorName) last.operatorName = slice.operatorName;
     } else {
       slices.push(slice);
@@ -205,7 +208,7 @@ export function buildStopReasonTotals(periods, machine, siteSettings) {
   const totals = {};
   for (const p of periods) {
     if (p.state !== "stopped" || Number(p.minutes || 0) < 1) continue;
-    const reason = p.reason || "Stop";
+    const reason = canonicalStopReason(p.reason, siteSettings);
     if (!totals[reason]) {
       const role = stopOwnerRole(reason, siteSettings);
       totals[reason] = {

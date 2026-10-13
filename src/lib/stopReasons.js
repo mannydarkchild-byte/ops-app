@@ -101,6 +101,69 @@ const OWNER_HINT = {
   Berlington: "Wear owner — wear and consumables, no deduction",
 };
 
+/** Fold stored labels so "No Diesel", "no diesel", and "diesel" chart as one reason. */
+function reasonKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_/]+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const LEGACY_REASON_CANONICAL = {
+  "Engine Problem": "Engine or cooling",
+  "Electrical Breakdown": "Electrical or controls",
+  "Mechanical Breakdown": "Hydraulic system",
+  "Track Problem": "Tracks or final drive",
+  "Hydraulic Breakdown": "Hydraulic system",
+  "Screen Problem": "Worn or torn screen media",
+  "Conveyor/Belt Problem": "Worn belts, skirting, or scrapers",
+  "No Diesel": "No diesel",
+  diesel: "No diesel",
+  "No diesel / fuel": "No diesel",
+  "no diesel fuel": "No diesel",
+  "Waiting for Material": "Waiting for material",
+  "Waiting for Loader": "Waiting for loader",
+  Weather: "Weather",
+  "Planned Maintenance": "Planned maintenance",
+  "Safety Stop": "Safety stop",
+  Cleaning: "Cleaning",
+  "End of Operating Period": "End of operating period",
+  Strike: "Strike",
+  Other: "Other",
+  "Screen media wear": "Worn or torn screen media",
+  "Feed rate or overflow": "Feed rate or screen overflow",
+};
+
+/** One display label for a stored stop reason, including old wording and casing. */
+export function canonicalStopReason(reason, siteSettings) {
+  const raw = String(reason || "").trim();
+  if (!raw) return "Stop";
+  const key = reasonKey(raw);
+  const list = resolveStopReasons(siteSettings);
+
+  const listed = list.find((row) => reasonKey(row.reason) === key);
+  if (listed) return listed.reason;
+
+  const alias = Object.entries(LEGACY_REASON_CANONICAL).find(([from]) => reasonKey(from) === key);
+  if (alias) {
+    const mapped = list.find((row) => reasonKey(row.reason) === reasonKey(alias[1]));
+    return mapped?.reason || alias[1];
+  }
+
+  if (key.length >= 4) {
+    const hits = list.filter((row) => {
+      const rk = reasonKey(row.reason);
+      return rk.includes(key) || key.includes(rk);
+    });
+    if (hits.length === 1) return hits[0].reason;
+  }
+
+  return raw;
+}
+
 function copyDefaults() {
   return DEFAULT_STOP_REASONS.map((r) => ({ ...r }));
 }
@@ -116,8 +179,9 @@ export function normalizeStopReasons(list) {
   for (const row of list) {
     const reason = String(row?.reason || row?.label || "").trim();
     const owner = String(row?.owner || DEFAULT_STOP_OWNERS.SITE).trim() || DEFAULT_STOP_OWNERS.SITE;
-    if (!reason || seen.has(reason)) continue;
-    seen.add(reason);
+    const seenKey = reasonKey(reason);
+    if (!reason || seen.has(seenKey)) continue;
+    seen.add(seenKey);
     out.push({ reason, owner });
   }
   if (!out.length || signature(out) === PREVIOUS_DEFAULT_SIGNATURE) return copyDefaults();
@@ -152,9 +216,15 @@ export function isContractorStop(reason, siteSettings) {
 
 export function ownerForStopReason(reason, siteSettings) {
   const list = resolveStopReasons(siteSettings);
-  const hit = list.find((r) => r.reason === reason);
+  const canon = canonicalStopReason(reason, siteSettings);
+  const hit = list.find((r) => r.reason === canon)
+    || list.find((r) => reasonKey(r.reason) === reasonKey(reason));
   if (hit) return hit.owner;
-  return LEGACY_STOP_OWNERS[reason] || DEFAULT_STOP_OWNERS.SITE;
+  const legacy = Object.entries(LEGACY_STOP_OWNERS).find(([label]) => (
+    reasonKey(label) === reasonKey(reason) || reasonKey(label) === reasonKey(canon)
+  ));
+  if (legacy) return legacy[1];
+  return DEFAULT_STOP_OWNERS.SITE;
 }
 
 /** Grouped for operator <select> optgroups. */
