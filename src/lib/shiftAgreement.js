@@ -43,6 +43,7 @@ export function getShiftAgreement(shift) {
   );
   const siteSigned = !!(
     shift?.site_signature_name ||
+    shift?.site_signature_ref ||
     shift?.site_signed_at
   );
   const dualSigned = status === SHIFT.VERIFIED && machineSigned && siteSigned;
@@ -87,11 +88,28 @@ export function needsBerlingtonSign(shift) {
   return a.awaitingSite || a.legacySingleSigned;
 }
 
-export function siteSignShareText(shift, machineName, link, ownerName = "Berlington") {
-  const hours = Number(shift?.hours_worked || 0).toFixed(1);
+export function siteSignShareText(shift, machineName, link, ownerName = "Berlington", extras = {}) {
   const when = shift?.started_at ? new Date(shift.started_at).toLocaleDateString("en-ZA") : "";
-  return (
-    `OPS shift report — ${machineName || "Machine"} · ${when} · ${hours}h. ` +
-    `${ownerName} supervisor: tap to sign: ${link}`
-  );
+  const meterH = Number(shift?.hours_worked || 0).toFixed(1);
+  const billable = extras.billableHours != null && Number.isFinite(Number(extras.billableHours))
+    ? Number(extras.billableHours).toFixed(1)
+    : null;
+  const meter = shift?.start_hour_meter != null && shift?.end_hour_meter != null
+    ? `${shift.start_hour_meter} to ${shift.end_hour_meter}`
+    : null;
+  const lines = [
+    `OPS shift report for ${ownerName} to sign`,
+    "",
+    `Machine: ${machineName || "Machine"}`,
+    `Operator: ${shift?.operator_name || "Operator"}`,
+    when ? `Date: ${when}` : null,
+    billable != null ? `Billable hours: ${billable}h (8h shift minus contractor downtime)` : null,
+    `Hour meter: ${meterH}h${meter ? ` (${meter})` : ""}`,
+    extras.downtimeLine || null,
+    "",
+    "Open the link, check the hours and stop owners, then sign with your name and signature.",
+    "",
+    `Sign here: ${link}`,
+  ];
+  return lines.filter((line) => line != null).join("\n");
 }

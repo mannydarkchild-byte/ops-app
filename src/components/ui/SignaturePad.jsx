@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 
-export function SignaturePad({ onChange, height = 160 }) {
+export function SignaturePad({ onChange, height = 160, label = "Signature - draw below" }) {
   const canvasRef = useRef(null);
   const drawing = useRef(false);
   const [hasStroke, setHasStroke] = useState(false);
@@ -62,7 +62,7 @@ export function SignaturePad({ onChange, height = 160 }) {
 
   return (
     <div>
-      <p className="font-logo text-[10px] text-[#F2F0EA]/50 mb-2 tracking-wider">SUPERVISOR SIGNATURE — DRAW BELOW</p>
+      <p className="ops-field-label">{label}</p>
       <canvas
         ref={canvasRef}
         style={{ height }}

@@ -46,7 +46,8 @@ function sanitizePayload(table, payload) {
   for (const [key, val] of Object.entries(payload)) {
     if (typeof val === "string" && val.startsWith("MEDIA_")) continue;
     if (key.endsWith("_ref")) {
-      const keep = allowed?.includes(key) && typeof val === "string" && val.startsWith("http");
+      const keep = allowed?.includes(key) && typeof val === "string"
+        && (val.startsWith("http") || val.startsWith("data:image"));
       if (!keep) continue;
     }
     if (allowed && !allowed.includes(key)) continue;

@@ -66,7 +66,10 @@ function RoleRouter() {
       const sign = params.get("sign");
       const token = params.get("token");
       // ?verify= belongs to the logged-in supervisor flow; ?sign= is the public site link.
-      if (sign && token && !params.has("verify")) return { shiftId: sign, token };
+      // ?sign=preview shows the design with sample data (no live shift needed).
+      if (sign && !params.has("verify") && (token || sign === "preview")) {
+        return { shiftId: sign, token: token || "preview" };
+      }
     } catch {}
     return null;
   });

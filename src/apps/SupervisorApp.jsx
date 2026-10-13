@@ -3,7 +3,7 @@ import { useOps } from "../context/OpsContext.jsx";
 import { AppPage } from "../components/AppShell.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
-import { formatDurationMinutes } from "../lib/shiftMetrics.js";
+import { contractorDowntimeMinutes, formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
 import { DispatchSignoffList } from "../components/DispatchSignoffList.jsx";
 import {
@@ -201,7 +201,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
         getShiftStatus(s) === SHIFT.VERIFIED &&
         s.site_id === user?.site_id &&
         s.machine_id === selectedMachine?.id &&
-        (s.supervisor_signature_ref || s.supervisor_signature_name || s.verified_at)
+        (s.supervisor_signature_ref || s.supervisor_signature_name || s.machine_signature_ref || s.machine_signature_name || s.verified_at)
       ))
       .filter((s) => !reportPeriod || inPeriod(s.verified_at || s.ended_at, reportPeriod)))
       .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0))
@@ -252,7 +252,18 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
   const openBerlingtonWhatsApp = (shift) => {
     if (!shift?.site_token) return;
     const link = siteSignLink(shift);
-    openWhatsApp(whatsappShareUrl("", siteSignShareText(shift, machineName(shift.machine_id), link, berlingtonName)));
+    const billableHours = shiftBillableHours(shift, events, siteConfig);
+    const deducted = contractorDowntimeMinutes(events, shift, siteConfig);
+    const downtimeLine = deducted > 0
+      ? `Contractor downtime deducted: ${formatDurationMinutes(deducted)}`
+      : "No contractor downtime deducted";
+    openWhatsApp(whatsappShareUrl("", siteSignShareText(
+      shift,
+      machineName(shift.machine_id),
+      link,
+      berlingtonName,
+      { billableHours, downtimeLine }
+    )));
   };
 
   const sendToBerlington = async (shift) => {
@@ -402,10 +413,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
   const handleSignDispatch = async (row) => {
     setDispatchBusy(row.id);
     try {
-      await wf.signSiteDispatch(user, row);
+      const signed = await wf.signSiteDispatch(user, row);
       await refreshLocal();
+      if (navigator.onLine) await syncNow();
       setReportPreview({
-        ...(await dispatchDayReport(row, activeSite)),
+        ...(await dispatchDayReport(signed, activeSite)),
         startShareOpen: true,
       });
     } catch (e) {

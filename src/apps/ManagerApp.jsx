@@ -22,6 +22,8 @@ import {
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows } from "../lib/timesheet.js";
 import { openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
+import { dispatchDayReport } from "../lib/dispatchReport.js";
+import { SupervisorReports } from "../components/SupervisorReports.jsx";
 import { RolePulse } from "../components/RolePulse.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
@@ -740,6 +742,24 @@ export function ManagerApp() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div>
+              <h3 className="font-ui text-sm font-semibold text-[#F5C518] mb-3">Signed dispatch reports</h3>
+              <p className="text-[10px] text-[#F2F0EA]/40 -mt-1 mb-3">Same daily dispatch report Dispatch and the supervisor open.</p>
+              <SupervisorReports
+                group="dispatch"
+                period={signedPeriod}
+                periodLabel={signedPeriod?.label || "All time"}
+                dispatches={(siteDispatch || []).filter((row) => row.site_id === user?.site_id)}
+                onOpenDispatch={async (row) => {
+                  try {
+                    setReportPreview(await dispatchDayReport(row, activeSite));
+                  } catch (e) {
+                    showAlert("Could not open dispatch report", e.message, "error");
+                  }
+                }}
+              />
             </div>
           </div>
         )}

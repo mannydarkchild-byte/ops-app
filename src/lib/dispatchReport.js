@@ -83,6 +83,10 @@ export async function dispatchDayReport(row, site) {
   .signoff-meta{font-size:12px;color:#57534E}
   .signoff-meta p{margin:0 0 4px}
   .signoff-meta strong{color:#2A2A2A;font-weight:600}
+  .signature-row{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}
+  .signature-box{padding:14px;background:#fff;border:1px solid #D9D7D0;flex:1;min-width:220px}
+  .signature-label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6B6960;margin-bottom:6px;font-weight:400}
+  .signature-name{font-size:12px;color:#2A2A2A;font-weight:600;margin-top:8px}
 </style></head><body>
 <div class="page">
   <header class="header">
@@ -138,15 +142,25 @@ export async function dispatchDayReport(row, site) {
     <section>
       <div class="signoff">
         <div class="signoff-head">
-          <h2>Supervisor sign-off</h2>
+          <h2>Sign-off</h2>
           <div class="signoff-meta">
-            <p><strong>Assigned:</strong> ${esc(row?.assigned_supervisor_name || "Supervisor")}</p>
-            <p><strong>Status:</strong> ${esc(statusLine(row))}</p>
-            ${row?.signed_at ? `<p><strong>Signed at:</strong> ${esc(new Date(row.signed_at).toLocaleString("en-ZA"))}</p>` : ""}
+            <p><strong>Recorded by:</strong> ${esc(row?.recorded_by_name || "Dispatch")}</p>
+            ${row?.signed_at ? `<p><strong>Signed at:</strong> ${esc(new Date(row.signed_at).toLocaleString("en-ZA"))}</p>` : `<p><strong>Status:</strong> ${esc(statusLine(row))}</p>`}
+          </div>
+        </div>
+        <div class="signature-row">
+          <div class="signature-box">
+            <div class="signature-label">Dispatch</div>
+            <p class="signature-name">${esc(row?.recorded_by_name || "Dispatch")}</p>
+          </div>
+          <div class="signature-box">
+            <div class="signature-label">Supervisor signature</div>
+            <p class="note" style="margin:8px 0 0">${esc(row?.signed_by_name || "Awaiting supervisor signature")}</p>
+            <p class="signature-name">${esc(row?.signed_by_name || "Not signed yet")}</p>
           </div>
         </div>
         ${row?.supervisor_comment ? `<p class="note">Supervisor note: ${esc(row.supervisor_comment)}</p>` : ""}
-        <p class="note">Closing stock is the previous floor, plus FEL bucket tonnes, minus weighbridge tonnes dispatched. Days are not added together.</p>
+        <p class="note">This is the same daily dispatch report Dispatch and the supervisor open. Closing stock is the previous floor, plus FEL bucket tonnes, minus weighbridge tonnes dispatched. Days are not added together.</p>
       </div>
     </section>
 

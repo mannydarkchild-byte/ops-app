@@ -1509,7 +1509,7 @@ async function refreshSiteToken(shift) {
 }
 
 /** Site supervisor agrees/disputes via WhatsApp magic link. No login; token is the auth. */
-export async function siteSignShiftPublic({ shiftId, token, name, phone, action, reason }) {
+export async function siteSignShiftPublic({ shiftId, token, name, phone, action, reason, signature }) {
   const { error } = await supabase.rpc("site_sign_shift", {
     p_shift_id: shiftId,
     p_token: token,
@@ -1517,6 +1517,7 @@ export async function siteSignShiftPublic({ shiftId, token, name, phone, action,
     p_phone: phone || null,
     p_action: action,
     p_reason: reason || null,
+    p_signature: signature || null,
   });
   if (error) throw new Error(error.message || "Could not record the site decision");
   return true;
@@ -1550,6 +1551,7 @@ export async function resubmitShiftAfterCorrection(user, machine, site, shift, {
     machine_signed_at: null,
     machine_signed_by: null,
     site_signature_name: null,
+    site_signature_ref: null,
     site_signer_phone: null,
     site_signed_at: null,
     site_token: null,

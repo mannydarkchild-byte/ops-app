@@ -24,8 +24,10 @@ export function SignedReportCard({ shift, machineName, events, siteSettings, onV
             {fmtDateShort(shift.started_at)} · {shift.operator_name || "Operator"}
           </p>
           <p className="text-[10px] text-[#F5C518]/90 mt-1">
-            ✓ Signed by {shift.machine_signature_name || shift.supervisor_signature_name || "Supervisor"}
-            {shift.site_signature_name ? ` + ${shift.site_signature_name} (site)` : ""}
+            ✓ {siteSettings?.contractor_name || "Darkchild"}: {shift.machine_signature_name || shift.supervisor_signature_name || "Signed"}
+            {shift.site_signature_name
+              ? ` · ${siteSettings?.equipment_owner_name || "Berlington"}: ${shift.site_signature_name}`
+              : ""}
           </p>
           <p className="text-[9px] text-[#F2F0EA]/40 mt-0.5">{agreementLabel(shift)}</p>
         </div>

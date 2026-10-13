@@ -343,7 +343,7 @@ function siteDispatchForShift(rows, shift) {
   return (rows || []).find((row) => String(row.dispatch_date || "").slice(0, 10) === day && (!shift?.site_id || row.site_id === shift.site_id)) || null;
 }
 
-export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, siteDispatch, logoUrl, prestartPhotoUrls = {}, siteSettings, profiles = [], workSessions = [] }) {
+export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, siteDispatch, logoUrl, prestartPhotoUrls = {}, siteSettings, profiles = [], workSessions = [] }) {
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = fuelLogs.filter((f) => f.shift_id === shift.id);
@@ -399,9 +399,11 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
   .signoff-meta{font-size:12px;color:#57534E}
   .signoff-meta p{margin:0 0 4px}
   .signoff-meta strong{color:#2A2A2A;font-weight:600}
-  .signature-box{margin-top:12px;padding:14px;background:#fff;border:1px solid #D9D7D0;display:inline-block;min-width:260px}
+  .signature-row{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}
+  .signature-box{padding:14px;background:#fff;border:1px solid #D9D7D0;flex:1;min-width:220px}
   .signature-box img{max-width:280px;max-height:100px;display:block}
   .signature-label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6B6960;margin-bottom:6px;font-weight:400}
+  .signature-name{font-size:12px;color:#2A2A2A;font-weight:600;margin-top:8px}
 </style></head><body>
 <div class="page">
   <header class="header">
@@ -570,21 +572,31 @@ ${shiftFuel.length
     <section>
       <div class="signoff">
         <div class="signoff-head">
-          <h2>Supervisor sign-off</h2>
+          <h2>Dual sign-off</h2>
           <div class="signoff-meta">
-            <p><strong>Verified by:</strong> ${esc(shift.machine_signature_name || shift.supervisor_signature_name || shift.verified_by || "Supervisor")}</p>
-            ${shift.site_signature_name ? `<p><strong>Site sign-off:</strong> ${esc(shift.site_signature_name)}</p>` : ""}
+            <p><strong>Billable hours signed:</strong> ${billableHours.toFixed(1)}h (8h minus ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))} downtime)</p>
             <p><strong>Verified at:</strong> ${fmtDate(shift.verified_at || shift.ended_at)}</p>
+            ${shift.site_signed_at ? `<p><strong>Site signed at:</strong> ${fmtDate(shift.site_signed_at)}</p>` : ""}
             ${shift.assigned_supervisor_name ? `<p><strong>Assigned:</strong> ${esc(shift.assigned_supervisor_name)}</p>` : ""}
           </div>
         </div>
-        <div class="signature-box">
-          <div class="signature-label">Authorised signature</div>
-          ${signatureUrl
-    ? `<img src="${esc(signatureUrl)}" alt="Supervisor signature"/>`
+        <div class="signature-row">
+          <div class="signature-box">
+            <div class="signature-label">${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))} signature</div>
+            ${signatureUrl
+    ? `<img src="${esc(signatureUrl)}" alt="${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))} signature"/>`
     : `<p class="note" style="margin:8px 0 0">${esc(shift.machine_signature_name || shift.supervisor_signature_name || "Signature not on this phone yet - tap Update and open the report again.")}</p>`}
+            <p class="signature-name">${esc(shift.machine_signature_name || shift.supervisor_signature_name || shift.verified_by || "Supervisor")}</p>
+          </div>
+          <div class="signature-box">
+            <div class="signature-label">${esc(machineOwnerName(machine, OWNER_ROLES.WEAR, siteSettings))} signature</div>
+            ${siteSignatureUrl
+    ? `<img src="${esc(siteSignatureUrl)}" alt="${esc(machineOwnerName(machine, OWNER_ROLES.WEAR, siteSettings))} signature"/>`
+    : `<p class="note" style="margin:8px 0 0">${esc(shift.site_signature_name || "Awaiting signature")}</p>`}
+            <p class="signature-name">${esc(shift.site_signature_name || "Not signed yet")}</p>
+          </div>
         </div>
-        <p class="note">Billable hours are an 8-hour shift minus downtime owned by ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))}. Machine hours are the hour meter. Runtime and downtime are app-tracked.</p>
+        <p class="note">${esc(machineOwnerName(machine, OWNER_ROLES.WEAR, siteSettings))} signs billable hours and stop owners. Billable hours are an 8-hour shift minus downtime owned by ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))}. Machine hours are the hour meter. Runtime and downtime are app-tracked.</p>
       </div>
     </section>
 
@@ -595,6 +607,82 @@ ${shiftFuel.length
   </main>
 </div>
 </body></html>`;
+}
+
+function publicMedia(ref) {
+  if (typeof ref !== "string" || !ref.trim()) return null;
+  if (ref.startsWith("data:image") || ref.startsWith("http") || ref.startsWith("/")) return ref;
+  return null;
+}
+
+/** Same daily report HTML the operator and supervisor open — built from the public sign-link payload. */
+export function htmlFromSiteSummary(data, extras = {}) {
+  const raw = data?.shift || {};
+  const shift = {
+    ...raw,
+    id: raw.id || "preview",
+    site_signature_name: extras.siteSignerName || raw.site_signature_name,
+    site_signed_at: extras.siteSignedAt || raw.site_signed_at,
+  };
+  const machine = data.machine || {
+    id: shift.machine_id,
+    name: data.machine_name,
+    type: data.machine_type,
+    supplier_name: data.contractor_name,
+    wear_owner_name: data.owner_name,
+  };
+  const site = data.site || { name: data.site_name };
+  const siteSettings = {
+    contractor_name: data.contractor_name,
+    equipment_owner_name: data.owner_name,
+    client_site_name: data.client_name,
+    stop_reasons: data.stop_reasons,
+  };
+  let events = Array.isArray(data.events) ? data.events.map((e) => ({ ...e, shift_id: e.shift_id || shift.id })) : [];
+  if (!events.length && Array.isArray(data.stops)) {
+    events = data.stops.map((s, i) => ({
+      id: `stop-${i}`,
+      shift_id: shift.id,
+      type: "STOP",
+      reason: s.reason,
+      note: s.note,
+      downtime_minutes: Number(s.minutes || s.downtime_minutes || 0),
+      status: s.status || "closed",
+      stopped_at: s.stopped_at || shift.started_at,
+      restarted_at: s.restarted_at || null,
+      timestamp: s.stopped_at || shift.started_at,
+    }));
+  }
+  const fuelLogs = Array.isArray(data.fuel_logs) ? data.fuel_logs.map((f) => ({ ...f, shift_id: f.shift_id || shift.id })) : [];
+  const inspections = Array.isArray(data.inspections) ? data.inspections : [];
+  const openingPhotoUrl = extras.openingPhotoUrl
+    || data.opening_photo_url
+    || publicMedia(events.find((e) => e.type === "MACHINE_STARTED")?.photo_data);
+  const closingPhotoUrl = extras.closingPhotoUrl
+    || data.closing_photo_url
+    || publicMedia(events.find((e) => e.type === "METER_END_CAPTURED" || e.type === "MACHINE_ENDED")?.photo_data);
+  return generateShiftDailyReportHTML(shift, {
+    events,
+    inspections,
+    fuelLogs,
+    machine,
+    site,
+    signatureUrl: extras.signatureUrl || publicMedia(shift.machine_signature_ref || shift.supervisor_signature_ref),
+    siteSignatureUrl: extras.siteSignatureUrl || publicMedia(shift.site_signature_ref),
+    openingPhotoUrl,
+    closingPhotoUrl,
+    weighbridgePhotoUrl: extras.weighbridgePhotoUrl || data.weighbridge_photo_url || publicMedia(data.site_dispatch?.weighbridge_photo),
+    siteDispatch: data.site_dispatch || null,
+    logoUrl: extras.logoUrl || "/logo.png",
+    siteSettings,
+    profiles: [],
+    workSessions: [],
+  });
+}
+
+export function siteSummaryReportTitle(data) {
+  const shift = data?.shift || {};
+  return `Daily Report · ${data?.machine_name || shift.machine_id || "Machine"} · ${fmtDateShort(shift.started_at)}`;
 }
 
 function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, siteSettings, profiles = [], workSessions = [], siteDispatch = null }) {
@@ -687,6 +775,7 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
 
 export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [], siteSettings, profiles = [], workSessions = [], siteDispatch: siteDispatchRows = [] }) {
   const sigRef = firstMedia(shift.machine_signature_ref, shift.supervisor_signature_ref, shift.machine_signature, shift.supervisor_signature);
+  const siteSigRef = firstMedia(shift.site_signature_ref, shift.site_signature);
   const prestartItems = shiftPrestart(inspections, shift);
   const prestartPhotoMap = await resolveInspectionPhotoMap(prestartItems);
   const prestartPhotoUrls = Object.fromEntries(
@@ -695,16 +784,17 @@ export async function prepareShiftDailyReport(shift, { events = [], inspections 
 
   const dayDispatch = siteDispatchForShift(siteDispatchRows, shift);
   const weighbridgeRef = firstMedia(dayDispatch?.weighbridge_photo_ref, dayDispatch?.weighbridge_photo);
-  const [{ openingPhotoUrl, closingPhotoUrl }, signatureUrl, weighbridgePhotoUrl, logoUrl] = await Promise.all([
+  const [{ openingPhotoUrl, closingPhotoUrl }, signatureUrl, siteSignatureUrl, weighbridgePhotoUrl, logoUrl] = await Promise.all([
     resolveMeterPhotos(shift, events, hourReadings),
     embedMedia(sigRef),
+    embedMedia(siteSigRef),
     embedMedia(weighbridgeRef),
     resolveLogoDataUrl(),
   ]);
 
   const names = shiftNameLines(shift, { profiles, workSessions });
   const html = generateShiftDailyReportHTML(shift, {
-    events, inspections, fuelLogs, machine, site, signatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, siteDispatch: dayDispatch, logoUrl, prestartPhotoUrls, siteSettings, profiles, workSessions,
+    events, inspections, fuelLogs, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, siteDispatch: dayDispatch, logoUrl, prestartPhotoUrls, siteSettings, profiles, workSessions,
   });
 
   return {
