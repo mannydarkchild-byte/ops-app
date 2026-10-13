@@ -9,6 +9,7 @@ import { storeMediaDataUrl } from "../lib/media.js";
 import { ensureSiteSettings, prestartItemsForMachine, inspectionGroupsForMachine, getMechanicItemsFromGroups } from "../lib/siteConfig.js";
 import { fetchServerOpenShift } from "../lib/machineStatus.js";
 import { bucketTonnes, DISPATCH_STATUS, dispatchStatus, previewFloor } from "../lib/dispatchMetrics.js";
+import { WEIGHBRIDGE_PHOTO_MIN, weighbridgePhotoFields, weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
 import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
 
 const actionInflight = new Map();
@@ -1216,7 +1217,10 @@ function wholeCount(value, label, required) {
 }
 
 function readDispatch(dispatch, factors = {}, { requireComplete = false } = {}) {
-  if (requireComplete && !dispatch?.photoRef) throw new Error("Photograph the weighbridge report.");
+  const photoRefs = weighbridgePhotoRefs(dispatch);
+  if (requireComplete && photoRefs.length < WEIGHBRIDGE_PHOTO_MIN) {
+    throw new Error("Add 2 or 3 photos of the weighbridge tickets.");
+  }
   const tonnesBlank = dispatch?.tonnes === "" || dispatch?.tonnes == null;
   const tonnes = tonnesBlank ? null : Number(dispatch.tonnes);
   if (requireComplete && tonnesBlank) throw new Error("Enter the total tonnes dispatched.");
@@ -1237,7 +1241,7 @@ function readDispatch(dispatch, factors = {}, { requireComplete = false } = {}) 
     fel_bucket_tonnes: felEach,
     tonnes_screened: bucketTonnes(excavatorBuckets, excavatorEach),
     fel_tonnes: bucketTonnes(felBuckets, felEach),
-    weighbridge_photo_ref: dispatch?.photoRef || null,
+    ...weighbridgePhotoFields(photoRefs),
   };
 }
 
@@ -1295,6 +1299,12 @@ export async function submitSiteDispatch(user, site, dispatch, factors, supervis
       supervisor_comment: null,
     },
   });
+}
+
+/** Supervisor fills the day's dispatch and signs it in one step. */
+export async function completeSiteDispatch(user, site, dispatch, factors) {
+  const waiting = await submitSiteDispatch(user, site, dispatch, factors, user);
+  return signSiteDispatch(user, waiting);
 }
 
 export async function signSiteDispatch(user, row) {

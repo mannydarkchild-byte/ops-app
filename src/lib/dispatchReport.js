@@ -1,5 +1,6 @@
 import { resolveMediaUrl } from "./media.js";
 import { DISPATCH_STATUS, dispatchStatus, tonnesLabel } from "./dispatchMetrics.js";
+import { weighbridgePhotoRefs } from "./dispatchPhotos.js";
 import { reportPageStyles } from "../services/reports.js";
 
 function esc(value) {
@@ -64,16 +65,18 @@ function dayLabel(row) {
 /** Printable daily dispatch report — same page chrome as the operator daily report. */
 export async function dispatchDayReport(row, site) {
   const day = String(row?.dispatch_date || "").slice(0, 10);
-  const [photo, logoUrl] = await Promise.all([
-    embedPhoto(row?.weighbridge_photo_ref || row?.weighbridge_photo),
+  const ticketRefs = weighbridgePhotoRefs(row);
+  const [photos, logoUrl] = await Promise.all([
+    Promise.all(ticketRefs.map((ref) => embedPhoto(ref))),
     resolveLogoDataUrl(),
   ]);
+  const ticketPhotos = (photos || []).filter(Boolean);
   const title = `Dispatch report · ${day}`;
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Russo+One&display=swap" rel="stylesheet"/>
 <style>${reportPageStyles()}
-  .photos{display:grid;grid-template-columns:1fr;gap:16px;margin-top:10px}
+  .photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:10px}
   .photos figure{margin:0;border:1px solid #D9D7D0}
   .photos img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain;background:#fff}
   .photos figcaption{padding:8px 10px;font-size:11px;color:#6B6960;background:#F2F0EA;border-top:1px solid #D9D7D0}
@@ -133,10 +136,10 @@ export async function dispatchDayReport(row, site) {
     </div>
 
     <section>
-      <h2 class="font-brand">Weighbridge photo</h2>
-      ${photo
-    ? `<div class="photos"><figure><img src="${esc(photo)}" alt="Weighbridge report"/><figcaption>Weighbridge ticket · ${esc(day)}</figcaption></figure></div>`
-    : `<p class="note">No weighbridge photo on this day.</p>`}
+      <h2 class="font-brand">Weighbridge photos</h2>
+      ${ticketPhotos.length
+    ? `<div class="photos">${ticketPhotos.map((photo, i) => `<figure><img src="${esc(photo)}" alt="Weighbridge ticket ${i + 1}"/><figcaption>Weighbridge ticket ${i + 1} · ${esc(day)}</figcaption></figure>`).join("")}</div>`
+    : `<p class="note">No weighbridge photos on this day.</p>`}
     </section>
 
     <section>

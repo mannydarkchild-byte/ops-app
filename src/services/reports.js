@@ -1,4 +1,5 @@
 import { SHIFT } from "../lib/constants.js";
+import { weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
 import { machineOwnerName, OWNER_ROLES, ownerForStopReasonMachine } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { resolveMediaUrl } from "../lib/media.js";
@@ -343,7 +344,8 @@ function siteDispatchForShift(rows, shift) {
   return (rows || []).find((row) => String(row.dispatch_date || "").slice(0, 10) === day && (!shift?.site_id || row.site_id === shift.site_id)) || null;
 }
 
-export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, siteDispatch, logoUrl, prestartPhotoUrls = {}, siteSettings, profiles = [], workSessions = [] }) {
+export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, weighbridgePhotoUrls = [], siteDispatch, logoUrl, prestartPhotoUrls = {}, siteSettings, profiles = [], workSessions = [] }) {
+  const ticketUrls = (weighbridgePhotoUrls?.length ? weighbridgePhotoUrls : weighbridgePhotoUrl ? [weighbridgePhotoUrl] : []).filter(Boolean);
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = fuelLogs.filter((f) => f.shift_id === shift.id);
@@ -481,7 +483,9 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
           <div class="sub">${siteDispatch.tonnes_on_floor == null ? "No stock yet" : "Previous floor + FEL − dispatched"}</div>
         </div>
       </div>
-      ${weighbridgePhotoUrl ? `<img src="${esc(weighbridgePhotoUrl)}" alt="Weighbridge report" style="max-width:100%;max-height:320px;object-fit:contain;border-radius:12px;border:1px solid #E8E6E0"/>` : ""}
+      ${ticketUrls.length
+    ? `<div class="photos">${ticketUrls.map((url, i) => `<figure><img src="${esc(url)}" alt="Weighbridge ticket ${i + 1}"/><figcaption>Weighbridge ticket ${i + 1}</figcaption></figure>`).join("")}</div>`
+    : ""}
     </section>` : ""}
 
     <section>
@@ -671,7 +675,8 @@ export function htmlFromSiteSummary(data, extras = {}) {
     siteSignatureUrl: extras.siteSignatureUrl || publicMedia(shift.site_signature_ref),
     openingPhotoUrl,
     closingPhotoUrl,
-    weighbridgePhotoUrl: extras.weighbridgePhotoUrl || data.weighbridge_photo_url || publicMedia(data.site_dispatch?.weighbridge_photo),
+    weighbridgePhotoUrl: extras.weighbridgePhotoUrl || data.weighbridge_photo_url || publicMedia(weighbridgePhotoRefs(data.site_dispatch)[0] || data.site_dispatch?.weighbridge_photo),
+    weighbridgePhotoUrls: extras.weighbridgePhotoUrls || weighbridgePhotoRefs(data.site_dispatch).map((ref) => publicMedia(ref)).filter(Boolean),
     siteDispatch: data.site_dispatch || null,
     logoUrl: extras.logoUrl || "/logo.png",
     siteSettings,
@@ -783,18 +788,19 @@ export async function prepareShiftDailyReport(shift, { events = [], inspections 
   );
 
   const dayDispatch = siteDispatchForShift(siteDispatchRows, shift);
-  const weighbridgeRef = firstMedia(dayDispatch?.weighbridge_photo_ref, dayDispatch?.weighbridge_photo);
-  const [{ openingPhotoUrl, closingPhotoUrl }, signatureUrl, siteSignatureUrl, weighbridgePhotoUrl, logoUrl] = await Promise.all([
+  const ticketRefs = weighbridgePhotoRefs(dayDispatch);
+  const [{ openingPhotoUrl, closingPhotoUrl }, signatureUrl, siteSignatureUrl, ticketUrls, logoUrl] = await Promise.all([
     resolveMeterPhotos(shift, events, hourReadings),
     embedMedia(sigRef),
     embedMedia(siteSigRef),
-    embedMedia(weighbridgeRef),
+    Promise.all(ticketRefs.map((ref) => embedMedia(ref))),
     resolveLogoDataUrl(),
   ]);
+  const weighbridgePhotoUrls = (ticketUrls || []).filter(Boolean);
 
   const names = shiftNameLines(shift, { profiles, workSessions });
   const html = generateShiftDailyReportHTML(shift, {
-    events, inspections, fuelLogs, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, siteDispatch: dayDispatch, logoUrl, prestartPhotoUrls, siteSettings, profiles, workSessions,
+    events, inspections, fuelLogs, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl: weighbridgePhotoUrls[0], weighbridgePhotoUrls, siteDispatch: dayDispatch, logoUrl, prestartPhotoUrls, siteSettings, profiles, workSessions,
   });
 
   return {

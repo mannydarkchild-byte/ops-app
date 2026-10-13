@@ -5,6 +5,7 @@ import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ROLES, SHIFT, ISSUE } from "../lib/constants.js";
 import { contractorDowntimeMinutes, formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
+import { DispatchDayForm } from "../components/DispatchDayForm.jsx";
 import { DispatchSignoffList } from "../components/DispatchSignoffList.jsx";
 import {
   getBillingPeriod,
@@ -31,7 +32,7 @@ import {
   summarizeDispatch,
   tonnesLabel,
 } from "../lib/dispatchMetrics.js";
-import { pickLineFleet } from "../lib/siteConfig.js";
+import { pickLineFleet, tonnesPerBucket } from "../lib/siteConfig.js";
 import * as wf from "../services/workflows.js";
 import { Button } from "../components/ui/Button.jsx";
 import { FieldSelect } from "../components/ui/FieldSelect.jsx";
@@ -70,6 +71,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
     () => getSettingsForSite(user?.site_id || activeSite?.id),
     [getSettingsForSite, user?.site_id, activeSite?.id]
   );
+  const dispatchFactors = useMemo(() => ({
+    excavator_bucket_tonnes: tonnesPerBucket(siteConfig.excavator_bucket_tonnes),
+    fel_bucket_tonnes: tonnesPerBucket(siteConfig.fel_bucket_tonnes),
+  }), [siteConfig.excavator_bucket_tonnes, siteConfig.fel_bucket_tonnes]);
+  const dispatchSite = activeSite?.id ? activeSite : { id: user?.site_id, name: "Site" };
 
   const [tab, setTab] = useState(verifyShiftId ? "reports" : "home");
   const [verifyBusy, setVerifyBusy] = useState(null);
@@ -654,10 +660,32 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
 
           {reportGroup === "dispatch" && (
             <div className="space-y-4">
+              <DispatchDayForm
+                selfSign
+                records={siteDispatch}
+                siteId={user?.site_id}
+                factors={dispatchFactors}
+                onSave={async (fields) => {
+                  await wf.saveSiteDispatch(user, dispatchSite, fields, dispatchFactors);
+                  await refreshLocal();
+                  showAlert("Saved", "Draft kept on this phone.", "success");
+                }}
+                onSubmit={async (fields) => {
+                  const signed = await wf.completeSiteDispatch(user, dispatchSite, fields, dispatchFactors);
+                  await refreshLocal();
+                  if (navigator.onLine) await syncNow();
+                  setReportPreview({
+                    ...(await dispatchDayReport(signed, dispatchSite)),
+                    startShareOpen: true,
+                  });
+                }}
+                onPreview={async (row) => setReportPreview(await dispatchDayReport(row, dispatchSite))}
+              />
+              <p className="font-ui text-sm font-semibold text-ops-text pt-2">Waiting to sign</p>
               <DispatchSignoffList
                 rows={assignedDispatch}
                 busyId={dispatchBusy}
-                emptyHint="No dispatch day is waiting to sign."
+                emptyHint="No dispatch day from Dispatch is waiting to sign."
                 onPreview={async (row) => setReportPreview(await dispatchDayReport(row, activeSite))}
                 onSign={handleSignDispatch}
                 onReturn={handleReturnDispatch}

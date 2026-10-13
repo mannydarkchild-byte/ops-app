@@ -10,6 +10,7 @@ import { DispatchApp } from "./apps/DispatchApp.jsx";
 import { StoreroomApp } from "./apps/StoreroomApp.jsx";
 import { LandingPage } from "./components/LandingPage.jsx";
 import { SiteSignPage } from "./components/SiteSignPage.jsx";
+import { DispatchPreviewPage } from "./components/DispatchPreviewPage.jsx";
 import { ROLES } from "./lib/constants.js";
 
 const VERIFY_ONCE_KEY = "ops_verify_once";
@@ -51,7 +52,7 @@ function forgetVerifyParams() {
 function shouldOpenLoginFirst() {
   const params = new URLSearchParams(window.location.search);
   // Site sign-off links (?sign=&token=) are public — never force login for them.
-  if (params.has("sign")) return false;
+  if (params.has("sign") || params.get("dispatch") === "preview") return false;
   const hash = window.location.hash || "";
   if (params.has("verify") || params.has("token")) return true;
   if (/type=recovery|access_token|error_description/i.test(hash)) return true;
@@ -73,9 +74,23 @@ function RoleRouter() {
     } catch {}
     return null;
   });
+  const [dispatchPreview] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("dispatch") === "preview";
+    } catch {
+      return false;
+    }
+  });
   const { user, loading, authError, signIn, passwordRecovery, setPassword } = useOps();
   const [verifyParams, setVerifyParams] = useState(consumeVerifyParams);
   const [gate, setGate] = useState(() => (shouldOpenLoginFirst() ? "login" : "site"));
+  if (dispatchPreview) {
+    return (
+      <div className="ops-field min-h-screen">
+        <DispatchPreviewPage />
+      </div>
+    );
+  }
   if (signParams) {
     return (
       <div className="ops-field min-h-screen">
