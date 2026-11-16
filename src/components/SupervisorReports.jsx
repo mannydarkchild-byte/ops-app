@@ -72,17 +72,13 @@ export function SupervisorReports({
         fileOf: shiftFile,
       });
 
-  const dispatchFolders = buildMonthFolders(dispatchRows, {
-    noun: "day",
-    plural: "days",
-    dateOf: (row) => row.dispatch_date,
-    fileOf: (row) => ({
-      id: row.id,
-      name: fileDate(row.dispatch_date),
-      detail: `${tonnesLabel(screenedTonnes(row, siteConfig))} screened · ${tonnesLabel(row.tonnes_on_floor)} on the floor`,
-      onOpen: () => onOpenDispatch?.(row),
-    }),
-  });
+  const dispatchDays = [];
+  for (const row of [...dispatchRows].sort((a, b) => String(b.dispatch_date || "").localeCompare(String(a.dispatch_date || "")))) {
+    const key = String(row.dispatch_date || "").slice(0, 10) || "undated";
+    const last = dispatchDays[dispatchDays.length - 1];
+    if (last?.key === key) last.rows.push(row);
+    else dispatchDays.push({ key, label: fileDate(row.dispatch_date), rows: [row] });
+  }
 
   return (
     <div className="space-y-4">
@@ -107,11 +103,25 @@ export function SupervisorReports({
       )}
 
       {group === "dispatch" && (
-        <section className="space-y-3">
-          <ReportBrowser
-            folders={dispatchFolders}
-            empty={`No signed dispatch day for ${periodLabel}.`}
-          />
+        <section className="space-y-4">
+          {dispatchDays.length === 0 ? (
+            <p className="font-body text-sm text-ops-muted">No signed dispatch day for {periodLabel}.</p>
+          ) : dispatchDays.map((day) => (
+            <div key={day.key} className="space-y-2">
+              <p className="font-ui text-sm font-semibold text-[#F5C518]">{day.label}</p>
+              {day.rows.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  onClick={() => onOpenDispatch?.(row)}
+                  className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-2xl px-4 py-3"
+                >
+                  <p className="font-ui font-semibold text-ops-text">{tonnesLabel(screenedTonnes(row, siteConfig))} screened</p>
+                  <p className="font-body text-xs text-ops-muted mt-1">{tonnesLabel(row.tonnes_on_floor)} on the floor · {row.trucks_dispatched ?? "—"} trucks</p>
+                </button>
+              ))}
+            </div>
+          ))}
         </section>
       )}
     </div>

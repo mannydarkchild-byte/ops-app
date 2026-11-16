@@ -1226,25 +1226,29 @@ export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, rea
   return patch;
 }
 
-/** Supervisor corrects meters or photos on an unsigned report before signing. */
+/** Supervisor corrects a report directly, including after it is signed. The signature stays. */
 export async function editShiftBeforeSign(actor, shift, {
   startHour,
   endHour,
   openingPhotoRef,
   closingPhotoRef,
   note,
+  dispatch,
+  site,
+  factors,
 } = {}) {
   if (!shift?.id) throw new Error("No shift to edit");
-  if ([SHIFT.VERIFIED, SHIFT.MACHINE_SIGNED].includes(getShiftStatus(shift))) {
-    throw new Error("This shift version is already signed and locked");
-  }
   const now = nowISO();
   const startMeter = startHour === "" || startHour == null ? Number(shift.start_hour_meter) : Number(startHour);
   const endMeter = endHour === "" || endHour == null
     ? (shift.end_hour_meter != null ? Number(shift.end_hour_meter) : null)
     : Number(endHour);
-  if (endMeter != null) assertReasonableMeterHours(startMeter, endMeter);
-  else if (!Number.isFinite(startMeter) || startMeter < 0) throw new Error("Enter a valid opening meter");
+  if (!Number.isFinite(startMeter) || startMeter < 0) throw new Error("Enter a valid opening meter");
+  if (endHour !== "" && endHour != null && (!Number.isFinite(endMeter) || endMeter < 0)) {
+    throw new Error("Enter a valid closing meter");
+  }
+  const metersChanged = !sameMeter(startMeter, shift.start_hour_meter) || !sameMeter(endMeter, shift.end_hour_meter);
+  if (metersChanged && endMeter != null) assertReasonableMeterHours(startMeter, endMeter);
 
   let updated = {
     ...shift,
@@ -1254,6 +1258,20 @@ export async function editShiftBeforeSign(actor, shift, {
     notes: [shift.notes, note?.trim() ? `Supervisor edit: ${note.trim()}` : `Edited by ${actor?.name || "supervisor"}`].filter(Boolean).join(" | "),
     updated_at: now,
   };
+  if (dispatch && site) {
+    const day = localDayKey(updated.started_at || updated.ended_at);
+    const saved = await saveSiteDispatch(actor, site, { ...dispatch, date: day }, factors || {}, { preserveStatus: true });
+    updated = {
+      ...updated,
+      tonnes_dispatched: saved.tonnes_dispatched,
+      trucks_dispatched: saved.trucks_dispatched,
+      tonnes_on_floor: saved.tonnes_on_floor,
+      tonnes_screened: saved.tonnes_screened,
+      excavator_buckets: saved.excavator_buckets,
+      fel_buckets: saved.fel_buckets,
+      weighbridge_photo: weighbridgePhotoRefs(saved)[0] || updated.weighbridge_photo || null,
+    };
+  }
   await saveLocal("shifts", updated);
 
   if (openingPhotoRef) {
@@ -1278,6 +1296,10 @@ export async function editShiftBeforeSign(actor, shift, {
         end_hour_meter: updated.end_hour_meter,
         hours_worked: updated.hours_worked,
         notes: updated.notes,
+        tonnes_dispatched: updated.tonnes_dispatched ?? null,
+        trucks_dispatched: updated.trucks_dispatched ?? null,
+        tonnes_on_floor: updated.tonnes_on_floor ?? null,
+        weighbridge_photo: updated.weighbridge_photo ?? null,
         updated_at: now,
       }).eq("id", shift.id);
     } catch {}

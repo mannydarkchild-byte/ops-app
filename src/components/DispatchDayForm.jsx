@@ -27,6 +27,7 @@ export function DispatchDayForm({
   supervisors = [],
   suggestedSupervisorId = null,
   selfSign = false,
+  allowCorrect = false,
   onSave,
   onSubmit,
   onPreview,
@@ -35,7 +36,7 @@ export function DispatchDayForm({
   const [date, setDate] = useState(today);
   const row = useMemo(() => dayRow(records, siteId, date), [records, siteId, date]);
   const status = dispatchStatus(row);
-  const locked = !!row && status !== DISPATCH_STATUS.DRAFT;
+  const locked = !!row && status !== DISPATCH_STATUS.DRAFT && !allowCorrect;
 
   const [excavatorBuckets, setExcavatorBuckets] = useState(row?.excavator_buckets != null ? String(row.excavator_buckets) : "");
   const [felBuckets, setFelBuckets] = useState(row?.fel_buckets != null ? String(row.fel_buckets) : "");
@@ -189,16 +190,18 @@ export function DispatchDayForm({
               disabled={!!busy}
               onClick={() => run("save", () => onSave(fields))}
             >
-              {busy === "save" ? "Saving..." : "Save draft"}
+              {busy === "save" ? "Saving..." : status === DISPATCH_STATUS.SIGNED ? "Save corrections" : "Save draft"}
             </Button>
-            <Button
-              size="lg"
-              className="w-full"
-              disabled={!!busy || (!selfSign && !supervisorId)}
-              onClick={() => run("send", () => onSubmit(fields, selfSign ? null : supervisors.find((s) => s.id === supervisorId)))}
-            >
-              {busy === "send" ? (selfSign ? "Signing..." : "Sending...") : (selfSign ? "Save and sign" : "Send for sign-off")}
-            </Button>
+            {status !== DISPATCH_STATUS.SIGNED && (
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={!!busy || (!selfSign && !supervisorId)}
+                onClick={() => run("send", () => onSubmit(fields, selfSign ? null : supervisors.find((s) => s.id === supervisorId)))}
+              >
+                {busy === "send" ? (selfSign ? "Signing..." : "Sending...") : (selfSign ? "Save and sign" : "Send for sign-off")}
+              </Button>
+            )}
           </>
         )}
         {row && (
