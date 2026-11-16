@@ -16,31 +16,39 @@ import {
   isLiveSince,
   localDayKey,
   dedupeShifts,
+  fmtDateShort,
 } from "../lib/utils.js";
-import { hydrateOpenShiftsFromServer } from "../lib/machineStatus.js";
+import { hydrateOpenShiftsFromServer, loadShiftFromVerifyLink, normalizeShiftLinkId } from "../lib/machineStatus.js";
 import { needsBerlingtonSign, siteSignLink, siteSignShareText, whatsappShareUrl } from "../lib/shiftAgreement.js";
 import { openWhatsApp } from "../lib/whatsapp.js";
-import { openShiftDailyReport } from "../services/reports.js";
 import { RolePulse } from "../components/RolePulse.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { SupervisorReports } from "../components/SupervisorReports.jsx";
+import { OperationsReportPanel } from "../components/OperationsReportPanel.jsx";
+import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
+import { ReportsHub, REPORT_KIND } from "../components/ReportsHub.jsx";
+import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
+import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
 import { dispatchDayReport } from "../lib/dispatchReport.js";
 import {
   DISPATCH_STATUS,
   cycleDispatchTargetTonnes,
   dispatchStatus,
+  productionForShift,
+  screenedTonnes,
   summarizeDispatch,
   tonnesLabel,
 } from "../lib/dispatchMetrics.js";
+import { BucketSizeEditor } from "../components/BucketSizeEditor.jsx";
 import { pickLineFleet, tonnesPerBucket } from "../lib/siteConfig.js";
 import * as wf from "../services/workflows.js";
 import { Button } from "../components/ui/Button.jsx";
 import { FieldSelect } from "../components/ui/FieldSelect.jsx";
 import { AlertModal, Modal } from "../components/ui/Modal.jsx";
-import { SignaturePad } from "../components/ui/SignaturePad.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import { SupervisorShiftEdit } from "../components/SupervisorShiftEdit.jsx";
+import { SupervisorVerifySheet } from "../components/SupervisorVerifySheet.jsx";
 
 const TABS = [
   { id: "issues", label: "Problems" },
@@ -51,16 +59,17 @@ const TABS = [
 
 const REPORT_FILTERS = [
   { id: "cycle", label: "This cycle" },
-  { id: "month", label: "This month" },
   { id: "all", label: "All" },
 ];
 
-const REPORT_GROUPS = [
-  { id: "operators", label: "Operators" },
-  { id: "dispatch", label: "Dispatch" },
+const SUPERVISOR_REPORT_KINDS = [
+  REPORT_KIND.daily,
+  REPORT_KIND.operations,
+  REPORT_KIND.timesheet,
+  REPORT_KIND.dispatch,
 ];
 
-export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken = null, onVerifyConsumed }) {
+export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVerifyConsumed }) {
   const {
     shifts, events, issues, issueMessages, workSessions, machines, profiles,
     fuelLogs, expenses, inspections, hourReadings, siteDispatch, activeSite,
@@ -78,13 +87,19 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
   const dispatchSite = activeSite?.id ? activeSite : { id: user?.site_id, name: "Site" };
 
   const [tab, setTab] = useState(verifyShiftId ? "reports" : "home");
+  const [showBucketSize, setShowBucketSize] = useState(false);
   const [verifyBusy, setVerifyBusy] = useState(null);
   const [verifyTarget, setVerifyTarget] = useState(null);
-  const [verifyScope, setVerifyScope] = useState("mine");
+  const [verifyScope, setVerifyScope] = useState("all");
   const [signature, setSignature] = useState(null);
   const [reportFilter, setReportFilter] = useState("cycle");
-  const [reportGroup, setReportGroup] = useState("operators");
-  const [focusMachineId, setFocusMachineId] = useState("");
+  const [reportKind, setReportKind] = useState(null);
+  const [reportMachineId, setReportMachineId] = useState(null);
+  const [timesheetFilter, setTimesheetFilter] = useState("cycle");
+  const [linkedShift, setLinkedShift] = useState(null);
+  const [linkedDoc, setLinkedDoc] = useState(null);
+  const [linkedError, setLinkedError] = useState("");
+  const [linkedLoading, setLinkedLoading] = useState(false);
   const [delegateIssueId, setDelegateIssueId] = useState(null);
   const [delegateTargetId, setDelegateTargetId] = useState("");
   const [delegateNote, setDelegateNote] = useState("");
@@ -120,17 +135,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
       if (!cancelled) await refreshLocal().catch(() => {});
     };
     refreshTick();
-    const refreshId = setInterval(refreshTick, 15000);
+    const refreshId = setInterval(refreshTick, 60000);
     return () => { cancelled = true; clearInterval(refreshId); };
   }, [user?.id, refreshLocal]);
 
   const siteMachines = useMemo(
     () => machines.filter((m) => m.site_id === user?.site_id && m.active !== false),
     [machines, user?.site_id]
-  );
-  const selectedMachine = useMemo(
-    () => siteMachines.find((machine) => machine.id === focusMachineId) || siteMachines[0] || null,
-    [siteMachines, focusMachineId]
   );
   const siteIssues = useMemo(() => issues.filter((i) => i.site_id === user?.site_id), [issues, user?.site_id]);
   const openSiteIssues = useMemo(() => siteIssues.filter((i) => i.status !== ISSUE.RESOLVED), [siteIssues]);
@@ -159,7 +170,11 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
   ), [shifts]);
 
   const pendingShifts = dedupeShifts(shifts
-    .filter((r) => [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(getShiftStatus(r)) && r.site_id === user?.site_id))
+    .filter((r) => {
+      if (![SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(getShiftStatus(r))) return false;
+      if (user?.role === ROLES.ADMIN || user?.role === ROLES.MANAGER) return true;
+      return r.site_id === user?.site_id || r.assigned_supervisor_id === user?.id;
+    }))
     .sort((a, b) => {
       const aMine = a.assigned_supervisor_id === user?.id ? 0 : 1;
       const bMine = b.assigned_supervisor_id === user?.id ? 0 : 1;
@@ -167,9 +182,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
     });
 
   const awaitingSiteShifts = useMemo(() => dedupeShifts(shifts
-    .filter((r) => r.site_id === user?.site_id && needsBerlingtonSign(r)))
+    .filter((r) => {
+      if (!needsBerlingtonSign(r)) return false;
+      if (user?.role === ROLES.ADMIN || user?.role === ROLES.MANAGER) return true;
+      return r.site_id === user?.site_id || r.assigned_supervisor_id === user?.id;
+    }))
     .sort((a, b) => new Date(b.machine_signed_at || b.verified_at || b.updated_at || 0) - new Date(a.machine_signed_at || a.verified_at || a.updated_at || 0)),
-  [shifts, user?.site_id]);
+  [shifts, user?.site_id, user?.id, user?.role]);
 
   const displayedPendingShifts = useMemo(() => {
     const list = verifyScope === "all"
@@ -196,9 +215,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
 
   const reportPeriod = useMemo(() => {
     if (reportFilter === "all") return null;
-    if (reportFilter === "cycle") return getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
     const preset = getDatePresets(siteConfig.billing_cycle_start_day).find((p) => p.id === reportFilter);
-    return preset ? { start: preset.start, end: preset.end, label: preset.label } : getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
+    if (preset) return { start: preset.start, end: preset.end, label: preset.label };
+    return getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
   }, [reportFilter, siteConfig.billing_cycle_start_day]);
 
   const signedReports = useMemo(() => (
@@ -206,12 +225,74 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
       .filter((s) => (
         getShiftStatus(s) === SHIFT.VERIFIED &&
         s.site_id === user?.site_id &&
-        s.machine_id === selectedMachine?.id &&
         (s.supervisor_signature_ref || s.supervisor_signature_name || s.machine_signature_ref || s.machine_signature_name || s.verified_at)
       ))
       .filter((s) => !reportPeriod || inPeriod(s.verified_at || s.ended_at, reportPeriod)))
       .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0))
-  ), [shifts, user?.site_id, reportPeriod, selectedMachine?.id]);
+  ), [shifts, user?.site_id, reportPeriod]);
+
+  const timesheetPeriod = useMemo(() => {
+    if (timesheetFilter === "all") return null;
+    if (timesheetFilter === "cycle") return getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day);
+    const preset = getDatePresets(siteConfig.billing_cycle_start_day).find((p) => p.id === timesheetFilter);
+    return preset ? { start: preset.start, end: preset.end, label: preset.label } : reportPeriod;
+  }, [timesheetFilter, siteConfig.billing_cycle_start_day, reportPeriod]);
+
+  const timesheetRows = useMemo(
+    () => buildTimesheetRows(workSessions, { siteId: user?.site_id, period: timesheetPeriod }),
+    [workSessions, user?.site_id, timesheetPeriod]
+  );
+
+  const reportMachineCounts = useMemo(() => {
+    const counts = {};
+    for (const machine of siteMachines) counts[machine.id] = { waiting: 0, send: 0, signed: 0 };
+    for (const shift of pendingShifts) {
+      if (counts[shift.machine_id]) counts[shift.machine_id].waiting += 1;
+    }
+    for (const shift of awaitingSiteShifts) {
+      if (counts[shift.machine_id]) counts[shift.machine_id].send += 1;
+    }
+    for (const shift of signedReports) {
+      if (counts[shift.machine_id]) counts[shift.machine_id].signed += 1;
+    }
+    return counts;
+  }, [siteMachines, pendingShifts, awaitingSiteShifts, signedReports]);
+
+  const reportAttention = useMemo(
+    () => siteMachines
+      .map((machine) => {
+        const count = reportMachineCounts[machine.id] || {};
+        const line = [
+          count.waiting ? `${count.waiting} waiting` : "",
+          count.send ? `${count.send} to send` : "",
+        ].filter(Boolean).join(" · ");
+        return line ? { machineId: machine.id, name: machine.name, line } : null;
+      })
+      .filter(Boolean),
+    [siteMachines, reportMachineCounts]
+  );
+
+  const hubCounts = useMemo(() => {
+    const waiting = pendingShifts.length + awaitingSiteShifts.length;
+    const hours = summarizeTimesheet(timesheetRows).hours;
+    return {
+      daily: {
+        badge: waiting ? `${waiting} need you` : "",
+        sub: "Sign, send, and filed copies",
+      },
+      operations: { sub: "Weekly and monthly by machine" },
+      timesheet: { sub: `${hours.toFixed(1)}h on site` },
+      dispatch: {
+        badge: dispatchWaiting ? `${dispatchWaiting} waiting` : "",
+        sub: "Daily tonnes and trucks",
+      },
+    };
+  }, [pendingShifts.length, awaitingSiteShifts.length, timesheetRows, dispatchWaiting]);
+
+  const dailyMachines = useMemo(
+    () => (reportMachineId ? siteMachines.filter((machine) => machine.id === reportMachineId) : siteMachines),
+    [siteMachines, reportMachineId]
+  );
 
   const billingPeriod = useMemo(
     () => getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day),
@@ -228,6 +309,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
     const todayKey = localDayKey();
     const todayRow = summary.todayRow;
     const trucksToday = todayRow?.trucks_dispatched ?? 0;
+    const hasProduction = (row) => row && (
+      row.excavator_buckets != null
+      || row.fel_buckets != null
+      || screenedTonnes(row, siteConfig) != null
+      || row.tonnes_on_floor != null
+    );
+    const focusRow = hasProduction(todayRow)
+      ? todayRow
+      : [...summary.rows].reverse().find((row) => hasProduction(row)) || null;
     return {
       cycleTonnes,
       cycleTarget,
@@ -235,6 +325,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
       trucksToday,
       trucksCycle: summary.trucks || 0,
       screened: summary.screened,
+      screenedToday: focusRow ? screenedTonnes(focusRow, siteConfig) : null,
+      excavatorBuckets: focusRow?.excavator_buckets ?? null,
+      felBuckets: focusRow?.fel_buckets ?? null,
       floor: summary.floor,
       details: summary.details,
       line: pickLineFleet(fleetStatus),
@@ -252,6 +345,37 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
       setReportPreview(await openShiftDailyReport(shift, { ...reportContext, machine }));
     } catch (e) {
       showAlert("Could not open report", e.message, "error");
+    }
+  };
+
+  const closeLinkedReport = () => {
+    setLinkedShift(null);
+    setLinkedDoc(null);
+    setLinkedError("");
+    setLinkedLoading(false);
+    setVerifyTarget(null);
+    setSignature(null);
+    onVerifyConsumed?.();
+  };
+
+  const openLinkedReport = async (shift) => {
+    if (!shift) return;
+    setTab("reports");
+    setReportKind("daily");
+    setReportMachineId(shift.machine_id || null);
+    setLinkedShift(shift);
+    setVerifyTarget(shift);
+    setSignature(null);
+    setLinkedError("");
+    setLinkedLoading(true);
+    setLinkedDoc(null);
+    try {
+      const machine = machines.find((m) => m.id === shift.machine_id);
+      setLinkedDoc(await openShiftDailyReport(shift, { ...reportContext, machine }));
+    } catch (e) {
+      setLinkedError(e.message || "Could not open this report");
+    } finally {
+      setLinkedLoading(false);
     }
   };
 
@@ -338,20 +462,51 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
     setMechanicBusy(false);
   };
 
-  const verifyOpened = useRef(false);
-  useEffect(() => {
-    if (!verifyShiftId || verifyOpened.current) return;
-    verifyOpened.current = true;
-    setTab("reports");
-    setReportGroup("operators");
-    setVerifyScope("all");
-    onVerifyConsumed?.();
-  }, [verifyShiftId, onVerifyConsumed]);
+  const verifyOpened = useRef(null);
+  const shiftsRef = useRef(shifts);
+  shiftsRef.current = shifts;
+  const [verifyRetry, setVerifyRetry] = useState(0);
 
-  const openVerifyModal = (shift) => {
-    setVerifyTarget(shift);
-    setSignature(null);
-  };
+  useEffect(() => {
+    if (!verifyShiftId) {
+      verifyOpened.current = null;
+      return undefined;
+    }
+    if (verifyOpened.current === verifyShiftId) return undefined;
+    setTab("reports");
+    setReportKind("daily");
+    setLinkedLoading(true);
+    setLinkedError("");
+    setLinkedShift((prev) => (prev?.id === verifyShiftId ? prev : { id: verifyShiftId }));
+    let cancelled = false;
+
+    const run = async () => {
+      let shift = null;
+      let lastError = "";
+      for (let i = 0; i < 4 && !cancelled && !shift; i += 1) {
+        try {
+          const id = normalizeShiftLinkId(verifyShiftId);
+          shift = (shiftsRef.current || []).find((s) => s.id === id)
+            || await loadShiftFromVerifyLink(id, verifyToken, user);
+        } catch (e) {
+          lastError = e.message || "";
+        }
+        if (shift) break;
+        await new Promise((resolve) => window.setTimeout(resolve, 1000 * (i + 1)));
+      }
+      if (cancelled) return;
+      if (!shift) {
+        setLinkedError(lastError || "Could not load this report from the server. Tap Try again.");
+        setLinkedLoading(false);
+        return;
+      }
+      verifyOpened.current = verifyShiftId;
+      await openLinkedReport(shift);
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [verifyShiftId, verifyToken, verifyRetry]);
 
   const openReasonModal = (shift, action) => {
     setReasonModal({
@@ -378,6 +533,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
       await wf.verifyShift(shift, user, { action, reason, signatureDataUrl: null });
       await syncNow();
       await refreshLocal();
+      closeLinkedReport();
       showAlert("Sent back", "The operator will see your note and can fix the report.", "success");
     } catch (e) {
       showAlert("Failed", e.message, "error");
@@ -405,11 +561,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
       const signed = await wf.verifyShift(verifyTarget, user, { action: "machine_sign", reason: null, signatureDataUrl: signature });
       await syncNow();
       const locked = signed || { ...verifyTarget, shift_status: SHIFT.MACHINE_SIGNED };
-      setJustSigned(locked);
-      openBerlingtonWhatsApp(locked);
-      await refreshLocal();
       setVerifyTarget(null);
       setSignature(null);
+      setLinkedShift(null);
+      setLinkedDoc(null);
+      onVerifyConsumed?.();
+      await sendToBerlington(locked);
+      await refreshLocal();
     } catch (e) {
       showAlert("Failed", e.message, "error");
     }
@@ -466,7 +624,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
   })), [myPendingVerify, dispatchWaiting, awaitingSiteShifts.length, openSiteIssues.length]);
 
   const viewTab = tab === "live" || tab === "today" ? "home" : tab === "verify" || tab === "dispatch" ? "reports" : tab;
-  const headerContext = `${activeSite?.name || "Site"} - ${billingPeriod.label}`;
+  const headerContext = activeSite?.name || "Site";
 
   return (
     <AppPage
@@ -475,10 +633,15 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
       showSite={false}
       tabs={tabItems}
       activeTab={viewTab}
-      onTabChange={setTab}
+      onTabChange={(id) => {
+        setTab(id);
+        if (id !== "reports") {
+          setReportKind(null);
+          setReportMachineId(null);
+        }
+      }}
       onSync={syncNow}
       maxWidth="max-w-2xl"
-      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
       {viewTab !== "pulse" && (
@@ -523,9 +686,12 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
                 onClick={() => setKpiDetail(homeKpis.details?.trucks)}
               />
               <DashboardKpi
-                label="Screened"
-                value={tonnesLabel(homeKpis.screened)}
-                sub="This cycle"
+                label="Material screened"
+                value={tonnesLabel(homeKpis.screenedToday ?? homeKpis.screened)}
+                sub={[
+                  homeKpis.excavatorBuckets != null ? `${homeKpis.excavatorBuckets} excavator buckets` : null,
+                  `${tonnesLabel(homeKpis.screened)} this cycle`,
+                ].filter(Boolean).join(" · ")}
                 color="#22C55E"
                 onClick={() => setKpiDetail(homeKpis.details?.screened)}
               />
@@ -533,10 +699,22 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
             <DashboardKpi
               label="On the floor"
               value={tonnesLabel(homeKpis.floor)}
-              sub="Latest closing stock"
+              sub={[
+                homeKpis.felBuckets != null ? `${homeKpis.felBuckets} FEL buckets` : null,
+                "Latest closing stock",
+              ].filter(Boolean).join(" · ")}
               color="#00A4A6"
               onClick={() => setKpiDetail(homeKpis.details?.floor)}
             />
+            {(!dispatchFactors.excavator_bucket_tonnes || !dispatchFactors.fel_bucket_tonnes) && (
+              <button
+                type="button"
+                onClick={() => setShowBucketSize(true)}
+                className="w-full text-left font-body text-sm text-[#F5C518] bg-[#F5C518]/10 border border-[#F5C518]/40 rounded-2xl p-4"
+              >
+                Set tonnes per excavator bucket and tonnes per FEL bucket. Bucket counts stay as counts until those two numbers are saved.
+              </button>
+            )}
           </div>
 
           {openShiftsToClose.length > 0 && (
@@ -563,102 +741,96 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
       )}
 
       {viewTab === "reports" && (
-        <div className="space-y-4">
-          <FieldSelect value={reportGroup} onChange={setReportGroup}>
-            {REPORT_GROUPS.map((item) => (
-              <option key={item.id} value={item.id}>{item.label}</option>
-            ))}
-          </FieldSelect>
-
-          {reportGroup === "operators" && (
-            <div className="space-y-4">
-              <FieldSelect value={verifyScope} onChange={setVerifyScope}>
-                <option value="mine">Assigned to me</option>
-                <option value="all">Everyone on site</option>
+        <ReportsHub
+          kinds={SUPERVISOR_REPORT_KINDS}
+          machines={siteMachines}
+          kind={reportKind}
+          machineId={reportMachineId}
+          onKind={setReportKind}
+          onMachine={setReportMachineId}
+          counts={hubCounts}
+          machineCounts={reportMachineCounts}
+          attention={reportAttention}
+        >
+          {reportKind === "daily" && (
+            <div className="space-y-6">
+              <FieldSelect value={reportFilter} onChange={setReportFilter}>
+                {REPORT_FILTERS.map((item) => (
+                  <option key={item.id} value={item.id}>{item.label}</option>
+                ))}
               </FieldSelect>
-
-              {displayedPendingShifts.length === 0 && awaitingSiteShifts.length === 0 && (
-                <p className="font-body text-sm text-ops-muted">No operator reports waiting.</p>
-              )}
-
-              {displayedAwaitingCorrection.length > 0 && (
+              {displayedAwaitingCorrection.filter((row) => !reportMachineId || row.machine_id === reportMachineId).length > 0 && (
                 <p className="font-body text-sm text-[#F5C518]">
-                  {displayedAwaitingCorrection.length} sent back for correction
+                  {displayedAwaitingCorrection.filter((row) => !reportMachineId || row.machine_id === reportMachineId).length} sent back to the operator
                 </p>
               )}
-
-              {displayedPendingShifts.map((r) => (
-                <div key={r.id} className="bg-ops-card border-2 border-ops-gold rounded-2xl p-4">
-                  <p className="font-ui font-semibold text-ops-text">{machineName(r.machine_id)}</p>
-                  <p className="font-body text-sm text-ops-muted mt-1">
-                    {r.operator_name || "Operator"} - {Number(r.hours_worked || 0).toFixed(1)}h
-                  </p>
-                  {(r.runtime_minutes > 0 || r.downtime_minutes > 0) && (
-                    <p className="text-sm text-[#F2F0EA]/45">
-                      Runtime {formatDurationMinutes(r.runtime_minutes || 0)} - Downtime {formatDurationMinutes(r.downtime_minutes || 0)}
-                    </p>
-                  )}
-                  {r.assigned_supervisor_name && (
-                    <p className="text-sm text-[#F5C518]/80 mt-1">
-                      {r.assigned_supervisor_id === user?.id ? "Assigned to you" : `Assigned: ${r.assigned_supervisor_name}`}
-                    </p>
-                  )}
-                  <div className="grid grid-cols-1 gap-2 mt-4">
-                    <Button className="w-full" size="lg" disabled={verifyBusy === r.id} onClick={() => openVerifyModal(r)}>
-                      Sign
-                    </Button>
-                    <Button className="w-full" size="lg" variant="secondary" disabled={verifyBusy === r.id} onClick={() => openReasonModal(r, "correct")}>
-                      Send back
-                    </Button>
-                    <Button className="w-full" size="lg" variant="secondary" onClick={() => handleViewReport(r)}>
-                      Open report
-                    </Button>
-                    <Button className="w-full" size="lg" variant="secondary" onClick={() => setEditShift(r)}>
-                      Edit report
-                    </Button>
-                  </div>
-                </div>
-              ))}
-
-              {awaitingSiteShifts.length > 0 && (
-                <div>
-                  <p className="font-ui text-sm font-semibold text-[#25D366] mb-2">Send to {berlingtonName} ({awaitingSiteShifts.length})</p>
-                  <div className="space-y-2">
-                    {awaitingSiteShifts.map((r) => (
-                      <SiteSignShareCard
-                        key={r.id}
-                        shift={r}
-                        machineName={machineName(r.machine_id)}
-                        ownerName={berlingtonName}
-                        compact
-                        sending={resendBusy === r.id}
-                        onSend={() => sendToBerlington(r)}
-                      />
-                    ))}
-                  </div>
-                </div>
+              {dailyMachines.length === 0 && (
+                <p className="font-body text-sm text-ops-muted">No machines on this site.</p>
               )}
-
-              <p className="font-ui text-sm font-semibold text-ops-text pt-2">Signed</p>
-              <SupervisorReports
-                machines={siteMachines}
-                machineId={selectedMachine?.id}
-                onMachine={setFocusMachineId}
-                period={reportPeriod}
-                periodLabel={reportPeriod?.label || "All time"}
-                filter={reportFilter}
-                filters={REPORT_FILTERS}
-                onFilter={setReportFilter}
-                signedReports={signedReports.filter((s) => !needsBerlingtonSign(s))}
-                machineName={machineName}
-                events={events}
-                siteConfig={siteConfig}
-                onView={handleViewReport}
-              />
+              {dailyMachines.map((machine) => (
+                <DailyMachineInbox
+                  key={machine.id}
+                  title={dailyMachines.length > 1 ? machine.name : ""}
+                  hideEmpty={dailyMachines.length > 1}
+                  pending={displayedPendingShifts.filter((row) => row.machine_id === machine.id)}
+                  awaiting={awaitingSiteShifts.filter((row) => row.machine_id === machine.id)}
+                  signed={signedReports.filter((row) => row.machine_id === machine.id)}
+                  berlingtonName={berlingtonName}
+                  machineName={machineName}
+                  verifyBusy={verifyBusy}
+                  resendBusy={resendBusy}
+                  events={events}
+                  siteConfig={siteConfig}
+                  siteDispatch={siteDispatch}
+                  reportPeriod={reportPeriod}
+                  onOpen={openLinkedReport}
+                  onSendBack={(row) => openReasonModal(row, "correct")}
+                  onView={handleViewReport}
+                  onSend={sendToBerlington}
+                />
+              ))}
             </div>
           )}
 
-          {reportGroup === "dispatch" && (
+          {reportKind === "operations" && (
+            <OperationsReportPanel
+              site={activeSite}
+              machines={siteMachines}
+              machineId={reportMachineId || siteMachines[0]?.id || ""}
+              onMachine={setReportMachineId}
+              hideMachineSelect
+              cycleStartDay={siteConfig.billing_cycle_start_day}
+              data={{
+                shifts,
+                events,
+                expenses,
+                fuelLogs,
+                inspections,
+                siteSettings: siteConfig,
+                dispatches: siteDispatch,
+              }}
+            />
+          )}
+
+          {reportKind === "timesheet" && (
+            <TimesheetPanel
+              rows={timesheetRows}
+              periodLabel={timesheetPeriod?.label || "All time"}
+              filter={timesheetFilter}
+              onFilter={setTimesheetFilter}
+              machines={machines}
+              onPreview={async () => {
+                try {
+                  const doc = await printTimesheetReport(workSessions, timesheetPeriod, activeSite, machines);
+                  setReportPreview(doc);
+                } catch (e) {
+                  showAlert("Could not open timesheet", e.message, "error");
+                }
+              }}
+            />
+          )}
+
+          {reportKind === "dispatch" && (
             <div className="space-y-4">
               <DispatchDayForm
                 selfSign
@@ -703,7 +875,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
               />
             </div>
           )}
-        </div>
+        </ReportsHub>
       )}
 
       {viewTab === "issues" && (
@@ -795,16 +967,34 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
         </Modal>
       )}
 
-      {verifyTarget && (
-        <Modal title="Sign" color="green" onClose={() => { setVerifyTarget(null); setSignature(null); }}>
-          <p className="font-body text-sm text-ops-muted mb-3">
-            {machineName(verifyTarget.machine_id)} - {verifyTarget.operator_name || "Operator"} - {Number(verifyTarget.hours_worked || 0).toFixed(1)}h
-          </p>
-          <SignaturePad onChange={setSignature} />
-          <Button className="w-full mt-4" size="lg" disabled={verifyBusy || !signature} onClick={() => handleVerify("machine_sign")}>
-            {verifyBusy ? "Signing..." : "Sign"}
-          </Button>
-        </Modal>
+      {(linkedShift || linkedLoading) && (
+        <SupervisorVerifySheet
+          title={linkedDoc?.title || "Daily report"}
+          html={linkedDoc?.html}
+          loading={linkedLoading}
+          error={linkedError}
+          mode={
+            !linkedShift?.id || getShiftStatus(linkedShift) === SHIFT.VERIFIED
+              ? "filed"
+              : needsBerlingtonSign(linkedShift)
+                ? "send"
+                : "sign"
+          }
+          signature={signature}
+          onSignature={setSignature}
+          busy={!!verifyBusy}
+          ownerName={berlingtonName}
+          onSign={() => handleVerify("machine_sign")}
+          onSendBack={() => openReasonModal(linkedShift, "correct")}
+          onSendToOwner={() => sendToBerlington(linkedShift)}
+          onClose={closeLinkedReport}
+          onRetry={() => {
+            verifyOpened.current = null;
+            setLinkedDoc(null);
+            setLinkedError("");
+            setVerifyRetry((n) => n + 1);
+          }}
+        />
       )}
 
       {editShift && (
@@ -863,8 +1053,20 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
             machineName={machineName(justSigned.machine_id)}
             ownerName={berlingtonName}
             sending={resendBusy === justSigned.id}
+            onView={() => handleViewReport(shifts.find((s) => s.id === justSigned.id) || justSigned)}
             onSend={() => sendToBerlington(justSigned)}
             onDismiss={() => setJustSigned(null)}
+          />
+        </Modal>
+      )}
+
+      {showBucketSize && (
+        <Modal title="Bucket size" color="yellow" onClose={() => setShowBucketSize(false)}>
+          <BucketSizeEditor
+            siteId={user?.site_id || activeSite?.id}
+            settings={siteConfig}
+            onSaved={async () => { await syncNow(); await refreshLocal(); setShowBucketSize(false); }}
+            showAlert={showAlert}
           />
         </Modal>
       )}
@@ -884,24 +1086,132 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken: _verifyToken 
   );
 }
 
-function SiteSignShareCard({ shift, machineName, ownerName = "Berlington", onDismiss, onSend, sending, compact }) {
-  const link = shift?.site_token ? siteSignLink(shift) : "";
+function ShiftProductionLines({ shift, dispatches, siteConfig }) {
+  const production = productionForShift(shift, dispatches, siteConfig);
+  if (!production) return null;
+  const { tonnes_screened: screened, tonnes_on_floor: floor, excavator_buckets: excavatorBuckets, fel_buckets: felBuckets } = production;
+  if (screened == null && floor == null && excavatorBuckets == null && felBuckets == null) return null;
+  const tonnes = (n) => (n == null ? "—" : `${Number(n).toLocaleString("en-US")} t`);
+  return (
+    <div className="mt-3 space-y-1">
+      <p className="font-ui text-2xl font-semibold text-[#22C55E]">{tonnes(screened)}</p>
+      <p className="font-body text-xs text-ops-muted">Material screened{excavatorBuckets == null ? "" : ` · ${excavatorBuckets} excavator buckets`}</p>
+      <p className="font-ui text-2xl font-semibold text-[#F97316] mt-2">{tonnes(floor)}</p>
+      <p className="font-body text-xs text-ops-muted">On the floor{felBuckets == null ? "" : ` · ${felBuckets} FEL buckets`}</p>
+    </div>
+  );
+}
+
+function DailyMachineInbox({
+  title,
+  hideEmpty = false,
+  pending = [],
+  awaiting = [],
+  signed = [],
+  berlingtonName,
+  machineName,
+  verifyBusy,
+  resendBusy,
+  events,
+  siteConfig,
+  siteDispatch = [],
+  reportPeriod,
+  onOpen,
+  onSendBack,
+  onView,
+  onSend,
+}) {
+  if (hideEmpty && !pending.length && !awaiting.length && !signed.length) return null;
+
+  return (
+    <div className="space-y-4">
+      {title ? <p className="font-ui text-sm font-semibold text-[#F5C518]">{title}</p> : null}
+
+      <section className="space-y-2">
+        <p className="font-ui text-sm font-semibold text-ops-text">
+          1. Waiting for you{pending.length ? ` (${pending.length})` : ""}
+        </p>
+        {pending.length === 0 ? (
+          <p className="font-body text-sm text-ops-muted">No operator reports waiting for your sign.</p>
+        ) : pending.map((row) => (
+          <div key={row.id} className="bg-ops-card border-2 border-ops-gold rounded-2xl p-4">
+            <p className="font-ui font-semibold text-ops-text">{machineName(row.machine_id)}</p>
+            <p className="font-body text-sm text-ops-muted mt-1">
+              {fmtDateShort(row.ended_at || row.started_at)} · {row.operator_name || "Operator"} · {Number(row.hours_worked || 0).toFixed(1)}h
+            </p>
+            <ShiftProductionLines shift={row} dispatches={siteDispatch} siteConfig={siteConfig} />
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <Button className="w-full" size="lg" disabled={verifyBusy === row.id} onClick={() => onOpen(row)}>
+                Open and sign
+              </Button>
+              <Button className="w-full" size="lg" variant="secondary" disabled={verifyBusy === row.id} onClick={() => onSendBack(row)}>
+                Send back
+              </Button>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="space-y-2">
+        <p className="font-ui text-sm font-semibold text-[#25D366]">
+          2. Send to {berlingtonName}{awaiting.length ? ` (${awaiting.length})` : ""}
+        </p>
+        {awaiting.length === 0 ? (
+          <p className="font-body text-sm text-ops-muted">Nothing waiting to send.</p>
+        ) : awaiting.map((row) => (
+          <SiteSignShareCard
+            key={row.id}
+            shift={row}
+            machineName={machineName(row.machine_id)}
+            ownerName={berlingtonName}
+            compact
+            sending={resendBusy === row.id}
+            onView={() => onView(row)}
+            onSend={() => onSend(row)}
+          />
+        ))}
+      </section>
+
+      <section className="space-y-3">
+        <p className="font-ui text-sm font-semibold text-ops-text">3. Signed</p>
+        <SupervisorReports
+          period={reportPeriod}
+          periodLabel={reportPeriod?.label || "All time"}
+          signedReports={signed}
+          machineName={machineName}
+          events={events}
+          siteConfig={siteConfig}
+          dispatches={siteDispatch}
+          onView={onView}
+        />
+      </section>
+    </div>
+  );
+}
+
+function SiteSignShareCard({ shift, machineName, ownerName = "Berlington", onDismiss, onSend, onView, sending, compact }) {
   const expiry = shift?.site_token_expires_at ? new Date(shift.site_token_expires_at).toLocaleDateString() : "";
   return (
     <div className={compact ? "bg-[#141414] border border-[#25D366]/40 rounded-xl p-4" : ""}>
       <p className="font-ui text-sm font-semibold text-[#25D366] mb-1">
-        {compact ? `Needs ${ownerName} sign` : `WhatsApp this report to ${ownerName}`}
+        {compact ? `Signed by you` : `WhatsApp this report to ${ownerName}`}
       </p>
       <p className="text-base text-[#F2F0EA]">
-        {machineName} - {shift?.operator_name || "Operator"} - {Number(shift?.hours_worked || 0).toFixed(1)}h machine
+        {machineName} · {shift?.operator_name || "Operator"} · {Number(shift?.hours_worked || 0).toFixed(1)}h
       </p>
+      <p className="text-sm text-[#F2F0EA]/50 mt-1">{fmtDateShort(shift?.ended_at || shift?.started_at)}</p>
       <p className="text-sm text-[#F2F0EA]/60 mt-1">
         Signed by {shift?.machine_signature_name || shift?.supervisor_signature_name || "you"}
         {expiry ? ` - link expires ${expiry}` : ""}
       </p>
       <Button className="w-full mt-3" variant="whatsapp" disabled={sending} onClick={onSend}>
-        {sending ? "Opening..." : link ? `WhatsApp ${ownerName}` : `Create link & WhatsApp ${ownerName}`}
+        {sending ? "Opening..." : `WhatsApp ${ownerName}`}
       </Button>
+      {onView && (
+        <Button className="w-full mt-2" variant="secondary" onClick={onView}>
+          Open signed copy
+        </Button>
+      )}
       {onDismiss && (
         <Button className="w-full mt-2" variant="ghost" onClick={onDismiss}>
           Done

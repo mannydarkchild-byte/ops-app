@@ -251,14 +251,13 @@ export function MechanicApp() {
   return (
     <AppPage
       subtitle="Mechanic"
-      context={activeSite?.name || user?.site_id}
+      context={activeSite?.name || "Site"}
       showSite={false}
       tabs={tabItems}
       activeTab={tab}
       onTabChange={setTab}
       onSync={syncNow}
       maxWidth="max-w-2xl"
-      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
       {tab !== "pulse" && (

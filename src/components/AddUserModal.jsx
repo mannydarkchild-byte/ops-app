@@ -80,8 +80,8 @@ export function AddUserModal({ onClose, sites, machines, defaultSiteId, onDone }
         className="w-full bg-[#00A4A6] text-white py-4 rounded-xl font-logo font-bold disabled:opacity-40">
         {busy ? "CREATING…" : "CREATE USER"}
       </button>
-      <p className="font-body text-[10px] text-[#F2F0EA]/40 mt-3 text-center">
-        If email confirmation is enabled in Supabase, the user must confirm before signing in.
+      <p className="font-body text-xs text-[#F2F0EA]/45 mt-3 text-center">
+        They get an OPS email to confirm, then sign in with this password. Adding them does not sign you out.
       </p>
     </Modal>
   );

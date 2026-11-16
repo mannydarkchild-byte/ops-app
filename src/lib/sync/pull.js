@@ -3,6 +3,20 @@ import { SYNC_TABLES } from "../constants.js";
 import { getSyncMeta, setSyncMeta, mergeServerRow } from "../db.js";
 
 const PAGE_SIZE = 500;
+const PULL_CONCURRENCY = 3;
+
+async function mapPool(items, limit, worker) {
+  const out = new Array(items.length);
+  let cursor = 0;
+  async function run() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      out[index] = await worker(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return out;
+}
 
 /** Tables with a site_id column — filter on the server when syncing one site */
 const SITE_SCOPED_TABLES = new Set([
@@ -76,7 +90,7 @@ export async function pullIncremental({ tables = SYNC_TABLES, siteId = null } = 
   let totalPulled = 0;
   const errors = [];
 
-  for (const table of tables) {
+  await mapPool(tables, PULL_CONCURRENCY, async (table) => {
     try {
       const watermarkKey = `watermark_${table}${siteId ? `_${siteId}` : ""}`;
       const since = await getSyncMeta(watermarkKey);
@@ -111,14 +125,14 @@ export async function pullIncremental({ tables = SYNC_TABLES, siteId = null } = 
         errors.push(`${table}: ${msg}`);
       }
     }
-  }
+  });
 
   await setSyncMeta("last_pull_at", new Date().toISOString());
   return { pulled: totalPulled, errors };
 }
 
 /** Initial bootstrap: pull recent data only (last 90 days) */
-export async function pullBootstrap({ siteId = null, daysBack = 90 } = {}) {
+export async function pullBootstrap({ siteId = null, daysBack = 21 } = {}) {
   if (!navigator.onLine) return { pulled: 0, errors: ["offline"] };
 
   const since = new Date();
@@ -128,7 +142,7 @@ export async function pullBootstrap({ siteId = null, daysBack = 90 } = {}) {
   let totalPulled = 0;
   const errors = [];
 
-  for (const table of SYNC_TABLES) {
+  await mapPool(SYNC_TABLES, PULL_CONCURRENCY, async (table) => {
     try {
       let query = supabase.from(table).select("*");
       if (!CATALOG_TABLES.has(table)) {
@@ -138,12 +152,10 @@ export async function pullBootstrap({ siteId = null, daysBack = 90 } = {}) {
           query = query.gte("created_at", sinceISO);
         }
       }
-      if (table !== "profiles") {
-        query = applySiteFilter(query, table, siteId);
-      }
-      const { data, error } = await query.limit(5000);
+      query = applySiteFilter(query, table, siteId);
+      const { data, error } = await query.limit(2000);
       if (error) throw error;
-      if (!data?.length) continue;
+      if (!data?.length) return;
 
       for (const row of data) {
         if (await mergeServerRow(table, row)) totalPulled++;
@@ -165,16 +177,20 @@ export async function pullBootstrap({ siteId = null, daysBack = 90 } = {}) {
         errors.push(`${table}: ${msg}`);
       }
     }
-  }
+  });
 
   await setSyncMeta("bootstrapped_at", new Date().toISOString());
   return { pulled: totalPulled, errors };
 }
 
 /** Always refresh the people list — small table, must work offline after one Update. */
-export async function pullStaffDirectory() {
+export async function pullStaffDirectory({ siteId = null } = {}) {
   if (!navigator.onLine) return { pulled: 0 };
-  const { data, error } = await supabase.from("profiles").select("*");
+  let query = supabase
+    .from("profiles")
+    .select("id,email,name,role,site_id,machine_id,organization_id,phone,shift_band,active,updated_at");
+  if (siteId) query = query.eq("site_id", siteId);
+  const { data, error } = await query;
   if (error || !data?.length) return { pulled: 0, errors: error ? [error.message] : [] };
   let pulled = 0;
   for (const row of data) {

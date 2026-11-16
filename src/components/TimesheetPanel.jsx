@@ -45,6 +45,9 @@ export function TimesheetPanel({
         <div className="bg-[#0A0A0A] rounded-xl p-4 text-center border border-[#2A2A2A]">
           <p className="font-logo text-[#F2F0EA]/55">On site</p>
           <p className="font-logo text-3xl text-[#F5C518] mt-1">{summary.hours.toFixed(1)}h</p>
+          {summary.overtimeHours > 0 && (
+            <p className="font-body text-xs text-[#F97316] mt-1">incl. {summary.overtimeHours.toFixed(1)}h overtime</p>
+          )}
         </div>
         <div className="bg-[#0A0A0A] rounded-xl p-4 text-center border border-[#2A2A2A]">
           <p className="font-logo text-[#F2F0EA]/55">Left early</p>
@@ -79,7 +82,9 @@ export function TimesheetPanel({
             <div key={r.id} className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg p-3">
               <div className="flex justify-between gap-3">
                 <p className="font-logo text-sm text-[#F2F0EA] truncate">{r.operator_name || "Operator"}</p>
-                <p className="font-logo text-sm text-[#F5C518] shrink-0">{r.hours.toFixed(1)}h</p>
+                <p className="font-logo text-sm text-[#F5C518] shrink-0">
+                  {r.hours.toFixed(1)}h{r.overtimeHours > 0 ? ` · ${r.overtimeHours.toFixed(1)} OT` : ""}
+                </p>
               </div>
               <p className="font-body text-xs text-[#F2F0EA]/55 mt-1">
                 {r.dateLabel} · {r.inLabel} → {r.outLabel}

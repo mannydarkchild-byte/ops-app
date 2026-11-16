@@ -24,7 +24,7 @@ export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPa
     setBusy(true);
     setResetErr("");
     const { error: e } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/`,
+      redirectTo: "https://opsapp.africa/",
     });
     setBusy(false);
     if (e) setResetErr(e.message);
@@ -57,7 +57,7 @@ export function LoginScreen({ onLogin, error, loading, mode: forcedMode, onSetPa
       <div className="login-wrap px-5 pb-[max(2rem,env(safe-area-inset-bottom))] w-full mx-auto">
         <div className="login-brand">
           <div className="flex flex-col items-start gap-3">
-            <LogoMark size="xl" />
+            <LogoMark size="lg" />
             <h1 className="font-logo ops-brand text-3xl text-ops-gold leading-none">OPS</h1>
           </div>
           <p className="font-body text-ops-text login-copy mt-4">

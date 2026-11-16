@@ -2,6 +2,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "ops-app-darkchilds-projects.vercel.app" }],
+      "destination": "https://opsapp.africa/:path*",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     { "source": "/((?!assets/|.*\\..*).*)", "destination": "/index.html" }
   ]

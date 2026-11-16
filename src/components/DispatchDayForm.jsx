@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { localDayKey } from "../lib/utils.js";
 import { bucketTonnes, DISPATCH_STATUS, dispatchStatus, previewFloor } from "../lib/dispatchMetrics.js";
+import { tonnesPerBucket } from "../lib/siteConfig.js";
 import { weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
 import { resolveMediaUrl } from "../lib/media.js";
-import { ShiftDispatchFields } from "./ShiftDispatchFields.jsx";
+import { ProductionReadout, ShiftDispatchFields } from "./ShiftDispatchFields.jsx";
 import { Button } from "./ui/Button.jsx";
 import { FieldDate, FieldSelect } from "./ui/FieldSelect.jsx";
 
@@ -84,8 +85,10 @@ export function DispatchDayForm({
     trucks,
     photoRefs: photos.map((p) => p.ref).filter(Boolean),
   };
-  const screened = bucketTonnes(excavatorBuckets, factors.excavator_bucket_tonnes);
-  const felTonnes = bucketTonnes(felBuckets, factors.fel_bucket_tonnes);
+  const excavatorEach = factors.excavator_bucket_tonnes ?? tonnesPerBucket(row?.excavator_bucket_tonnes);
+  const felEach = factors.fel_bucket_tonnes ?? tonnesPerBucket(row?.fel_bucket_tonnes);
+  const screened = bucketTonnes(excavatorBuckets, excavatorEach);
+  const felTonnes = bucketTonnes(felBuckets, felEach);
   const dispatchedNow = tonnes === "" || tonnes == null || !Number.isFinite(Number(tonnes)) ? null : Number(tonnes);
   const floorPreview = previewFloor(records, siteId, date, felTonnes, dispatchedNow, factors);
   const floor = floorPreview.closing;
@@ -135,21 +138,15 @@ export function DispatchDayForm({
         <p className="font-body text-sm text-[#F97316]">Sent back: {row.supervisor_comment}</p>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
-          <p className="font-ui text-xs font-semibold text-[#F2F0EA]/50">Screened</p>
-          <p className="font-ui text-lg font-semibold text-[#F2F0EA] mt-1">{screened == null ? "-" : `${screened.toLocaleString("en-US")} t`}</p>
-        </div>
-        <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
-          <p className="font-ui text-xs font-semibold text-[#F2F0EA]/50">On the floor</p>
-          <p className="font-ui text-lg font-semibold text-[#F2F0EA] mt-1">{floor == null ? "-" : `${floor.toLocaleString("en-US")} t`}</p>
-          <p className="font-body text-xs text-[#F2F0EA]/45 mt-1">
-            {`${floorPreview.opening.toLocaleString("en-US")} t opened`}
-            {floorPreview.added == null ? "" : ` + ${floorPreview.added.toLocaleString("en-US")} FEL`}
-            {floorPreview.removed == null ? "" : ` - ${floorPreview.removed.toLocaleString("en-US")} dispatched`}
-          </p>
-        </div>
-      </div>
+      <ProductionReadout
+        screened={screened}
+        floor={floor}
+        excavatorBuckets={excavatorBuckets}
+        felBuckets={felBuckets}
+        excavatorEach={excavatorEach}
+        felEach={felEach}
+        floorNote={`${floorPreview.opening.toLocaleString("en-US")} t opened${floorPreview.added == null ? "" : ` + ${floorPreview.added.toLocaleString("en-US")} t FEL`}${floorPreview.removed == null ? "" : ` − ${floorPreview.removed.toLocaleString("en-US")} t dispatched`}`}
+      />
 
       {!locked && (
         <>
@@ -159,8 +156,8 @@ export function DispatchDayForm({
             tonnes={tonnes}
             trucks={trucks}
             photos={photos}
-            excavatorEach={factors.excavator_bucket_tonnes}
-            felEach={factors.fel_bucket_tonnes}
+            excavatorEach={excavatorEach}
+            felEach={felEach}
             onExcavator={setExcavatorBuckets}
             onFel={setFelBuckets}
             onTonnes={setTonnes}

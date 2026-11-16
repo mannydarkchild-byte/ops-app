@@ -172,6 +172,7 @@ export async function mergeServerRow(table, serverRow) {
   }
 
   await database[table].put({
+    ...(local || {}),
     ...serverRow,
     _sync_status: "synced",
     _server_updated_at: serverUpdated,

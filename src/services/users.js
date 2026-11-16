@@ -1,29 +1,46 @@
-import { supabase } from "../lib/supabase.js";
+import { supabase, createEphemeralAuthClient } from "../lib/supabase.js";
 import { saveLocal, readTable } from "../lib/db.js";
 import { ROLES } from "../lib/constants.js";
 import { nowISO } from "../lib/utils.js";
 
 const CREATABLE_ROLES = [ROLES.OPERATOR, ROLES.MECHANIC, ROLES.SUPERVISOR, ROLES.MANAGER, ROLES.DISPATCH, ROLES.STOREROOM];
+const CONFIRM_REDIRECT = "https://opsapp.africa/";
 
 export { CREATABLE_ROLES };
 
-/** Create auth user + profile (admin only). Restores admin session after signUp. */
+/** Create auth user + profile without replacing the admin's login. */
 export async function adminCreateUser({ email, password, name, role, siteId, machineId, phone, shiftBand }) {
   if (!CREATABLE_ROLES.includes(role)) throw new Error("Invalid role for new user");
   if (!email?.trim() || !password || password.length < 6) throw new Error("Email and password (6+ chars) required");
+  if (!name?.trim()) throw new Error("Enter the person's name");
 
   const { data: { session: adminSession } } = await supabase.auth.getSession();
-  if (!adminSession) throw new Error("Admin session required");
+  if (!adminSession) throw new Error("Sign in as admin first");
 
-  const { data, error } = await supabase.auth.signUp({
+  const guest = createEphemeralAuthClient();
+  const { data, error } = await guest.auth.signUp({
     email: email.trim(),
     password,
     options: {
-      data: { name: name.trim(), role },
+      emailRedirectTo: CONFIRM_REDIRECT,
+      data: {
+        name: name.trim(),
+        role,
+        site_id: siteId || "",
+        machine_id: role === ROLES.OPERATOR ? (machineId || "") : "",
+      },
     },
   });
-  if (error) throw error;
-  if (!data.user?.id) throw new Error("User was not created — check if email already exists");
+  try { await guest.auth.signOut(); } catch {}
+
+  if (error) {
+    const msg = error.message || "Could not create user";
+    if (/already/i.test(msg) || error.status === 422) {
+      throw new Error("That email is already on OPS.");
+    }
+    throw new Error(msg);
+  }
+  if (!data.user?.id) throw new Error("User was not created — try a different email");
 
   const profile = {
     id: data.user.id,
@@ -39,14 +56,17 @@ export async function adminCreateUser({ email, password, name, role, siteId, mac
   };
 
   const { error: profileErr } = await supabase.from("profiles").update(profile).eq("id", data.user.id);
-  if (profileErr) throw profileErr;
+  if (profileErr) throw new Error(profileErr.message || "Account created, but the profile did not save. Open People and set their site and role.");
 
   await saveLocal("profiles", { ...profile, created_at: nowISO(), _sync_status: "synced" }, { enqueue: false });
 
-  await supabase.auth.setSession({
-    access_token: adminSession.access_token,
-    refresh_token: adminSession.refresh_token,
-  });
+  const { data: { session: stillAdmin } } = await supabase.auth.getSession();
+  if (!stillAdmin && adminSession) {
+    await supabase.auth.setSession({
+      access_token: adminSession.access_token,
+      refresh_token: adminSession.refresh_token,
+    });
+  }
 
   return { user: data.user, profile, needsEmailConfirm: !data.session };
 }

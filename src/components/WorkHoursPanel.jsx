@@ -164,7 +164,11 @@ export function WorkHoursPanel({ variant = "full" }) {
           ) : mine.map((row) => (
             <div key={row.id} className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
               <p className="font-logo text-[#F2F0EA]">{row.dateLabel}</p>
-              <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">{row.inLabel} – {row.outLabel} · {row.hours.toFixed(1)}h · {row.statusLabel}</p>
+              <p className="font-body text-sm text-[#F2F0EA]/70 mt-1">
+                {row.inLabel} – {row.outLabel} · {row.hours.toFixed(1)}h
+                {row.overtimeHours > 0 ? ` · ${row.overtimeHours.toFixed(1)}h OT` : ""}
+                {" · "}{row.statusLabel}
+              </p>
             </div>
           ))}
         </div>

@@ -44,12 +44,12 @@ export function LogoMark({ size = "bar", src = "/logo.png" }) {
   }[size] || "w-24 h-24";
 
   return (
-    <div className={`${dim} shrink-0`} aria-hidden>
+    <div className={`${dim} shrink-0 flex items-center justify-center`} aria-hidden>
       {!imgFailed ? (
         <img
           src={src || "/logo.png"}
           alt=""
-          className="block w-full h-full object-contain"
+          className="block max-w-full max-h-full w-auto h-auto object-contain"
           onError={() => setImgFailed(true)}
         />
       ) : (
@@ -264,12 +264,12 @@ export function AppHeader({ right, subtitle, context, menuItems = [], openHeader
             <span className="font-logo ops-brand text-base leading-none text-ops-gold">
               {user?.organization_name || "OPS"}
             </span>
-            <p className="font-body text-sm text-ops-text leading-tight break-words">
+            <p className="font-body text-sm text-ops-text leading-snug mt-0.5 truncate">
               {displayName}
+              <span className={`font-ui text-xs capitalize ${colors.text}`}> · {roleLabel}</span>
             </p>
-            <p className={`font-ui text-xs capitalize leading-tight ${colors.text}`}>{roleLabel}</p>
             {context && (
-              <p className="font-body text-xs text-ops-muted truncate leading-tight">{context}</p>
+              <p className="font-body text-xs text-ops-muted leading-snug mt-0.5 truncate">{context}</p>
             )}
           </div>
         </div>

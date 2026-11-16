@@ -1,3 +1,5 @@
+import { stopReasonDetail } from "./stopReasons.js";
+
 const EVENT_META = {
   CLOCK_IN: { icon: "⏱", label: "Clocked in" },
   CLOCK_OUT: { icon: "⏱", label: "Clocked out" },
@@ -8,14 +10,25 @@ const EVENT_META = {
   METER_END_CAPTURED: { icon: "📸", label: "Closing meter photo" },
 };
 
-export function buildActivityFeed({ events, fuelLogs, issues, machines, siteId }, { limit = 40 } = {}) {
+export function buildActivityFeed({ events, fuelLogs, issues, machines, siteId, machineId = null }, { limit = 40, fromMs = null, toMs = null } = {}) {
   const machineName = (id) => {
     if (!id) return "Site-wide";
     return machines.find((m) => m.id === id)?.name || id;
   };
   const items = [];
 
-  for (const e of events.filter((x) => x.site_id === siteId)) {
+  const onSite = (row) => !siteId || row.site_id === siteId;
+  const onMachine = (row) => !machineId || row.machine_id === machineId;
+  const inWindow = (iso) => {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) return false;
+    if (fromMs != null && t < fromMs) return false;
+    if (toMs != null && t > toMs) return false;
+    return true;
+  };
+
+  for (const e of events.filter((x) => onSite(x) && onMachine(x))) {
     const meta = EVENT_META[e.type] || { icon: "•", label: e.type?.replace(/_/g, " ") || "Activity" };
     items.push({
       id: `ev-${e.id}`,
@@ -26,14 +39,19 @@ export function buildActivityFeed({ events, fuelLogs, issues, machines, siteId }
       label: meta.label,
       operator: e.operator_name,
       machine: machineName(e.machine_id),
-      detail: e.type === "STOP" || e.type === "CLOCK_OUT"
-        ? [e.reason, e.note].filter(Boolean).join(" — ")
-        : (e.note || e.reason || ""),
+      detail: (() => {
+        if (e.type === "STOP") {
+          const shown = stopReasonDetail(e.reason, e.note);
+          return [shown.category, shown.detail].filter(Boolean).join(" — ");
+        }
+        if (e.type === "CLOCK_OUT") return [e.reason, e.note].filter(Boolean).join(" — ");
+        return e.note || e.reason || "";
+      })(),
       source: e,
     });
   }
 
-  for (const f of fuelLogs.filter((x) => x.site_id === siteId)) {
+  for (const f of fuelLogs.filter((x) => onSite(x) && onMachine(x))) {
     items.push({
       id: `fuel-${f.id}`,
       kind: "fuel",
@@ -48,7 +66,7 @@ export function buildActivityFeed({ events, fuelLogs, issues, machines, siteId }
     });
   }
 
-  for (const i of issues.filter((x) => x.site_id === siteId)) {
+  for (const i of issues.filter((x) => onSite(x) && onMachine(x))) {
     items.push({
       id: `iss-${i.id}`,
       kind: "issue",
@@ -64,7 +82,7 @@ export function buildActivityFeed({ events, fuelLogs, issues, machines, siteId }
   }
 
   return items
-    .filter((x) => x.at)
+    .filter((x) => inWindow(x.at))
     .sort((a, b) => new Date(b.at) - new Date(a.at))
     .slice(0, limit);
 }

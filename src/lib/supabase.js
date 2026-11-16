@@ -12,5 +12,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    storage: typeof window !== "undefined" ? window.localStorage : undefined,
   },
 });
+
+/** Separate client so admin "Add user" cannot steal the admin's login. */
+export function createEphemeralAuthClient() {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}

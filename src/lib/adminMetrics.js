@@ -1,6 +1,7 @@
 import { ISSUE, MAINTENANCE_STATUS, ROLES, SHIFT } from "./constants.js";
 import { getBillingPeriod, inPeriod, isLiveShift, money, onSiteRecord, shiftBillableValue } from "./utils.js";
 import { formatDurationMinutes, shiftBillableHours } from "./shiftMetrics.js";
+import { canonicalStopReason } from "./stopReasons.js";
 import {
   billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours,
 } from "./dashboardBreakdown.js";
@@ -182,7 +183,7 @@ export function computeAdminDashboard({
         id: m.id,
         name: m.name,
         status: stop ? "stopped" : running ? "running" : "idle",
-        stopReason: stop?.reason,
+        stopReason: stop?.reason ? canonicalStopReason(stop.reason) : stop?.reason,
       };
     }),
   };

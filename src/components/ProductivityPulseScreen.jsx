@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
-import { StockChartSvg } from "./StockChart.jsx";
+import { StockChartSvg, formatNetMinutes } from "./StockChart.jsx";
 import { MachineSelect } from "./DashboardKpi.jsx";
 import { buildPulseSnapshot } from "../lib/productivityPulse.js";
 import { refreshMachineActivity } from "../lib/machineStatus.js";
@@ -50,6 +50,7 @@ export function ProductivityPulseScreen({
   children,
   initialMachineId,
   initialWindow = "today",
+  onContextChange,
 }) {
   const {
     user, activeSite, machines, shifts, events, getSettingsForSite, syncNow, refreshLocal,
@@ -116,6 +117,27 @@ export function ProductivityPulseScreen({
     [nowMs, siteConfig.billing_cycle_start_day]
   );
 
+  useEffect(() => {
+    if (!onContextChange) return;
+    let from = new Date(nowMs);
+    from.setHours(0, 0, 0, 0);
+    let to = new Date(nowMs);
+    if (windowMode === "cycle") {
+      from = new Date(cycle.start);
+      to = new Date(cycle.end);
+    } else if (windowMode === "history") {
+      from = new Date(`${historyDay}T00:00:00`);
+      to = new Date(`${historyDay}T23:59:59.999`);
+    }
+    onContextChange({
+      machineId: machine?.id || "",
+      machineName: machine?.name || "",
+      fromMs: from.getTime(),
+      toMs: to.getTime(),
+      windowMode,
+    });
+  }, [machine?.id, machine?.name, windowMode, historyDay, cycle.start, cycle.end, nowMs, onContextChange]);
+
   const pulse = useMemo(() => {
     if (!machine?.id) return null;
     return buildPulseSnapshot({
@@ -146,11 +168,7 @@ export function ProductivityPulseScreen({
       ? new Date(`${historyDay}T12:00:00`).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })
       : cycle.label || "This cycle";
 
-  const netLabel = !pulse
-    ? "—"
-    : pulse.endScore >= 0
-      ? `+${formatDurationMinutes(pulse.endScore)}`
-      : `−${formatDurationMinutes(Math.abs(pulse.endScore))}`;
+  const netLabel = !pulse ? "—" : formatNetMinutes(pulse.endScore);
 
   const body = (
     <div className={`space-y-4 ${embedded ? "" : "px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]"}`}>
@@ -247,6 +265,7 @@ export function ProductivityPulseScreen({
       <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3">
         <p className="font-ui text-sm font-semibold text-ops-text px-1 mb-2">Running vs stopped</p>
         <StockChartSvg points={pulse?.points || []} />
+        <p className="font-body text-xs text-[#F2F0EA]/45 px-1 mt-2">Green climbs while running. Red falls while stopped.</p>
       </div>
 
       {!isOperator && (

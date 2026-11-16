@@ -1,6 +1,3 @@
-import { Button } from "./ui/Button.jsx";
-import { OperatorDayTools } from "./OperatorDayTools.jsx";
-
 function greeting(now = new Date()) {
   const hour = now.getHours();
   if (hour < 12) return "Morning";
@@ -8,14 +5,7 @@ function greeting(now = new Date()) {
   return "Evening";
 }
 
-export function OperatorWelcome({
-  name,
-  siteName,
-  reportsAttention = 0,
-  onReady,
-  onMyReports,
-  onPulse,
-}) {
+export function OperatorGreeting({ name }) {
   const firstName = (name || "Operator").split(/\s+/)[0];
   const today = new Date().toLocaleDateString("en-ZA", {
     weekday: "long",
@@ -25,21 +15,8 @@ export function OperatorWelcome({
 
   return (
     <div className="operator-welcome">
-      <p className="operator-welcome-kicker font-ui">{greeting()}</p>
-      <h2 className="operator-welcome-name font-ui">{firstName}</h2>
+      <h2 className="operator-welcome-name font-ui">{greeting()} {firstName}</h2>
       <p className="operator-welcome-date font-body">{today}</p>
-      <p className="operator-welcome-copy font-body">
-        Clock in once{siteName ? ` on ${siteName}` : ""}, then pick a machine.
-      </p>
-      <Button type="button" variant="primary" size="lg" className="w-full min-h-14 text-lg" onClick={onReady}>
-        Start my day
-      </Button>
-      <OperatorDayTools
-        className="mt-3"
-        onPulse={onPulse}
-        onReports={onMyReports}
-        reportsAttention={reportsAttention}
-      />
     </div>
   );
 }

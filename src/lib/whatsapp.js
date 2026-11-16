@@ -1,14 +1,13 @@
-import { formatDurationMinutes, shiftBillableHours } from "./shiftMetrics.js";
+import { formatDurationMinutes } from "./shiftMetrics.js";
+import { publicAppOrigin } from "./utils.js";
 
 /** Build WhatsApp deep link for supervisor shift verification */
-export function buildSupervisorVerifyWhatsApp(supervisorPhone, shift, machine, site, { recordedBy, events, siteSettings } = {}) {
+export function buildSupervisorVerifyWhatsApp(supervisorPhone, shift, machine, site, { recordedBy } = {}) {
   const phone = String(supervisorPhone || "").replace(/\D/g, "");
   if (!phone) return null;
 
-  const base = window.location.origin + window.location.pathname;
-  const verifyUrl = `${base}?verify=${encodeURIComponent(shift.id)}&token=${encodeURIComponent(shift.verification_token || "")}`;
+  const verifyUrl = `${publicAppOrigin()}/r/${encodeURIComponent(shift.id)}/${encodeURIComponent(shift.verification_token || "")}`;
   const meterHours = Number(shift.hours_worked || 0).toFixed(1);
-  const billable = events ? shiftBillableHours(shift, events, siteSettings).toFixed(1) : null;
   const lines = [
     "OPS — Daily Shift Verification",
     "",
@@ -17,7 +16,6 @@ export function buildSupervisorVerifyWhatsApp(supervisorPhone, shift, machine, s
     `Machine operator: ${shift.operator_name}`,
     `Recorded by: ${recordedBy || shift.operator_name}`,
     `Machine hours: ${meterHours}h (${shift.start_hour_meter}h → ${shift.end_hour_meter}h)`,
-    billable != null ? `Billable hours: ${billable}h (8h shift minus Darkchild downtime)` : null,
     shift.runtime_minutes != null ? `Runtime: ${formatDurationMinutes(shift.runtime_minutes)} · Downtime: ${formatDurationMinutes(shift.downtime_minutes || 0)}` : null,
     "",
     "Tap to open OPS and verify:",

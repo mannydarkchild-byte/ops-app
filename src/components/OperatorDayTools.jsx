@@ -1,7 +1,7 @@
 import { Button } from "./ui/Button.jsx";
 import { IconPulse, IconReports } from "./FieldIcons.jsx";
 
-/** Pulse and Reports on the page — not in the hamburger. */
+/** Pulse and Reports — kept for other layouts. Operator home uses the tab bar. */
 export function OperatorDayTools({ onPulse, onReports, reportsAttention = 0, className = "" }) {
   return (
     <div className={`grid grid-cols-2 gap-2 ${className}`.trim()}>

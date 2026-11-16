@@ -1,11 +1,12 @@
 import { Modal } from "./ui/Modal.jsx";
 import { FieldSelect } from "./ui/FieldSelect.jsx";
 
-export function MachineSelect({ machines, value, onChange }) {
+export function MachineSelect({ machines, value, onChange, allowAll = false }) {
   return (
     <label className="block">
       <span className="ops-field-label">Machine</span>
-      <FieldSelect value={value || ""} onChange={onChange} placeholder="Choose a machine…">
+      <FieldSelect value={value || ""} onChange={onChange} placeholder={allowAll ? "All machines" : "Choose a machine…"}>
+        {allowAll && <option value="">All machines</option>}
         {machines.map((machine) => (
           <option key={machine.id} value={machine.id}>{machine.name}</option>
         ))}

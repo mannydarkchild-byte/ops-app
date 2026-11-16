@@ -41,15 +41,15 @@ export function siteSignPreviewData() {
     },
     site: { name: "Site" },
     stops: [
-      { reason: "Hydraulic system", minutes: 48, note: "", status: "closed", stopped_at: t(8, 10), restarted_at: t(8, 58) },
-      { reason: "Waiting for loader", minutes: 35, note: "", status: "closed", stopped_at: t(11, 5), restarted_at: t(11, 40) },
-      { reason: "Worn or torn screen media", minutes: 12, note: "", status: "closed", stopped_at: t(12, 20), restarted_at: t(12, 32) },
+      { reason: "Hydraulic", minutes: 48, note: "Hose burst", status: "closed", stopped_at: t(8, 10), restarted_at: t(8, 58) },
+      { reason: "Site / operational", minutes: 35, note: "Waiting for loader", status: "closed", stopped_at: t(11, 5), restarted_at: t(11, 40) },
+      { reason: "Consumables", minutes: 12, note: "Torn screen media", status: "closed", stopped_at: t(12, 20), restarted_at: t(12, 32) },
     ],
     events: [
       { id: "e-start", shift_id: shiftId, type: "MACHINE_STARTED", timestamp: t(6, 5) },
-      { id: "e-s1", shift_id: shiftId, type: "STOP", reason: "Hydraulic system", downtime_minutes: 48, status: "closed", stopped_at: t(8, 10), restarted_at: t(8, 58), timestamp: t(8, 10) },
-      { id: "e-s2", shift_id: shiftId, type: "STOP", reason: "Waiting for loader", downtime_minutes: 35, status: "closed", stopped_at: t(11, 5), restarted_at: t(11, 40), timestamp: t(11, 5) },
-      { id: "e-s3", shift_id: shiftId, type: "STOP", reason: "Worn or torn screen media", downtime_minutes: 12, status: "closed", stopped_at: t(12, 20), restarted_at: t(12, 32), timestamp: t(12, 20) },
+      { id: "e-s1", shift_id: shiftId, type: "STOP", reason: "Hydraulic", note: "Hose burst", downtime_minutes: 48, status: "closed", stopped_at: t(8, 10), restarted_at: t(8, 58), timestamp: t(8, 10) },
+      { id: "e-s2", shift_id: shiftId, type: "STOP", reason: "Site / operational", note: "Waiting for loader", downtime_minutes: 35, status: "closed", stopped_at: t(11, 5), restarted_at: t(11, 40), timestamp: t(11, 5) },
+      { id: "e-s3", shift_id: shiftId, type: "STOP", reason: "Consumables", note: "Torn screen media", downtime_minutes: 12, status: "closed", stopped_at: t(12, 20), restarted_at: t(12, 32), timestamp: t(12, 20) },
       { id: "e-end", shift_id: shiftId, type: "METER_END_CAPTURED", timestamp: t(14, 0) },
     ],
     fuel_logs: [
@@ -64,6 +64,10 @@ export function siteSignPreviewData() {
       trucks_dispatched: 31,
       tonnes_screened: 1180,
       tonnes_on_floor: 90,
+      excavator_buckets: 236,
+      fel_buckets: 45,
+      excavator_bucket_tonnes: 5,
+      fel_bucket_tonnes: 3,
     },
     shift: {
       id: shiftId,

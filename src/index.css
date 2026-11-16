@@ -489,13 +489,6 @@ button,
   margin: 0 0 1rem;
 }
 
-.operator-welcome-copy {
-  font-size: 1rem;
-  line-height: 1.45;
-  color: var(--ops-text);
-  margin: 0 0 1.5rem;
-}
-
 .operator-welcome-go {
   min-height: 56px !important;
   font-size: 1.05rem !important;

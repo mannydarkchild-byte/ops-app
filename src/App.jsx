@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import { OpsProvider, useOps } from "./context/OpsContext.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { OperatorApp } from "./apps/OperatorApp.jsx";
@@ -8,37 +8,58 @@ import { ManagerApp } from "./apps/ManagerApp.jsx";
 import { AdminApp } from "./apps/AdminApp.jsx";
 import { DispatchApp } from "./apps/DispatchApp.jsx";
 import { StoreroomApp } from "./apps/StoreroomApp.jsx";
-import { LandingPage } from "./components/LandingPage.jsx";
 import { SiteSignPage } from "./components/SiteSignPage.jsx";
 import { DispatchPreviewPage } from "./components/DispatchPreviewPage.jsx";
 import { ROLES } from "./lib/constants.js";
+import { readCachedAuthUser } from "./lib/auth.js";
+import { VERIFY_ONCE_KEY, parseVerifyLink } from "./lib/machineStatus.js";
+import { SiteHoursGuard } from "./components/SiteHoursGuard.jsx";
+import { DeviceSessionGuard } from "./components/DeviceSessionGuard.jsx";
+import { VerifyLinkBridge } from "./components/VerifyLinkBridge.jsx";
+import { LogoMark } from "./components/AppShell.jsx";
 
-const VERIFY_ONCE_KEY = "ops_verify_once";
+const LandingPage = lazy(() =>
+  import("./components/LandingPageV2.jsx").then((mod) => ({ default: mod.LandingPage }))
+);
 
 function stripVerifyFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  if (!params.has("verify") && !params.has("token")) return;
   params.delete("verify");
   params.delete("token");
+  params.delete("v");
+  params.delete("t");
   const qs = params.toString();
-  window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash || ""}`);
+  const path = /^\/r\//.test(window.location.pathname) ? "/" : window.location.pathname;
+  window.history.replaceState({}, "", `${path}${qs ? `?${qs}` : ""}${window.location.hash || ""}`);
 }
 
-function consumeVerifyParams() {
-  const params = new URLSearchParams(window.location.search);
-  const verify = params.get("verify");
-  const token = params.get("token");
-  if (verify) {
-    try {
-      sessionStorage.setItem(VERIFY_ONCE_KEY, JSON.stringify({ verifyShiftId: verify, verifyToken: token }));
-    } catch {}
-    stripVerifyFromUrl();
-  }
+function readPathVerify() {
+  const path = window.location.pathname || "";
+  const match = path.match(/^\/r\/([^/]+)(?:\/([^/]+))?/);
+  if (!match) return null;
+  const parsed = parseVerifyLink(match[1], match[2] || "");
+  if (!parsed.id && !parsed.tok) return null;
+  return { verifyShiftId: parsed.id, verifyToken: parsed.tok };
+}
+
+function readVerifyParams() {
   try {
+    const fromPath = readPathVerify();
+    const params = new URLSearchParams(window.location.search);
+    const rawVerify = params.get("verify") || params.get("v") || fromPath?.verifyShiftId || "";
+    const rawToken = params.get("token") || params.get("t") || fromPath?.verifyToken || "";
+    const parsed = parseVerifyLink(rawVerify, rawToken);
+    if (parsed.id || parsed.tok) {
+      try {
+        sessionStorage.setItem(VERIFY_ONCE_KEY, JSON.stringify({ verifyShiftId: parsed.id, verifyToken: parsed.tok }));
+      } catch {}
+      return { verifyShiftId: parsed.id || null, verifyToken: parsed.tok || null };
+    }
     const raw = sessionStorage.getItem(VERIFY_ONCE_KEY);
     if (!raw) return { verifyShiftId: null, verifyToken: null };
-    const parsed = JSON.parse(raw);
-    return { verifyShiftId: parsed.verifyShiftId || null, verifyToken: parsed.verifyToken || null };
+    const stored = JSON.parse(raw);
+    const again = parseVerifyLink(stored.verifyShiftId, stored.verifyToken);
+    return { verifyShiftId: again.id || null, verifyToken: again.tok || null };
   } catch {
     return { verifyShiftId: null, verifyToken: null };
   }
@@ -54,9 +75,15 @@ function shouldOpenLoginFirst() {
   // Site sign-off links (?sign=&token=) are public — never force login for them.
   if (params.has("sign") || params.get("dispatch") === "preview") return false;
   const hash = window.location.hash || "";
-  if (params.has("verify") || params.has("token")) return true;
+  if (params.has("verify") || params.has("token") || params.has("v") || /^\/r\//.test(window.location.pathname || "")) return true;
   if (/type=recovery|access_token|error_description/i.test(hash)) return true;
   if (hash === "#login") return true;
+  try {
+    if (window.matchMedia("(display-mode: standalone)").matches) return true;
+    if (window.navigator.standalone) return true;
+    if (localStorage.getItem("ops-pwa-installed")) return true;
+    if (readCachedAuthUser()) return true;
+  } catch {}
   return false;
 }
 
@@ -82,7 +109,16 @@ function RoleRouter() {
     }
   });
   const { user, loading, authError, signIn, passwordRecovery, setPassword } = useOps();
-  const [verifyParams, setVerifyParams] = useState(consumeVerifyParams);
+  const [verifyParams, setVerifyParams] = useState(readVerifyParams);
+  useEffect(() => {
+    const sync = () => setVerifyParams(readVerifyParams());
+    window.addEventListener("pageshow", sync);
+    window.addEventListener("popstate", sync);
+    return () => {
+      window.removeEventListener("pageshow", sync);
+      window.removeEventListener("popstate", sync);
+    };
+  }, []);
   const [gate, setGate] = useState(() => (shouldOpenLoginFirst() ? "login" : "site"));
   if (dispatchPreview) {
     return (
@@ -104,16 +140,16 @@ function RoleRouter() {
     setVerifyParams({ verifyShiftId: null, verifyToken: null });
   };
 
-  if (loading) {
-  return (
+  if (loading && gate !== "site") {
+    return (
       <div className="min-h-[100dvh] bg-ops-black text-ops-text flex items-center justify-center px-6">
-        <div className="text-center">
-          <p className="font-logo text-4xl text-ops-gold tracking-widest mb-3">OPS</p>
-          <p className="font-body text-lg text-ops-muted">Loading…</p>
+        <div className="text-center flex flex-col items-center">
+          <LogoMark size="lg" />
+          <p className="font-body text-lg text-ops-muted mt-4">Loading…</p>
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   if (passwordRecovery) {
     return (
@@ -125,7 +161,11 @@ function RoleRouter() {
 
   if (!user) {
     if (!passwordRecovery && gate === "site") {
-      return <LandingPage onLogin={() => setGate("login")} />;
+      return (
+        <Suspense fallback={<div className="min-h-[100dvh] bg-ops-black" />}>
+          <LandingPage onLogin={() => setGate("login")} />
+        </Suspense>
+      );
     }
     return (
       <div className="ops-field min-h-screen">
@@ -153,9 +193,27 @@ function RoleRouter() {
         />
       );
     case ROLES.MANAGER:
-      return <ManagerApp />;
+      return (
+        <>
+          <ManagerApp />
+          <VerifyLinkBridge
+            verifyShiftId={verifyParams.verifyShiftId}
+            verifyToken={verifyParams.verifyToken}
+            onConsumed={clearVerifyLink}
+          />
+        </>
+      );
     case ROLES.ADMIN:
-      return <AdminApp />;
+      return (
+        <>
+          <AdminApp />
+          <VerifyLinkBridge
+            verifyShiftId={verifyParams.verifyShiftId}
+            verifyToken={verifyParams.verifyToken}
+            onConsumed={clearVerifyLink}
+          />
+        </>
+      );
     case ROLES.DISPATCH:
       return <DispatchApp />;
     case ROLES.STOREROOM:
@@ -165,7 +223,13 @@ function RoleRouter() {
       return <OperatorApp />;
   } })();
 
-  return <div className="ops-field min-h-screen">{app}</div>;
+  return (
+    <div className="ops-field min-h-screen">
+      {app}
+      <SiteHoursGuard />
+      <DeviceSessionGuard />
+    </div>
+  );
 }
 
 class ErrorBoundary extends React.Component {

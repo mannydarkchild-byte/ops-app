@@ -8,7 +8,6 @@ import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
-import { SignedReportCard } from "../components/SignedReportCard.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
 import { ISSUE, SHIFT } from "../lib/constants.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
@@ -20,10 +19,12 @@ import {
   fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
-import { buildTimesheetRows } from "../lib/timesheet.js";
-import { openShiftDailyReport, printOperationsReport, printTimesheetReport } from "../services/reports.js";
+import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
+import { openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
+import { OperationsReportPanel } from "../components/OperationsReportPanel.jsx";
 import { dispatchDayReport } from "../lib/dispatchReport.js";
 import { SupervisorReports } from "../components/SupervisorReports.jsx";
+import { ReportsHub, REPORT_KIND } from "../components/ReportsHub.jsx";
 import { RolePulse } from "../components/RolePulse.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
@@ -46,6 +47,13 @@ const REPORT_FILTERS = [
   { id: "all", label: "All" },
 ];
 
+const MANAGER_REPORT_KINDS = [
+  REPORT_KIND.daily,
+  REPORT_KIND.operations,
+  REPORT_KIND.timesheet,
+  REPORT_KIND.dispatch,
+];
+
 const EXPENSE_FILTERS = [
   { id: "cycle", label: "This cycle" },
   { id: "month", label: "This month" },
@@ -61,6 +69,8 @@ export function ManagerApp() {
 
   const [tab, setTab] = useState("today");
   const [moneyView, setMoneyView] = useState("spending");
+  const [reportKind, setReportKind] = useState(null);
+  const [reportMachineId, setReportMachineId] = useState(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [reportPreset, setReportPreset] = useState("cycle");
   const [timesheetFilter, setTimesheetFilter] = useState("cycle");
@@ -290,16 +300,37 @@ export function ManagerApp() {
   const currentShift = useMemo(() => currentShiftWindow(), []);
 
   const signedReports = useMemo(
-    () => dedupeShifts(warriorShifts
+    () => dedupeShifts(shifts
       .filter(
         (s) =>
+          s.site_id === user?.site_id &&
           s.shift_status === SHIFT.VERIFIED &&
           (s.supervisor_signature_ref || s.supervisor_signature_name || s.verified_at)
       )
-      .filter((s) => !signedPeriod || inPeriod(s.verified_at || s.ended_at, signedPeriod)))
+      .filter((s) => !signedPeriod || inPeriod(s.verified_at || s.ended_at, signedPeriod))
+      .filter((s) => !reportMachineId || s.machine_id === reportMachineId))
       .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0)),
-    [warriorShifts, signedPeriod]
+    [shifts, user?.site_id, signedPeriod, reportMachineId]
   );
+
+  const reportMachineCounts = useMemo(() => {
+    const counts = {};
+    for (const machine of siteMachines) counts[machine.id] = { signed: 0 };
+    for (const shift of signedReports) {
+      if (!reportMachineId && counts[shift.machine_id]) counts[shift.machine_id].signed += 1;
+    }
+    return counts;
+  }, [siteMachines, signedReports, reportMachineId]);
+
+  const hubCounts = useMemo(() => {
+    const hours = summarizeTimesheet(timesheetRows).hours;
+    return {
+      daily: { sub: `${signedReports.length} signed this period` },
+      operations: { sub: "Weekly and monthly by machine" },
+      timesheet: { sub: `${hours.toFixed(1)}h on site` },
+      dispatch: { sub: "Daily tonnes and trucks" },
+    };
+  }, [signedReports.length, timesheetRows]);
 
   const dualSignedCount = useMemo(
     () => signedReports.filter((s) => s.site_signature_name || s.site_signed_at).length,
@@ -403,13 +434,11 @@ export function ManagerApp() {
     [myIssues.length, partsRequests.length]
   );
 
-  const headerContext = primaryMachine
-    ? `${activeSite?.name || "Site"} - ${primaryMachine.name} - ${money(primaryMachine.billable_rate)}/h - ${billingPeriod.label}`
-    : activeSite?.name;
+  const headerContext = activeSite?.name || "Site";
 
   if (!primaryMachine) {
     return (
-      <AppPage subtitle="Manager" context={headerContext} onSync={syncNow} openHeaderTools alert={<AlertModal {...alert} confirmText="OK" />}>
+      <AppPage subtitle="Manager" context={headerContext} onSync={syncNow} alert={<AlertModal {...alert} confirmText="OK" />}>
         <p className="py-12 text-center text-sm text-[#F2F0EA]/40">
           No primary machine configured for this site. Ask admin to add a machine and set the primary in Sites.
         </p>
@@ -426,7 +455,6 @@ export function ManagerApp() {
       activeTab={tab}
       onTabChange={setTab}
       onSync={syncNow}
-      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
@@ -466,13 +494,13 @@ export function ManagerApp() {
           </div>
         )}
 
-        {tab !== "pulse" && !(tab === "money" && moneyView === "reports") && (
+        {tab !== "pulse" && (
           <div className="mb-4">
             <WorkHoursPanel variant="clock" />
           </div>
         )}
 
-        {tab !== "pulse" && tab !== "issues" && siteMachines.length > 1 && (
+        {tab !== "pulse" && tab !== "issues" && !(tab === "money" && moneyView === "reports") && siteMachines.length > 1 && (
           <label className="block mb-4">
             <span className="ops-field-label">Machine</span>
             <select
@@ -554,7 +582,7 @@ export function ManagerApp() {
         {tab === "money" && (
           <div className="grid grid-cols-2 gap-2 mb-3">
             <Button variant={moneyView === "spending" ? "primary" : "secondary"} onClick={() => setMoneyView("spending")}>Spending</Button>
-            <Button variant={moneyView === "reports" ? "primary" : "secondary"} onClick={() => setMoneyView("reports")}>Reports</Button>
+            <Button variant={moneyView === "reports" ? "primary" : "secondary"} onClick={() => { setMoneyView("reports"); setReportKind(null); setReportMachineId(null); }}>Reports</Button>
           </div>
         )}
 
@@ -657,58 +685,19 @@ export function ManagerApp() {
         )}
 
         {tab === "money" && moneyView === "reports" && (
-          <div className="space-y-4">
-            <WorkHoursPanel />
-            <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
-              <h3 className="font-ui text-sm font-semibold text-[#F5C518] mb-3">Operations report</h3>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {getDatePresets(siteConfig.billing_cycle_start_day).map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setReportPreset(p.id)}
-                    className={`px-3 py-2 rounded-lg font-logo text-[10px] ${reportPreset === p.id ? "bg-[#F5C518] text-black" : "bg-[#0A0A0A] border border-[#2A2A2A]"}`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const doc = await printOperationsReport(warriorReportData, getReportPeriod(), primaryMachine, activeSite);
-                    setReportPreview(doc);
-                  } catch (e) {
-                    showAlert("Could not open report", e.message, "error");
-                  }
-                }}
-                className="w-full bg-[#F5C518] text-black py-4 rounded-2xl font-ui font-semibold"
-              >
-                Open operations report
-              </button>
-            </div>
-
-            <TimesheetPanel
-              rows={timesheetRows}
-              periodLabel={timesheetPeriod?.label || "All time"}
-              filter={timesheetFilter}
-              onFilter={setTimesheetFilter}
-              machines={machines}
-              onPreview={async () => {
-                try {
-                  const doc = await printTimesheetReport(workSessions, timesheetPeriod, activeSite, machines);
-                  setReportPreview(doc);
-                } catch (e) {
-                  showAlert("Could not open timesheet", e.message, "error");
-                }
-              }}
-            />
-
-            <div>
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <h3 className="font-ui text-sm font-semibold text-[#F5C518]">Signed daily reports</h3>
-                <div className="flex flex-wrap gap-1 ml-auto">
+          <ReportsHub
+            kinds={MANAGER_REPORT_KINDS}
+            machines={siteMachines}
+            kind={reportKind}
+            machineId={reportMachineId}
+            onKind={setReportKind}
+            onMachine={setReportMachineId}
+            counts={hubCounts}
+            machineCounts={reportMachineCounts}
+          >
+            {reportKind === "daily" && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-1">
                   {REPORT_FILTERS.map((f) => (
                     <button
                       key={f.id}
@@ -720,33 +709,63 @@ export function ManagerApp() {
                     </button>
                   ))}
                 </div>
+                <p className="text-[10px] text-[#F2F0EA]/40">
+                  {dualSignedCount} dual-signed · {signedReports.length - dualSignedCount} legacy single-signed
+                </p>
+                <SupervisorReports
+                  machines={siteMachines}
+                  machineId={reportMachineId || ""}
+                  period={signedPeriod}
+                  periodLabel={signedPeriod?.label || "All time"}
+                  signedReports={signedReports}
+                  machineName={(id) => siteMachines.find((machine) => machine.id === id)?.name || id}
+                  events={events}
+                  siteConfig={siteConfig}
+                  dispatches={siteDispatch}
+                  onView={handleViewReport}
+                />
               </div>
-              <p className="text-[10px] text-[#F2F0EA]/40 -mt-1">
-                {dualSignedCount} dual-signed (both sides agreed, billable) · {signedReports.length - dualSignedCount} legacy single-signed
-              </p>
-              {signedReports.length === 0 ? (
-                <p className="text-sm text-[#F2F0EA]/40 text-center py-6">No signed reports for this period.</p>
-              ) : (
-                <div className="space-y-3">
-                  {signedReports.map((r) => (
-                    <SignedReportCard
-                      key={r.id}
-                      shift={r}
-                      machineName={primaryMachine.name}
-                      events={events}
-                      siteSettings={siteConfig}
-                      onViewReport={handleViewReport}
-                      onDownloadReport={handleViewReport}
-                      onShareReport={handleViewReport}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
 
-            <div>
-              <h3 className="font-ui text-sm font-semibold text-[#F5C518] mb-3">Signed dispatch reports</h3>
-              <p className="text-[10px] text-[#F2F0EA]/40 -mt-1 mb-3">Same daily dispatch report Dispatch and the supervisor open.</p>
+            {reportKind === "operations" && (
+              <OperationsReportPanel
+                site={activeSite}
+                machines={siteMachines}
+                machineId={reportMachineId || primaryMachine?.id || ""}
+                onMachine={setReportMachineId}
+                hideMachineSelect
+                cycleStartDay={siteConfig.billing_cycle_start_day}
+                data={{
+                  shifts,
+                  events,
+                  expenses,
+                  fuelLogs,
+                  inspections,
+                  siteSettings: siteConfig,
+                  dispatches: siteDispatch,
+                }}
+              />
+            )}
+
+            {reportKind === "timesheet" && (
+              <TimesheetPanel
+                rows={timesheetRows}
+                periodLabel={timesheetPeriod?.label || "All time"}
+                filter={timesheetFilter}
+                onFilter={setTimesheetFilter}
+                machines={machines}
+                onPreview={async () => {
+                  try {
+                    const doc = await printTimesheetReport(workSessions, timesheetPeriod, activeSite, machines);
+                    setReportPreview(doc);
+                  } catch (e) {
+                    showAlert("Could not open timesheet", e.message, "error");
+                  }
+                }}
+              />
+            )}
+
+            {reportKind === "dispatch" && (
               <SupervisorReports
                 group="dispatch"
                 period={signedPeriod}
@@ -760,8 +779,8 @@ export function ManagerApp() {
                   }
                 }}
               />
-            </div>
-          </div>
+            )}
+          </ReportsHub>
         )}
 
       {showBackdate && (

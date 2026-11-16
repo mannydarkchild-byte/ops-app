@@ -1,4 +1,5 @@
 import { SHIFT } from "./constants.js";
+import { publicAppOrigin } from "./utils.js";
 
 /**
  * Locked shift pattern: Morning 06:00-14:00, Afternoon 14:00-22:00.
@@ -74,7 +75,7 @@ export function agreementLabel(shift) {
 
 /** Public site sign-off link shared over WhatsApp. Token is the auth. */
 export function siteSignLink(shift, origin) {
-  const base = (origin || (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/$/, "");
+  const base = (origin || publicAppOrigin()).replace(/\/$/, "");
   return `${base}/?sign=${encodeURIComponent(shift.id)}&token=${encodeURIComponent(shift.site_token || "")}`;
 }
 

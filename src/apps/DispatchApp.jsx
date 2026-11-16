@@ -44,7 +44,6 @@ export function DispatchApp() {
       activeTab={tab}
       onTabChange={setTab}
       onSync={syncNow}
-      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
       {tab !== "pulse" && (
@@ -55,7 +54,7 @@ export function DispatchApp() {
       {tab === "pulse" && <RolePulse />}
       {tab === "today" && (
         <div className="space-y-4">
-          <p className="font-body text-sm text-[#F2F0EA]/70">One day, one record. Enter buckets, send for sign-off, done.</p>
+          <p className="font-body text-sm text-[#F2F0EA]/70">Backup only. Operators now enter buckets, trucks and tonnes when they finish the shift.</p>
           <DispatchDayForm
             records={siteDispatch}
             siteId={siteId}

@@ -22,12 +22,31 @@ export const HOUR_LABELS = {
   netHint: "Revenue minus expenses",
 };
 
+/** A single shift cannot add more meter hours than a full day. Extra digits (18391 vs 1839.1) fail this. */
+export const MAX_SHIFT_METER_HOURS = 24;
+
 /** Machine hours from the hour meter. This is not the billable figure. */
 export function meterHoursWorked(startMeter, endMeter) {
   const start = Number(startMeter);
   const end = Number(endMeter);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
   return Math.max(0, end - start);
+}
+
+/** Reject blank, reversed, or impossible meter jumps before they become source-of-truth hours. */
+export function assertReasonableMeterHours(startMeter, endMeter, { maxHours = MAX_SHIFT_METER_HOURS } = {}) {
+  const start = Number(startMeter);
+  const end = Number(endMeter);
+  if (!Number.isFinite(start) || start < 0) throw new Error("Enter a valid opening meter");
+  if (!Number.isFinite(end) || end < 0) throw new Error("Enter a valid closing meter");
+  if (end < start) throw new Error("Closing meter cannot be below opening");
+  const delta = end - start;
+  if (delta > maxHours) {
+    throw new Error(
+      `That meter jump is ${delta.toFixed(1)} hours. A shift cannot add more than ${maxHours} hours. Check you typed the reading, not an extra digit.`
+    );
+  }
+  return delta;
 }
 
 /** Sum closed stop events for a shift (app-tracked downtime) */

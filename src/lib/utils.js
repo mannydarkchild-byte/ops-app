@@ -1,7 +1,19 @@
 import { ISSUE, PRESTART_INSPECTION_ITEMS, PRIMARY_MACHINE_CODE, ROLES, SHIFT } from "./constants.js";
 import { shiftBillableHours } from "./shiftMetrics.js";
+import { canonicalStopReason } from "./stopReasons.js";
 
 export const nowISO = () => new Date().toISOString();
+
+/** Public product URL for WhatsApp / sign links. Never use a Vercel preview host. */
+export const PUBLIC_APP_ORIGIN = "https://opsapp.africa";
+
+export function publicAppOrigin() {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") return window.location.origin;
+  }
+  return PUBLIC_APP_ORIGIN;
+}
 
 /** Auth ids can differ by case. The same login must still count as the same person. */
 export function sameOperatorId(a, b) {
@@ -192,45 +204,7 @@ export function canCloseIssue(user, issue) {
 }
 
 export function stopReasonToIssueArea(reason) {
-  const map = {
-    "Screenbox bearings or drive": "Screenbox bearings or drive",
-    "Conveyor or feeder drive": "Conveyor or feeder drive",
-    "Hydraulic system": "Hydraulic system",
-    "Engine or cooling": "Engine or cooling",
-    "Electrical or controls": "Electrical or controls",
-    "Tracks or final drive": "Tracks or final drive",
-    "Worn or torn screen media": "Screen media wear",
-    "Worn belts, skirting, or scrapers": "Belts, skirting, or scrapers",
-    "Worn rollers or impact bars": "Rollers or impact bars",
-    "Worn tracks or undercarriage": "Track and undercarriage wear",
-    "Hopper, chute, or wear plate": "Hopper, chute, or wear plate",
-    "No diesel": "No diesel / fuel",
-    "Feed rate or screen overflow": "Feed rate or overflow",
-    "Product not to size": "Product not to size",
-    "Build-up, wet, or sticky material": "Build-up or wet material",
-    "Belt off-centre": "Belt off-centre",
-    Dust: "Dust",
-    "Waiting for material": "Waiting for material",
-    "Waiting for loader": "Waiting for loader",
-    Weather: "Weather",
-    Cleaning: "Cleaning",
-    "Safety stop": "Safety",
-    "Planned maintenance": "Planned maintenance",
-    Strike: "Strike / labour action",
-    "Mechanical Breakdown": "Screenbox bearings or drive",
-    "Hydraulic Breakdown": "Hydraulic system",
-    "Electrical Breakdown": "Electrical or controls",
-    "Engine Problem": "Engine or cooling",
-    "Screen Problem": "Screen media wear",
-    "Conveyor/Belt Problem": "Belts, skirting, or scrapers",
-    "Track Problem": "Tracks or final drive",
-    "Waiting for Material": "Waiting for material",
-    "Waiting for Loader": "Waiting for loader",
-    "No Diesel": "No diesel / fuel",
-    "Planned Maintenance": "Planned maintenance",
-    "Safety Stop": "Safety",
-  };
-  return map[reason] || "Other";
+  return canonicalStopReason(reason);
 }
 
 /**
@@ -297,18 +271,32 @@ export function shiftBillableValue(shift, machines, events = null, siteSettings 
   return hours * Number(machine?.billable_rate || 0);
 }
 
+function startOfWeekMonday(ref = new Date()) {
+  const start = new Date(ref);
+  start.setHours(0, 0, 0, 0);
+  const day = start.getDay();
+  start.setDate(start.getDate() + (day === 0 ? -6 : 1 - day));
+  return start;
+}
+
 export function getDatePresets(cycleStartDay = 26) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-  const weekStart = new Date(today); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const weekStart = startOfWeekMonday(today);
+  const lastWeekStart = new Date(weekStart); lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  const lastWeekEnd = new Date(weekStart); lastWeekEnd.setMilliseconds(-1);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lastMonthEnd = new Date(monthStart); lastMonthEnd.setMilliseconds(-1);
   const cycle = getBillingPeriod(new Date(), cycleStartDay);
   const fmt = (d) => d.toLocaleDateString("en-ZA", { day: "2-digit", month: "short" });
   return [
     { id: "today", label: "Today", start: today, end: new Date(today.getTime() + 86400000 - 1) },
     { id: "yesterday", label: "Yesterday", start: yesterday, end: new Date(yesterday.getTime() + 86400000 - 1) },
-    { id: "week", label: "This Week", start: weekStart, end: new Date() },
-    { id: "month", label: "This Month", start: monthStart, end: new Date() },
-    { id: "cycle", label: `Billing (${fmt(cycle.start)}–${fmt(cycle.end)})`, start: cycle.start, end: cycle.end },
+    { id: "week", label: "This week", start: weekStart, end: new Date() },
+    { id: "last_week", label: "Last week", start: lastWeekStart, end: lastWeekEnd },
+    { id: "month", label: "This month", start: monthStart, end: new Date() },
+    { id: "last_month", label: "Last month", start: lastMonthStart, end: lastMonthEnd },
+    { id: "cycle", label: `This cycle (${fmt(cycle.start)}–${fmt(cycle.end)})`, start: cycle.start, end: cycle.end },
   ];
 }

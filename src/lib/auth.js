@@ -1,11 +1,17 @@
 import { supabase } from "./supabase.js";
 import { saveLocal, readTable, ensureDB } from "./db.js";
+import { clearLocalLoginId } from "./deviceLogin.js";
 
 const AUTH_CACHE_KEY = "ops-auth-cache";
 
+function writeAuthCache(value) {
+  try { localStorage.setItem(AUTH_CACHE_KEY, value); } catch {}
+  try { sessionStorage.removeItem(AUTH_CACHE_KEY); } catch {}
+}
+
 export function cacheAuthUser(userId, profile, email) {
   try {
-    sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
+    writeAuthCache(JSON.stringify({
       userId,
       profile,
       email,
@@ -16,14 +22,17 @@ export function cacheAuthUser(userId, profile, email) {
 
 export function readCachedAuthUser() {
   try {
-    const raw = sessionStorage.getItem(AUTH_CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const raw = localStorage.getItem(AUTH_CACHE_KEY) || sessionStorage.getItem(AUTH_CACHE_KEY);
+    if (!raw) return null;
+    if (!localStorage.getItem(AUTH_CACHE_KEY)) writeAuthCache(raw);
+    return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 
 export function clearCachedAuthUser() {
+  try { localStorage.removeItem(AUTH_CACHE_KEY); } catch {}
   try { sessionStorage.removeItem(AUTH_CACHE_KEY); } catch {}
 }
 
@@ -48,6 +57,7 @@ export async function signIn(email, password) {
 
 export async function signOut() {
   clearCachedAuthUser();
+  clearLocalLoginId();
   try { await supabase.auth.signOut(); } catch {}
 }
 

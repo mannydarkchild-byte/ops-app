@@ -4,12 +4,64 @@ import { VoiceInput } from "./ui/VoiceInput.jsx";
 import { IssueTimeline } from "./IssueTimeline.jsx";
 import { ISSUE, issueAreaRequiresMachine } from "../lib/constants.js";
 import { issueStatusLabel } from "../lib/issueTimeline.js";
-import { canCloseIssue, fmtDate } from "../lib/utils.js";
+import { canCloseIssue, sameOperatorId } from "../lib/utils.js";
 import * as wf from "../services/workflows.js";
 
 const PRIORITY_COLOR = { Critical: "#EF4444", High: "#F97316", Medium: "#F5C518", Low: "#22C55E" };
+const AVATAR = ["#F5C518", "#00A4A6", "#F97316", "#A78BFA", "#22C55E", "#EF4444"];
+const actionBtn = "w-full py-3 rounded-xl font-ui text-sm font-semibold";
 
-const actionBtn = "w-full py-4 rounded-xl font-logo text-base font-bold";
+function avatarColor(name) {
+  let hash = 0;
+  for (const char of String(name || "")) hash = (hash + char.charCodeAt(0)) % AVATAR.length;
+  return AVATAR[hash];
+}
+
+function initial(name) {
+  return (String(name || "?").trim().charAt(0) || "?").toUpperCase();
+}
+
+function inboxWhen(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
+  }
+  return date.toLocaleDateString("en-ZA", {
+    day: "numeric",
+    month: "short",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
+function threadOf(issue, issueMessages) {
+  return (issueMessages || [])
+    .filter((message) => message.issue_id === issue.id)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+}
+
+function isUnread(issue, messages, userId) {
+  const last = messages[messages.length - 1];
+  if (last) return !sameOperatorId(last.sender_id, userId);
+  return !sameOperatorId(issue.reporter_id, userId);
+}
+
+function Avatar({ name, unread }) {
+  return (
+    <span
+      className="relative w-10 h-10 rounded-full shrink-0 flex items-center justify-center font-ui text-sm font-semibold text-[#0A0A0A]"
+      style={{ background: avatarColor(name) }}
+      aria-hidden
+    >
+      {initial(name)}
+      {unread && (
+        <span className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[#1A73E8]" />
+      )}
+    </span>
+  );
+}
 
 export function IssueInboxModal({
   onClose,
@@ -87,76 +139,83 @@ export function IssueInboxModal({
   if (selected) {
     return (
       <Modal title={selected.area} color="red" onClose={() => setSelectedId(null)}>
-        <div className="space-y-2 mb-4">
-          <p className="text-base font-logo" style={{ color: PRIORITY_COLOR[selected.priority] || "#F5C518" }}>
-            {selected.priority} priority
-          </p>
-          <p className="text-base text-[#F2F0EA]/70">{issueStatusLabel(selected.status)}</p>
-          <p className="text-base text-[#F2F0EA]/70">{machineName(selected.machine_id)}</p>
-          <p className="text-sm text-[#F2F0EA]/50">Reported by {selected.reporter_name}</p>
+        <div className="flex items-start gap-3 mb-4">
+          <Avatar name={selected.reporter_name} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="font-ui text-sm font-semibold text-[#F2F0EA] truncate">{selected.reporter_name}</p>
+              <p className="font-body text-[11px] text-[#F2F0EA]/45 shrink-0">{inboxWhen(selected.created_at)}</p>
+            </div>
+            <p className="font-body text-xs text-[#F2F0EA]/55 mt-0.5">
+              {machineName(selected.machine_id)} · {issueStatusLabel(selected.status)}
+            </p>
+            <p className="font-ui text-xs mt-1" style={{ color: PRIORITY_COLOR[selected.priority] || "#F5C518" }}>
+              {selected.priority} priority
+            </p>
+          </div>
         </div>
 
-        <p className="text-base text-[#F2F0EA] leading-relaxed mb-4">{selected.description}</p>
+        <p className="text-[15px] text-[#F2F0EA] leading-relaxed mb-4 whitespace-pre-wrap">{selected.description}</p>
 
-        <IssueTimeline issue={selected} messages={threadMessages} />
+        <IssueTimeline issue={selected} messages={threadMessages} variant="mail" />
 
         {selected.status !== ISSUE.RESOLVED && (
           <div className="space-y-3">
             {!showClose ? (
               <>
-                <VoiceInput value={reply} onChange={setReply} placeholder="Type a reply…" rows={3} />
+                <VoiceInput value={reply} onChange={setReply} placeholder="Reply…" rows={3} />
                 <button
                   type="button"
                   onClick={sendReply}
                   disabled={busy || !reply.trim()}
-                  className={`${actionBtn} bg-[#EF4444] text-white disabled:opacity-50`}
+                  className={`${actionBtn} bg-[#1A73E8] text-white disabled:opacity-50`}
                 >
-                  {busy ? "SENDING…" : "SEND REPLY"}
+                  {busy ? "Sending…" : "Send"}
                 </button>
 
                 {onSendTo && (
                   <button
                     type="button"
                     onClick={() => { onSendTo(selected); setSelectedId(null); }}
-                    className={`${actionBtn} border-2 border-[#00A4A6] text-[#00A4A6]`}
+                    className={`${actionBtn} border border-[#2A2A2A] text-[#F2F0EA]`}
                   >
-                    SEND TO SOMEONE
+                    Send to someone
                   </button>
                 )}
                 {onSendToMechanic && issueAreaRequiresMachine(selected.area) && selected.status !== ISSUE.WITH_MECHANIC && selected.status !== ISSUE.WAITING_FOR_PARTS && (
                   <button
                     type="button"
                     onClick={() => { onSendToMechanic(selected); setSelectedId(null); }}
-                    className={`${actionBtn} border-2 border-[#F5C518] text-[#F5C518]`}
+                    className={`${actionBtn} border border-[#2A2A2A] text-[#F2F0EA]`}
                   >
-                    SEND TO MECHANIC
+                    Send to mechanic
                   </button>
                 )}
                 {onMarkPartsOrdered && selected.status === ISSUE.WAITING_FOR_PARTS && (
                   <button
                     type="button"
                     onClick={async () => { setBusy(true); try { await onMarkPartsOrdered(selected); await onDone?.(); } finally { setBusy(false); } }}
-                    className={`${actionBtn} border-2 border-[#F5C518] text-[#F5C518]`}
+                    className={`${actionBtn} border border-[#2A2A2A] text-[#F2F0EA]`}
                   >
-                    PARTS ORDERED
+                    Parts ordered
                   </button>
                 )}
                 {onMarkPartsOnSite && selected.status === ISSUE.WAITING_FOR_PARTS && (
                   <button
                     type="button"
                     onClick={async () => { setBusy(true); try { await onMarkPartsOnSite(selected); await onDone?.(); } finally { setBusy(false); } }}
-                    className={`${actionBtn} border-2 border-[#22C55E] text-[#22C55E]`}
+                    className={`${actionBtn} border border-[#2A2A2A] text-[#F2F0EA]`}
                   >
-                    PARTS ON SITE
+                    Parts on site
                   </button>
                 )}
                 {userCanClose && (
                   <button
                     type="button"
                     onClick={() => setShowClose(true)}
-                    className={`${actionBtn} border-2 border-[#22C55E] text-[#22C55E]`}
+                    className={`${actionBtn} border border-[#22C55E]/50 text-[#22C55E]`}
                   >
-                    CLOSE PROBLEM
+                    Close problem
                   </button>
                 )}
               </>
@@ -169,14 +228,14 @@ export function IssueInboxModal({
                   disabled={busy}
                   className={`${actionBtn} bg-[#22C55E] text-black disabled:opacity-50`}
                 >
-                  {busy ? "CLOSING…" : "CONFIRM CLOSE"}
+                  {busy ? "Closing…" : "Confirm close"}
                 </button>
                 <button
                   type="button"
                   onClick={() => { setShowClose(false); setCloseNote(""); }}
-                  className={`${actionBtn} border-2 border-ops-gold text-ops-text`}
+                  className={`${actionBtn} border border-[#2A2A2A] text-[#F2F0EA]`}
                 >
-                  CANCEL
+                  Cancel
                 </button>
               </>
             )}
@@ -187,38 +246,50 @@ export function IssueInboxModal({
   }
 
   const listContent = (
-    <>
-      {filteredIssues.length > 0 && (
-        <p className="font-logo text-sm text-[#F5C518] mb-3">{filteredIssues.length} open problem(s)</p>
+    <div className={`${variant === "modal" ? "max-h-[70vh]" : ""} overflow-y-auto -mx-1`}>
+      {filteredIssues.length === 0 && (
+        <p className="text-sm text-[#F2F0EA]/50 text-center py-12">Inbox is empty.</p>
       )}
-      <div className={`${variant === "modal" ? "max-h-[70vh]" : ""} overflow-y-auto space-y-3`}>
-        {filteredIssues.length === 0 && (
-          <p className="text-base text-[#F2F0EA]/50 text-center py-10">No open problems.</p>
-        )}
+      <ul className="divide-y divide-[#2A2A2A]">
         {filteredIssues.map((issue) => {
-          const msgs = issueMessages.filter((m) => m.issue_id === issue.id);
+          const msgs = threadOf(issue, issueMessages);
           const last = msgs[msgs.length - 1];
+          const unread = isUnread(issue, msgs, user.id);
+          const from = last?.sender_name || issue.reporter_name || "Someone";
+          const snippet = (last?.text || issue.description || "").replace(/\s+/g, " ").trim();
+          const when = inboxWhen(last?.created_at || issue.updated_at || issue.created_at);
           return (
-            <button
-              key={issue.id}
-              type="button"
-              onClick={() => setSelectedId(issue.id)}
-              className="block w-full text-left bg-ops-inset border-2 border-ops-gold rounded-xl p-4 active:bg-ops-elevated"
-            >
-              <div className="flex justify-between items-start gap-3 mb-2">
-                <span className="font-logo text-base text-[#F2F0EA] leading-snug">{issue.area}</span>
-                <span className="font-logo text-sm shrink-0" style={{ color: PRIORITY_COLOR[issue.priority] }}>
-                  {issue.priority}
-                </span>
-              </div>
-              <p className="text-base text-[#F2F0EA]/75 leading-relaxed line-clamp-3 mb-2">{issue.description}</p>
-              <p className="text-sm text-[#F2F0EA]/50">{issueStatusLabel(issue.status)} · {machineName(issue.machine_id)}</p>
-              <p className="text-sm text-[#F2F0EA]/40 mt-1">{last ? fmtDate(last.created_at) : fmtDate(issue.created_at)}</p>
-            </button>
+            <li key={issue.id}>
+              <button
+                type="button"
+                onClick={() => setSelectedId(issue.id)}
+                className={`flex w-full items-start gap-3 px-2 py-3 text-left ${unread ? "bg-[#1A73E8]/5" : ""}`}
+              >
+                <Avatar name={from} unread={unread} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className={`truncate text-[15px] ${unread ? "font-semibold text-[#F2F0EA]" : "font-medium text-[#F2F0EA]/85"}`}>
+                      {from}
+                    </p>
+                    <p className={`shrink-0 text-[11px] ${unread ? "text-[#1A73E8]" : "text-[#F2F0EA]/40"}`}>{when}</p>
+                  </div>
+                  <p className={`truncate text-[13px] mt-0.5 ${unread ? "text-[#F2F0EA]" : "text-[#F2F0EA]/70"}`}>
+                    {issue.area}
+                    <span className="text-[#F2F0EA]/40"> · {machineName(issue.machine_id)}</span>
+                  </p>
+                  <p className="truncate text-[12px] text-[#F2F0EA]/45 mt-0.5">{snippet || issueStatusLabel(issue.status)}</p>
+                </div>
+                <span
+                  className="mt-1.5 w-2 h-2 rounded-full shrink-0"
+                  style={{ background: PRIORITY_COLOR[issue.priority] || "#A8A59C" }}
+                  title={issue.priority}
+                />
+              </button>
+            </li>
           );
         })}
-      </div>
-    </>
+      </ul>
+    </div>
   );
 
   if (variant === "inline") return listContent;

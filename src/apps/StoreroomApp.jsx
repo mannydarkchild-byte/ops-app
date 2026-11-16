@@ -140,7 +140,6 @@ export function StoreroomApp() {
       activeTab={tab}
       onTabChange={setTab}
       onSync={syncNow}
-      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
       {tab !== "pulse" && (

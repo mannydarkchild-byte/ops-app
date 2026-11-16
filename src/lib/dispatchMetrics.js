@@ -36,6 +36,31 @@ export function screenedTonnes(row, factors = {}) {
   return row?.tonnes_screened == null || row?.tonnes_screened === "" || !Number.isFinite(stored) ? null : stored;
 }
 
+/** Tonnes for the shift's calendar day, from the site dispatch row. */
+export function productionForShift(shift, rows, factors = {}) {
+  const siteId = shift?.site_id;
+  const balanced = runningFloor(
+    (rows || []).filter((row) => !siteId || row.site_id === siteId),
+    factors
+  );
+  const days = [localDayKey(shift?.started_at), localDayKey(shift?.ended_at)].filter(Boolean);
+  let row = null;
+  for (const day of days) {
+    row = balanced.find((item) => String(item.dispatch_date || "").slice(0, 10) === day) || null;
+    if (row) break;
+  }
+  if (!row) return null;
+  const floor = row.tonnes_on_floor == null || row.tonnes_on_floor === "" ? null : Number(row.tonnes_on_floor);
+  return {
+    tonnes_screened: screenedTonnes(row, factors),
+    tonnes_on_floor: Number.isFinite(floor) ? floor : null,
+    excavator_buckets: row.excavator_buckets ?? null,
+    fel_buckets: row.fel_buckets ?? null,
+    tonnes_dispatched: row.tonnes_dispatched ?? null,
+    trucks_dispatched: row.trucks_dispatched ?? null,
+  };
+}
+
 function sumKnown(values) {
   const known = values.filter((n) => n != null && Number.isFinite(n));
   if (!known.length) return null;

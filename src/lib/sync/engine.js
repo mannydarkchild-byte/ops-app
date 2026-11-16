@@ -83,7 +83,7 @@ export async function runSync({ silent = true, forceBootstrap = false, forcePush
       state.pulled += pull.pulled;
       if (pull.errors?.length) state.errors.push(...pull.errors);
 
-      const staff = await pullStaffDirectory();
+      const staff = await pullStaffDirectory({ siteId: effectiveSiteId });
       state.pulled += staff.pulled || 0;
       if (staff.errors?.length) state.errors.push(...staff.errors);
 

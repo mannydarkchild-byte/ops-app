@@ -1,5 +1,5 @@
 import { resolveMediaUrl } from "./media.js";
-import { DISPATCH_STATUS, dispatchStatus, tonnesLabel } from "./dispatchMetrics.js";
+import { DISPATCH_STATUS, dispatchStatus, screenedTonnes, tonnesLabel } from "./dispatchMetrics.js";
 import { weighbridgePhotoRefs } from "./dispatchPhotos.js";
 import { reportPageStyles } from "../services/reports.js";
 
@@ -125,7 +125,7 @@ export async function dispatchDayReport(row, site) {
       </div>
       <div class="summary-cell">
         <div class="label">Screened</div>
-        <div class="value font-brand">${esc(tonnesLabel(row?.tonnes_screened))}</div>
+        <div class="value font-brand">${esc(tonnesLabel(screenedTonnes(row)))}</div>
         <div class="sub">${row?.excavator_buckets == null ? "No excavator buckets" : `${row.excavator_buckets} excavator buckets`}</div>
       </div>
       <div class="summary-cell">
@@ -184,7 +184,7 @@ export async function dispatchDayReport(row, site) {
       ["Weighbridge tonnes", row?.tonnes_dispatched ?? ""],
       ["Trucks", row?.trucks_dispatched ?? ""],
       ["Excavator buckets", row?.excavator_buckets ?? ""],
-      ["Tonnes screened", row?.tonnes_screened ?? ""],
+      ["Tonnes screened", screenedTonnes(row) ?? ""],
       ["FEL buckets", row?.fel_buckets ?? ""],
       ["Tonnes on the floor", row?.tonnes_on_floor ?? ""],
       ["Recorded by", row?.recorded_by_name || ""],

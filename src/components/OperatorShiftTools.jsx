@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { SHIFT } from "../lib/constants.js";
-import { getShiftStatus } from "../lib/utils.js";
+import { getShiftStatus, localDayKey } from "../lib/utils.js";
+import { bucketTonnes, previewFloor, productionForShift } from "../lib/dispatchMetrics.js";
+import { tonnesPerBucket } from "../lib/siteConfig.js";
+import { weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
+import { resolveMediaUrl } from "../lib/media.js";
 import { deleteOwnShift, replaceShiftMeterPhoto, submitOwnOpenShift, updateOwnShift } from "../services/workflows.js";
 import { MeterPhoto } from "./ui/MeterPhoto.jsx";
 import { SupervisorPicker } from "./SupervisorPicker.jsx";
 import { Button } from "./ui/Button.jsx";
+import { ProductionReadout, ShiftDispatchFields } from "./ShiftDispatchFields.jsx";
 
 function toLocalInput(iso) {
   if (!iso) return "";
@@ -20,8 +25,20 @@ function fromLocalInput(value) {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString();
 }
 
-/** Edit or remove an operator's own unsigned shift. */
-export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
+function textOf(value) {
+  return value == null || value === "" ? "" : String(value);
+}
+
+async function photosFromRow(row) {
+  const refs = weighbridgePhotoRefs(row);
+  return Promise.all(refs.map(async (ref) => ({
+    ref,
+    preview: (await resolveMediaUrl(ref)) || null,
+  })));
+}
+
+/** Edit or remove an operator's own shift, including after it is signed. */
+export function OperatorShiftTools({ shift, user, supervisors = [], site, siteDispatch = [], factors = {}, onDone }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -34,16 +51,61 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
   const [photoSide, setPhotoSide] = useState("");
   const [photoRef, setPhotoRef] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [excavatorBuckets, setExcavatorBuckets] = useState("");
+  const [felBuckets, setFelBuckets] = useState("");
+  const [tonnes, setTonnes] = useState("");
+  const [trucks, setTrucks] = useState("");
+  const [photos, setPhotos] = useState([]);
 
-  if (!shift || getShiftStatus(shift) === SHIFT.VERIFIED) return null;
+  if (!shift) return null;
 
-  const isOpenShift = getShiftStatus(shift) === SHIFT.RUNNING;
+  const status = getShiftStatus(shift);
+  const isOpenShift = status === SHIFT.RUNNING;
+  const signed = status === SHIFT.VERIFIED || status === SHIFT.MACHINE_SIGNED;
+  const day = localDayKey(shift.started_at || shift.ended_at);
+  const dayRow = (siteDispatch || []).find((row) => (!site?.id || row.site_id === site.id) && String(row.dispatch_date || "").slice(0, 10) === day) || null;
+  const excavatorEach = factors.excavator_bucket_tonnes ?? tonnesPerBucket(dayRow?.excavator_bucket_tonnes);
+  const felEach = factors.fel_bucket_tonnes ?? tonnesPerBucket(dayRow?.fel_bucket_tonnes);
+  const screened = bucketTonnes(excavatorBuckets, excavatorEach);
+  const felTonnes = bucketTonnes(felBuckets, felEach);
+  const dispatchedNow = tonnes === "" || !Number.isFinite(Number(tonnes)) ? null : Number(tonnes);
+  const floorPreview = previewFloor(siteDispatch, site?.id, day, felTonnes, dispatchedNow, factors);
+
+  const openEditor = () => {
+    const production = productionForShift(shift, siteDispatch, factors) || {};
+    setStartMeter(String(shift.start_hour_meter ?? ""));
+    setEndMeter(shift.end_hour_meter == null ? "" : String(shift.end_hour_meter));
+    setStartedAt(toLocalInput(shift.started_at));
+    setEndedAt(toLocalInput(shift.ended_at));
+    setNotes(shift.notes || "");
+    setSupervisorId(shift.assigned_supervisor_id || "");
+    setExcavatorBuckets(textOf(production.excavator_buckets ?? shift.excavator_buckets));
+    setFelBuckets(textOf(production.fel_buckets ?? shift.fel_buckets));
+    setTonnes(textOf(production.tonnes_dispatched ?? shift.tonnes_dispatched));
+    setTrucks(textOf(production.trucks_dispatched ?? shift.trucks_dispatched));
+    setPhotos(weighbridgePhotoRefs(dayRow || shift).map((ref) => ({ ref, preview: null })));
+    photosFromRow(dayRow || shift).then(setPhotos);
+    setPhotoSide("");
+    setPhotoRef(null);
+    setPhotoPreview(null);
+    setError("");
+    setOpen(true);
+  };
 
   const save = async () => {
     setBusy("save");
     setError("");
     try {
       const supervisor = supervisors.find((s) => s.id === supervisorId) || null;
+      const hasFigures = [excavatorBuckets, felBuckets, tonnes, trucks].some((value) => String(value).trim() !== "")
+        || photos.some((photo) => photo.ref);
+      const dispatch = (hasFigures || dayRow) ? {
+        excavatorBuckets,
+        felBuckets,
+        tonnes,
+        trucks,
+        photoRefs: photos.map((p) => p.ref).filter(Boolean),
+      } : null;
       let updated = isOpenShift
         ? await submitOwnOpenShift(user, shift, {
             startHour: startMeter,
@@ -52,6 +114,9 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
             endedAt: endedAt ? fromLocalInput(endedAt) : new Date().toISOString(),
             notes,
             assignedSupervisor: supervisor,
+            dispatch,
+            site,
+            factors,
           })
         : await updateOwnShift(user, shift, {
             start_hour_meter: startMeter,
@@ -61,7 +126,8 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
             notes,
             assigned_supervisor_id: supervisor?.id || shift.assigned_supervisor_id || null,
             assigned_supervisor_name: supervisor?.name || shift.assigned_supervisor_name || null,
-          });
+            dispatch,
+          }, { site, factors });
       if (photoRef && photoSide) {
         updated = await replaceShiftMeterPhoto(user, updated, {
           side: photoSide,
@@ -104,23 +170,30 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
             variant={isOpenShift ? "primary" : "secondary"}
             size="lg"
             className="flex-1"
-            onClick={() => setOpen(true)}
+            onClick={openEditor}
           >
-            {isOpenShift ? "Finish leftover" : "Edit shift"}
+            {isOpenShift ? "Finish leftover" : signed ? "Edit report" : "Edit shift"}
           </Button>
-          <Button
-            type="button"
-            variant="danger"
-            size="lg"
-            onClick={remove}
-            disabled={!!busy}
-          >
-            {busy === "delete" ? "Removing…" : "Delete"}
-          </Button>
+          {!signed && (
+            <Button
+              type="button"
+              variant="danger"
+              size="lg"
+              onClick={remove}
+              disabled={!!busy}
+            >
+              {busy === "delete" ? "Removing…" : "Delete"}
+            </Button>
+          )}
         </div>
       ) : (
         <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4 text-left">
-          <p className="font-ui font-semibold text-[#F5C518] mb-3">{isOpenShift ? "Finish this leftover shift" : "Edit this shift"}</p>
+          <p className="font-ui font-semibold text-[#F5C518] mb-1">
+            {isOpenShift ? "Finish this leftover shift" : signed ? "Correct this signed report" : "Edit this shift"}
+          </p>
+          <p className="font-body text-sm text-[#F2F0EA]/60 mb-3">
+            Hours, buckets, trucks and tonnes can all be changed. Saving a signed report keeps the signature and updates the numbers.
+          </p>
           <label className="block mb-3">
             <span className="ops-field-label">Opening meter</span>
             <input value={startMeter} onChange={(e) => setStartMeter(e.target.value)} inputMode="decimal" className="w-full mt-1 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA]" />
@@ -141,6 +214,33 @@ export function OperatorShiftTools({ shift, user, supervisors = [], onDone }) {
             <span className="ops-field-label">Notes</span>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full mt-1 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA]" />
           </label>
+          <div className="mb-3 space-y-3">
+            <p className="font-ui text-sm font-semibold text-[#F5C518]">Buckets, trucks and tonnes</p>
+            <p className="font-body text-sm text-[#F2F0EA]/60">These are the site figures for this day.</p>
+            <ProductionReadout
+              screened={screened}
+              floor={floorPreview.closing}
+              excavatorBuckets={excavatorBuckets}
+              felBuckets={felBuckets}
+              excavatorEach={excavatorEach}
+              felEach={felEach}
+              floorNote={`${floorPreview.opening.toLocaleString("en-US")} t opened${floorPreview.added == null ? "" : ` + ${floorPreview.added.toLocaleString("en-US")} t FEL`}${floorPreview.removed == null ? "" : ` − ${floorPreview.removed.toLocaleString("en-US")} t dispatched`}`}
+            />
+            <ShiftDispatchFields
+              excavatorBuckets={excavatorBuckets}
+              felBuckets={felBuckets}
+              tonnes={tonnes}
+              trucks={trucks}
+              photos={photos}
+              excavatorEach={excavatorEach}
+              felEach={felEach}
+              onExcavator={setExcavatorBuckets}
+              onFel={setFelBuckets}
+              onTonnes={setTonnes}
+              onTrucks={setTrucks}
+              onPhotos={setPhotos}
+            />
+          </div>
           {supervisors.length > 0 && (
             <div className="mb-3">
               <SupervisorPicker supervisors={supervisors} value={supervisorId} onChange={setSupervisorId} />

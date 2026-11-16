@@ -28,11 +28,13 @@ import { AlertModal } from "../components/ui/Modal.jsx";
 import { BackdateReadingModal } from "../components/BackdateReadingModal.jsx";
 
 import { AddUserModal } from "../components/AddUserModal.jsx";
+import { AuthEmailBrandCard } from "../components/admin/AuthEmailBrandCard.jsx";
 import { AdminSitesPanel } from "../components/admin/AdminSitesPanel.jsx";
 import { AdminMachinesPanel } from "../components/admin/AdminMachinesPanel.jsx";
 import { AdminChecklistsPanel } from "../components/admin/AdminChecklistsPanel.jsx";
 import { AdminActivityPanel } from "../components/admin/AdminActivityPanel.jsx";
 import { RolePulse } from "../components/RolePulse.jsx";
+import { OperationsReportPanel } from "../components/OperationsReportPanel.jsx";
 import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { SiteExpensesPanel } from "../components/SiteExpensesPanel.jsx";
@@ -211,13 +213,9 @@ export function AdminApp() {
     await refreshLocal();
 
     if (result.needsEmailConfirm) {
-
-      showAlert("User Created", "User created — they must confirm email before first login (if enabled in Supabase).");
-
+      showAlert("User created", `${result.profile.name} must tap the OPS email, then sign in with the password you set.`);
     } else {
-
-      showAlert("User Created", `${result.profile.name} can sign in now.`);
-
+      showAlert("User created", `${result.profile.name} can sign in now.`);
     }
 
   };
@@ -260,7 +258,7 @@ export function AdminApp() {
 
   const tabItems = useMemo(() => TABS.map((t) => ({ ...t, badge: 0 })), []);
 
-  const headerContext = `${activeSite?.name || "All sites"} - ${dashboard.periodLabel}`;
+  const headerContext = activeSite?.name || "All sites";
 
   return (
 
@@ -272,7 +270,6 @@ export function AdminApp() {
       activeTab={tab}
       onTabChange={(id) => { setTab(id); setMoreView(null); }}
       onSync={syncNow}
-      openHeaderTools
       alert={<AlertModal {...alert} confirmText="OK" />}
     >
 
@@ -300,6 +297,23 @@ export function AdminApp() {
             </div>
 
             <DispatchKpis records={siteDispatch} siteId={activeSite?.id} period={billingPeriod} factors={getSettingsForSite(activeSite?.id)} onOpen={setKpiDetail} />
+
+            <OperationsReportPanel
+              site={activeSite}
+              machines={siteMachines}
+              machineId={selectedMachine?.id || ""}
+              onMachine={setFocusMachineId}
+              cycleStartDay={getSettingsForSite(activeSite?.id).billing_cycle_start_day}
+              data={{
+                shifts,
+                events,
+                expenses,
+                fuelLogs,
+                inspections,
+                siteSettings: getSettingsForSite(activeSite?.id),
+                dispatches: siteDispatch,
+              }}
+            />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <DashboardKpi label="Pending sign-off" value={dashboard.overview.pendingVerify} sub="All machines · awaiting supervisor" color="#00A4A6" />
@@ -413,6 +427,7 @@ export function AdminApp() {
                 {showInactive ? "Hide inactive" : "Show inactive"}
               </Button>
             </div>
+            <AuthEmailBrandCard />
 
             {visibleProfiles.length === 0 ? (
               <p className="text-sm text-[#F2F0EA]/40">No users. Sync when online or add a user.</p>

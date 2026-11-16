@@ -2,17 +2,28 @@ import { saveLocal, saveManyLocal, readTable, dropLocalRecord } from "../lib/db.
 import { acquireMachineLock, releaseMachineLock } from "../lib/machineLock.js";
 import { scheduleSync } from "../lib/sync/engine.js";
 import { supabase } from "../lib/supabase.js";
-import { SHIFT, ISSUE, ROLES, BREAKDOWN_STATUS, MAINTENANCE_STATUS, issueAreaRequiresMachine } from "../lib/constants.js";
+import { ALLOWED_COLUMNS, SHIFT, ISSUE, ROLES, BREAKDOWN_STATUS, MAINTENANCE_STATUS, issueAreaRequiresMachine } from "../lib/constants.js";
 import { canCloseIssue, getShiftStatus, sameOperatorId } from "../lib/utils.js";
 import { localDayKey, makeId, nowISO } from "../lib/utils.js";
 import { storeMediaDataUrl } from "../lib/media.js";
 import { ensureSiteSettings, prestartItemsForMachine, inspectionGroupsForMachine, getMechanicItemsFromGroups } from "../lib/siteConfig.js";
 import { fetchServerOpenShift } from "../lib/machineStatus.js";
 import { bucketTonnes, DISPATCH_STATUS, dispatchStatus, previewFloor } from "../lib/dispatchMetrics.js";
-import { WEIGHBRIDGE_PHOTO_MIN, weighbridgePhotoFields, weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
-import { findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
+import { weighbridgePhotoFields, weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
+import { assertReasonableMeterHours, findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
+import { AUTO_CLOCK_OUT_NOTE, OVERTIME_ACK_TAG, hasOvertimeAck, standardClockOutAt } from "../lib/timesheet.js";
 
 const actionInflight = new Map();
+
+async function upsertShiftNow(shift) {
+  if (!navigator.onLine || !shift?.id) return;
+  const payload = {};
+  for (const key of ALLOWED_COLUMNS.shifts || []) {
+    if (shift[key] !== undefined) payload[key] = shift[key];
+  }
+  const { error } = await supabase.from("shifts").upsert(payload, { onConflict: "id" });
+  if (error) console.warn("upsertShiftNow", error.message);
+}
 
 /** One in-flight action per key. A second call waits on the first result instead of creating another record. */
 function withInflight(key, fn) {
@@ -61,6 +72,7 @@ async function clockInOnce(user, machine, site, { assignedSupervisor } = {}) {
     clock_out: null,
     status: "active",
     notes: null,
+    organization_id: site?.organization_id || user?.organization_id || null,
     created_at: nowISO(),
     updated_at: nowISO(),
   };
@@ -70,17 +82,19 @@ async function clockInOnce(user, machine, site, { assignedSupervisor } = {}) {
   return s;
 }
 
-export async function clockOut(user, workSession, { note, signatureRef, signatureName }) {
-  return withInflight(`clockout:${workSession?.id || user?.id}`, () => clockOutOnce(user, workSession, { note, signatureRef, signatureName }));
+export async function clockOut(user, workSession, { note, signatureRef, signatureName, clockOutAt } = {}) {
+  return withInflight(`clockout:${workSession?.id || user?.id}`, () => clockOutOnce(user, workSession, { note, signatureRef, signatureName, clockOutAt }));
 }
 
-async function clockOutOnce(user, workSession, { note, signatureRef, signatureName }) {
+async function clockOutOnce(user, workSession, { note, signatureRef, signatureName, clockOutAt } = {}) {
   if (!workSession?.id) throw new Error("No active session to clock out");
   if (workSession.status && workSession.status !== "active") return workSession;
   const now = nowISO();
+  const requested = clockOutAt ? new Date(clockOutAt).getTime() : Date.now();
+  const outAt = Number.isNaN(requested) || requested > Date.now() ? now : new Date(requested).toISOString();
   const updated = {
     ...workSession,
-    clock_out: now,
+    clock_out: outAt,
     status: "ended",
     notes: note || workSession.notes || null,
     supervisor_signature_ref: signatureRef,
@@ -99,7 +113,7 @@ async function clockOutOnce(user, workSession, { note, signatureRef, signatureNa
   if (navigator.onLine) {
     try {
       await supabase.from("work_sessions").update({
-        clock_out: now,
+        clock_out: outAt,
         status: "ended",
         notes: updated.notes,
         updated_at: now,
@@ -108,6 +122,27 @@ async function clockOutOnce(user, workSession, { note, signatureRef, signatureNa
   }
   scheduleSync();
   return updated;
+}
+
+export async function ackStayOnOvertime(workSession) {
+  if (!workSession?.id || workSession.status !== "active") return workSession;
+  if (hasOvertimeAck(workSession)) return workSession;
+  const updated = {
+    ...workSession,
+    notes: [workSession.notes, OVERTIME_ACK_TAG].filter(Boolean).join(" "),
+    updated_at: nowISO(),
+  };
+  await saveLocal("work_sessions", updated);
+  scheduleSync();
+  return updated;
+}
+
+export async function autoClockOutAfterStandardDay(user, workSession) {
+  const capAt = standardClockOutAt(workSession);
+  return clockOut(user, workSession, {
+    note: AUTO_CLOCK_OUT_NOTE,
+    clockOutAt: capAt,
+  });
 }
 
 /** Clock out before pre-start or before starting the machine — reason required */
@@ -235,7 +270,7 @@ export async function startMachine(user, machine, site, options = {}) {
   return withInflight(`start:${machine?.id}`, () => startMachineOnce(user, machine, site, options));
 }
 
-async function startMachineOnce(user, machine, site, { hourMeter, photoRef, verifiedShifts, workSessionClockIn, machineOperatorName } = {}) {
+async function startMachineOnce(user, machine, site, { hourMeter, photoRef, machineOperatorName } = {}) {
   if (!photoRef) throw new Error("Hour meter photo is required");
   const h = Number(hourMeter);
   if (!Number.isFinite(h) || h < 0) throw new Error("Enter a valid hour meter reading");
@@ -271,14 +306,7 @@ async function startMachineOnce(user, machine, site, { hourMeter, photoRef, veri
     return { run: blocker, lock: { accepted: true }, alreadyRunning: true };
   }
 
-  let baseline = Number(machine.start_hour_meter || 0);
-  const verified = (verifiedShifts || []).filter((s) => s.shift_status === SHIFT.VERIFIED && s.end_hour_meter != null);
-  if (verified.length) {
-    const latest = verified.reduce((a, b) => new Date(b.ended_at || 0) > new Date(a.ended_at || 0) ? b : a);
-    baseline = Number(latest.end_hour_meter);
-  }
-  if (h < baseline) throw new Error(`Reading below last verified (${baseline}h)`);
-
+  // A previous signed meter must not stop today's start. Wrong signed numbers are corrected on the report.
   const cabName = String(machineOperatorName || "").trim();
   if (!cabName) throw new Error("Enter who is operating this machine");
 
@@ -286,6 +314,7 @@ async function startMachineOnce(user, machine, site, { hourMeter, photoRef, veri
   const run = {
     id: makeId("RUN"),
     site_id: site?.id,
+    organization_id: site?.organization_id || user?.organization_id || null,
     machine_id: machine.id,
     operator_id: user.id,
     operator_name: cabName,
@@ -429,17 +458,16 @@ export async function endMachineDay(user, machine, site, machineRun, options = {
   return withInflight(`end:${machineRun?.id}`, () => endMachineDayOnce(user, machine, site, machineRun, options));
 }
 
-async function endMachineDayOnce(user, machine, site, machineRun, { endHour, photoRef, assignedSupervisor }) {
+async function endMachineDayOnce(user, machine, site, machineRun, { endHour, photoRef, assignedSupervisor, dispatch = null }) {
   if (machineRun && getShiftStatus(machineRun) && getShiftStatus(machineRun) !== SHIFT.RUNNING) {
     return { ended: machineRun, alreadyEnded: true };
   }
   if (!photoRef) throw new Error("Closing hour meter photo is required");
   const h = Number(endHour);
-  if (!Number.isFinite(h) || h < Number(machineRun.start_hour_meter)) throw new Error("Enter valid ending meter");
+  const hoursWorked = assertReasonableMeterHours(machineRun.start_hour_meter, h);
   if (!assignedSupervisor?.id) throw new Error("Select the supervisor on duty for this shift");
 
   const now = nowISO();
-  const hoursWorked = meterHoursWorked(machineRun.start_hour_meter, h);
 
   // Close open downtime so the shift fully ends — no restart offered afterward
   const events = await closeOpenDowntimeForShift(machineRun.id, now);
@@ -458,9 +486,19 @@ async function endMachineDayOnce(user, machine, site, machineRun, { endHour, pho
     assigned_supervisor_id: assignedSupervisor.id,
     assigned_supervisor_name: assignedSupervisor.name,
     updated_at: now,
+    ...(dispatch ? {
+      tonnes_dispatched: dispatch.tonnes_dispatched ?? machineRun.tonnes_dispatched ?? null,
+      trucks_dispatched: dispatch.trucks_dispatched ?? machineRun.trucks_dispatched ?? null,
+      tonnes_on_floor: dispatch.tonnes_on_floor ?? machineRun.tonnes_on_floor ?? null,
+      tonnes_screened: dispatch.tonnes_screened ?? machineRun.tonnes_screened ?? null,
+      excavator_buckets: dispatch.excavator_buckets ?? machineRun.excavator_buckets ?? null,
+      fel_buckets: dispatch.fel_buckets ?? machineRun.fel_buckets ?? null,
+      weighbridge_photo: dispatch.weighbridge_photo || machineRun.weighbridge_photo || null,
+    } : {}),
   };
 
   await saveLocal("shifts", ended);
+  await upsertShiftNow(ended);
   await addEvent(user, machine, site, "METER_END_CAPTURED", { shift_id: ended.id, note: `Ending meter ${h}h`, photo_ref: photoRef });
   await recordHourReading(user, machine, site, {
     reading: h,
@@ -497,9 +535,7 @@ async function endMachineDayOnce(user, machine, site, machineRun, { endHour, pho
 export async function closeOpenShift(supervisor, machine, shift, { endHour, note } = {}) {
   if (!shift || getShiftStatus(shift) !== SHIFT.RUNNING) throw new Error("That shift is not still open");
   const h = Number(endHour);
-  if (!Number.isFinite(h) || h < Number(shift.start_hour_meter || 0)) {
-    throw new Error("Enter a closing meter at or above the opening reading");
-  }
+  const hoursWorked = assertReasonableMeterHours(shift.start_hour_meter || 0, h);
   if (!navigator.onLine) {
     throw new Error("Need a connection to close this so the next operator can start");
   }
@@ -510,7 +546,7 @@ export async function closeOpenShift(supervisor, machine, shift, { endHour, note
   const closed = {
     ...shift,
     end_hour_meter: h,
-    hours_worked: meterHoursWorked(shift.start_hour_meter, h),
+    hours_worked: hoursWorked,
     runtime_minutes: runtimeMinutes,
     downtime_minutes: downtimeMinutes,
     ended_at: now,
@@ -542,9 +578,10 @@ export async function closeOpenShift(supervisor, machine, shift, { endHour, note
   return closed;
 }
 
-function assertOwnEditableShift(user, shift) {
+function assertOwnEditableShift(user, shift, { allowSigned = false } = {}) {
   if (!user?.id || !shift?.id) throw new Error("No shift to change");
-  if (shift.operator_id !== user.id) throw new Error("You can only change your own shift");
+  if (!sameOperatorId(shift.operator_id, user.id)) throw new Error("You can only change your own shift");
+  if (allowSigned) return;
   if (getShiftStatus(shift) === SHIFT.VERIFIED) {
     throw new Error("This shift is already signed off. Ask a supervisor if it must change.");
   }
@@ -553,9 +590,16 @@ function assertOwnEditableShift(user, shift) {
   }
 }
 
-/** Operator edits their own unsigned shift — times, meters, notes, supervisor. */
-export async function updateOwnShift(user, shift, patch = {}) {
-  assertOwnEditableShift(user, shift);
+function sameMeter(a, b) {
+  const left = Number(a);
+  const right = Number(b);
+  if (!Number.isFinite(left) && !Number.isFinite(right)) return true;
+  return left === right;
+}
+
+/** Operator edits their own shift, including after it is signed — meters, times, and the day's tonnes. */
+export async function updateOwnShift(user, shift, patch = {}, context = {}) {
+  assertOwnEditableShift(user, shift, { allowSigned: true });
   const now = nowISO();
   const startMeter = patch.start_hour_meter != null ? Number(patch.start_hour_meter) : Number(shift.start_hour_meter);
   const endMeter = patch.end_hour_meter != null && patch.end_hour_meter !== ""
@@ -567,10 +611,11 @@ export async function updateOwnShift(user, shift, patch = {}) {
   if (patch.end_hour_meter != null && patch.end_hour_meter !== "" && (!Number.isFinite(endMeter) || endMeter < 0)) {
     throw new Error("Enter a valid closing meter");
   }
-  if (endMeter != null && startMeter != null && endMeter < startMeter) {
-    throw new Error("Closing meter cannot be below opening");
+  const metersChanged = !sameMeter(startMeter, shift.start_hour_meter) || !sameMeter(endMeter, shift.end_hour_meter);
+  if (metersChanged && endMeter != null && Number.isFinite(startMeter)) {
+    assertReasonableMeterHours(startMeter, endMeter);
   }
-  const updated = {
+  let updated = {
     ...shift,
     start_hour_meter: Number.isFinite(startMeter) ? startMeter : shift.start_hour_meter,
     end_hour_meter: endMeter,
@@ -582,6 +627,20 @@ export async function updateOwnShift(user, shift, patch = {}) {
     assigned_supervisor_name: patch.assigned_supervisor_name !== undefined ? patch.assigned_supervisor_name : shift.assigned_supervisor_name,
     updated_at: now,
   };
+  if (patch.dispatch && context.site) {
+    const day = localDayKey(updated.started_at || updated.ended_at);
+    const saved = await saveSiteDispatch(user, context.site, { ...patch.dispatch, date: day }, context.factors || {}, { preserveStatus: true });
+    updated = {
+      ...updated,
+      tonnes_dispatched: saved.tonnes_dispatched,
+      trucks_dispatched: saved.trucks_dispatched,
+      tonnes_on_floor: saved.tonnes_on_floor,
+      tonnes_screened: saved.tonnes_screened,
+      excavator_buckets: saved.excavator_buckets,
+      fel_buckets: saved.fel_buckets,
+      weighbridge_photo: weighbridgePhotoRefs(saved)[0] || updated.weighbridge_photo || null,
+    };
+  }
   await saveLocal("shifts", updated);
   if (navigator.onLine) {
     try {
@@ -594,6 +653,10 @@ export async function updateOwnShift(user, shift, patch = {}) {
         notes: updated.notes,
         assigned_supervisor_id: updated.assigned_supervisor_id,
         assigned_supervisor_name: updated.assigned_supervisor_name,
+        tonnes_dispatched: updated.tonnes_dispatched ?? null,
+        trucks_dispatched: updated.trucks_dispatched ?? null,
+        tonnes_on_floor: updated.tonnes_on_floor ?? null,
+        weighbridge_photo: updated.weighbridge_photo ?? null,
         updated_at: now,
       }).eq("id", shift.id).eq("operator_id", user.id);
     } catch {}
@@ -610,6 +673,9 @@ export async function submitOwnOpenShift(user, shift, {
   notes,
   startHour,
   startedAt,
+  dispatch,
+  site,
+  factors,
 } = {}) {
   assertOwnEditableShift(user, shift);
   if (getShiftStatus(shift) !== SHIFT.RUNNING) {
@@ -617,8 +683,7 @@ export async function submitOwnOpenShift(user, shift, {
   }
   const startMeter = startHour != null && startHour !== "" ? Number(startHour) : Number(shift.start_hour_meter);
   const h = Number(endHour);
-  if (!Number.isFinite(startMeter) || startMeter < 0) throw new Error("Enter a valid opening meter");
-  if (!Number.isFinite(h) || h < startMeter) throw new Error("Enter a closing meter at or above the opening reading");
+  const hoursWorked = assertReasonableMeterHours(startMeter, h);
   const supervisor = assignedSupervisor || (shift.assigned_supervisor_id
     ? { id: shift.assigned_supervisor_id, name: shift.assigned_supervisor_name }
     : null);
@@ -632,7 +697,7 @@ export async function submitOwnOpenShift(user, shift, {
     ...shift,
     start_hour_meter: startMeter,
     end_hour_meter: h,
-    hours_worked: meterHoursWorked(startMeter, h),
+    hours_worked: hoursWorked,
     runtime_minutes: runtimeMinutes,
     downtime_minutes: downtimeMinutes,
     started_at: startedAt || shift.started_at,
@@ -644,6 +709,17 @@ export async function submitOwnOpenShift(user, shift, {
     assigned_supervisor_name: supervisor.name,
     updated_at: now,
   };
+  if (dispatch && site) {
+    const day = localDayKey(ended.started_at || ended.ended_at);
+    const saved = await saveSiteDispatch(user, site, { ...dispatch, date: day }, factors || {}, { preserveStatus: true });
+    ended.tonnes_dispatched = saved.tonnes_dispatched;
+    ended.trucks_dispatched = saved.trucks_dispatched;
+    ended.tonnes_on_floor = saved.tonnes_on_floor;
+    ended.tonnes_screened = saved.tonnes_screened;
+    ended.excavator_buckets = saved.excavator_buckets;
+    ended.fel_buckets = saved.fel_buckets;
+    ended.weighbridge_photo = weighbridgePhotoRefs(saved)[0] || ended.weighbridge_photo || null;
+  }
   await saveLocal("shifts", ended);
   if (shift.machine_id) await releaseMachineLock(shift.machine_id);
   if (navigator.onLine) {
@@ -661,6 +737,10 @@ export async function submitOwnOpenShift(user, shift, {
         verification_token: ended.verification_token,
         assigned_supervisor_id: ended.assigned_supervisor_id,
         assigned_supervisor_name: ended.assigned_supervisor_name,
+        tonnes_dispatched: ended.tonnes_dispatched ?? null,
+        trucks_dispatched: ended.trucks_dispatched ?? null,
+        tonnes_on_floor: ended.tonnes_on_floor ?? null,
+        weighbridge_photo: ended.weighbridge_photo ?? null,
         updated_at: now,
       }).eq("id", shift.id).eq("operator_id", user.id);
     } catch {}
@@ -1094,9 +1174,6 @@ async function addEvent(user, machine, site, type, details = {}) {
 export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, reading } = {}) {
   if (!shift?.id) throw new Error("No shift to update");
   if (!photoRef) throw new Error("Take or choose a clearer photo first");
-  if ([SHIFT.VERIFIED, SHIFT.MACHINE_SIGNED].includes(getShiftStatus(shift))) {
-    throw new Error("This shift version is already signed and locked");
-  }
   const now = nowISO();
   const h = reading === "" || reading == null ? null : Number(reading);
   if (h != null && (!Number.isFinite(h) || h < 0)) throw new Error("Enter a valid meter reading");
@@ -1126,10 +1203,14 @@ export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, rea
   };
   if (side === "opening" && h != null) {
     patch.start_hour_meter = h;
-    if (shift.end_hour_meter != null) patch.hours_worked = meterHoursWorked(h, shift.end_hour_meter);
+    if (shift.end_hour_meter != null) {
+      assertReasonableMeterHours(h, shift.end_hour_meter);
+      patch.hours_worked = meterHoursWorked(h, shift.end_hour_meter);
+    }
   }
   if (side === "closing" && h != null) {
     patch.end_hour_meter = h;
+    assertReasonableMeterHours(shift.start_hour_meter, h);
     patch.hours_worked = meterHoursWorked(shift.start_hour_meter, h);
   }
   await saveLocal("shifts", patch);
@@ -1162,9 +1243,8 @@ export async function editShiftBeforeSign(actor, shift, {
   const endMeter = endHour === "" || endHour == null
     ? (shift.end_hour_meter != null ? Number(shift.end_hour_meter) : null)
     : Number(endHour);
-  if (!Number.isFinite(startMeter) || startMeter < 0) throw new Error("Enter a valid opening meter");
-  if (endMeter != null && (!Number.isFinite(endMeter) || endMeter < 0)) throw new Error("Enter a valid closing meter");
-  if (endMeter != null && endMeter < startMeter) throw new Error("Closing meter cannot be below opening");
+  if (endMeter != null) assertReasonableMeterHours(startMeter, endMeter);
+  else if (!Number.isFinite(startMeter) || startMeter < 0) throw new Error("Enter a valid opening meter");
 
   let updated = {
     ...shift,
@@ -1218,9 +1298,6 @@ function wholeCount(value, label, required) {
 
 function readDispatch(dispatch, factors = {}, { requireComplete = false } = {}) {
   const photoRefs = weighbridgePhotoRefs(dispatch);
-  if (requireComplete && photoRefs.length < WEIGHBRIDGE_PHOTO_MIN) {
-    throw new Error("Add 2 or 3 photos of the weighbridge tickets.");
-  }
   const tonnesBlank = dispatch?.tonnes === "" || dispatch?.tonnes == null;
   const tonnes = tonnesBlank ? null : Number(dispatch.tonnes);
   if (requireComplete && tonnesBlank) throw new Error("Enter the total tonnes dispatched.");
@@ -1245,7 +1322,7 @@ function readDispatch(dispatch, factors = {}, { requireComplete = false } = {}) 
   };
 }
 
-async function writeDispatchRow(user, site, dispatch, factors, { requireComplete = false, patch = {} } = {}) {
+async function writeDispatchRow(user, site, dispatch, factors, { requireComplete = false, patch = {}, allowEdit = false, preserveStatus = false } = {}) {
   if (!site?.id) throw new Error("No site");
   const fields = readDispatch(dispatch, factors, { requireComplete });
   const day = dispatch.date || localDayKey();
@@ -1255,16 +1332,19 @@ async function writeDispatchRow(user, site, dispatch, factors, { requireComplete
   const now = nowISO();
   const id = `DSP-${site.id}-${day}`;
   const existing = (await readTable("site_dispatch")).find((row) => row.id === id) || null;
-  if (existing && dispatchStatus(existing) !== DISPATCH_STATUS.DRAFT) {
-    throw new Error("This day has been sent. The supervisor must send it back before it can change.");
+  if (existing && dispatchStatus(existing) !== DISPATCH_STATUS.DRAFT && !allowEdit) {
+    throw new Error("This day has already been sent.");
   }
   const row = {
     ...(existing || {}),
     id,
     site_id: site.id,
+    organization_id: existing?.organization_id || site.organization_id || user?.organization_id || null,
     dispatch_date: day,
     ...fields,
-    status: existing?.status || DISPATCH_STATUS.DRAFT,
+    status: preserveStatus && existing?.status
+      ? existing.status
+      : (allowEdit ? DISPATCH_STATUS.DRAFT : (existing?.status || DISPATCH_STATUS.DRAFT)),
     recorded_by: user?.id || existing?.recorded_by || null,
     recorded_by_name: user?.name || existing?.recorded_by_name || null,
     created_at: existing?.created_at || now,
@@ -1277,9 +1357,9 @@ async function writeDispatchRow(user, site, dispatch, factors, { requireComplete
   return row;
 }
 
-/** Save the site's dispatch for one day. A sent or signed day stays locked. */
-export async function saveSiteDispatch(user, site, dispatch, factors) {
-  return writeDispatchRow(user, site, dispatch, factors);
+/** Save today's tonnes from the operator shift. preserveStatus keeps a signed day signed while the numbers change. */
+export async function saveSiteDispatch(user, site, dispatch, factors, { preserveStatus = false } = {}) {
+  return writeDispatchRow(user, site, dispatch, factors, { allowEdit: true, preserveStatus });
 }
 
 /** Send the day's dispatch to a supervisor for sign-off. */
@@ -1534,23 +1614,37 @@ export async function siteSignShiftPublic({ shiftId, token, name, phone, action,
 }
 
 /** Operator fixes a shift after supervisor requested correction */
-export async function resubmitShiftAfterCorrection(user, machine, site, shift, { endHour, photoRef, operatorNote }) {
+export async function resubmitShiftAfterCorrection(user, machine, site, shift, { endHour, startHour, photoRef, operatorNote, dispatch, factors } = {}) {
   if (!photoRef) throw new Error("Closing hour meter photo is required");
+  const startMeter = startHour != null && startHour !== "" ? Number(startHour) : Number(shift.start_hour_meter);
   const h = Number(endHour);
-  if (!Number.isFinite(h) || h < Number(shift.start_hour_meter)) {
-    throw new Error("Enter a valid closing meter reading");
-  }
+  const hoursWorked = assertReasonableMeterHours(startMeter, h);
 
   const now = nowISO();
   const events = await readTable("events");
   const downtimeMinutes = shiftDowntimeMinutes(events, shift.id);
   const runtimeMinutes = shiftRuntimeMinutes(shift.started_at, shift.ended_at || now, downtimeMinutes);
-  const hoursWorked = meterHoursWorked(shift.start_hour_meter, h);
+
+  let production = null;
+  if (dispatch && site) {
+    const day = localDayKey(shift.started_at || shift.ended_at);
+    production = await saveSiteDispatch(user, site, { ...dispatch, date: day }, factors || {}, { preserveStatus: true });
+  }
 
   const updated = {
     ...shift,
+    start_hour_meter: startMeter,
     end_hour_meter: h,
     hours_worked: hoursWorked,
+    ...(production ? {
+      tonnes_dispatched: production.tonnes_dispatched,
+      trucks_dispatched: production.trucks_dispatched,
+      tonnes_on_floor: production.tonnes_on_floor,
+      tonnes_screened: production.tonnes_screened,
+      excavator_buckets: production.excavator_buckets,
+      fel_buckets: production.fel_buckets,
+      weighbridge_photo: weighbridgePhotoRefs(production)[0] || shift.weighbridge_photo || null,
+    } : {}),
     runtime_minutes: runtimeMinutes,
     downtime_minutes: downtimeMinutes,
     shift_status: SHIFT.RESUBMITTED,

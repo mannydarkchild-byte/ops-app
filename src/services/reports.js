@@ -1,6 +1,6 @@
 import { SHIFT } from "../lib/constants.js";
 import { weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
-import { machineOwnerName, OWNER_ROLES, ownerForStopReasonMachine } from "../lib/stopReasons.js";
+import { canonicalStopReason, detailForStop, machineOwnerName, OWNER_ROLES, ownerForStopReasonMachine, stopReasonDetail } from "../lib/stopReasons.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { resolveMediaUrl } from "../lib/media.js";
 import { buildShiftActivityTimeline, consolidateShiftStops, formatDurationMinutes, shiftBillableHours } from "../lib/shiftMetrics.js";
@@ -8,6 +8,7 @@ import { buildStockSeries } from "../lib/productivityPulse.js";
 import { stockChartSvgHtml } from "../components/StockChart.jsx";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { esc, fmtDate, fmtDateShort, inPeriod, localDayKey, money, shiftBillableValue } from "../lib/utils.js";
+import { runningFloor, screenedTonnes } from "../lib/dispatchMetrics.js";
 
 function shiftWindow(shift) {
   const start = new Date(shift.started_at).getTime();
@@ -15,10 +16,20 @@ function shiftWindow(shift) {
   return { start, end };
 }
 
+function withTimeout(promise, ms, fallback = null) {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => resolve(fallback), ms);
+    Promise.resolve(promise).then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      () => { window.clearTimeout(timer); resolve(fallback); }
+    );
+  });
+}
+
 async function resolveLogoDataUrl() {
   try {
-    const res = await fetch("/logo.png");
-    if (!res.ok) return null;
+    const res = await withTimeout(fetch("/logo.png"), 2500);
+    if (!res?.ok) return null;
     const blob = await res.blob();
     return await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -61,8 +72,8 @@ async function embedMedia(ref) {
   if (!url) return null;
   if (url.startsWith("data:")) return url;
   try {
-    const res = await fetch(url);
-    if (!res.ok) return url.startsWith("http") ? url : null;
+    const res = await withTimeout(fetch(url), 6000);
+    if (!res?.ok) return url.startsWith("http") ? url : null;
     const blob = await res.blob();
     if (!blob?.size) return url.startsWith("http") ? url : null;
     return await blobToDataUrl(blob);
@@ -258,6 +269,11 @@ export function reportPageStyles() {
   .hbar-label{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:4px}
   .hbar-track{height:12px;background:#F2F0EA;border-radius:99px;overflow:hidden}
   .hbar-fill{height:100%;background:#EF4444;border-radius:99px}
+  .hbar-parts{margin:6px 0 0 10px;padding-left:10px;border-left:2px solid #E8E6E0}
+  .hbar-part{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#57534E;padding:3px 0}
+  .hbar-details{margin:8px 0 12px}
+  .hbar-details summary{cursor:pointer;list-style:none}
+  .hbar-details summary::-webkit-details-marker{display:none}
   .owner-row{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
   .owner-chip{display:inline-block;padding:6px 10px;background:#F2F0EA;border:1px solid #D9D7D0;border-radius:8px;font-size:12px;color:#1C1917}
   .owner-tag{font-style:normal;color:#6B6960;font-size:11px;margin-left:6px}
@@ -275,6 +291,13 @@ export function reportPageStyles() {
   }`;
 }
 
+function sharePct(part, total) {
+  const t = Number(total) || 0;
+  const p = Number(part) || 0;
+  if (t <= 0 || p <= 0) return "0%";
+  return `${Math.round((p / t) * 100)}%`;
+}
+
 function runStopChart(runtimeMin, downtimeMin) {
   const run = Math.max(0, Number(runtimeMin || 0));
   const down = Math.max(0, Number(downtimeMin || 0));
@@ -284,8 +307,8 @@ function runStopChart(runtimeMin, downtimeMin) {
     <span class="chart-bar-down" style="width:${(down / total) * 100}%"></span>
   </div>
   <div class="chart-legend">
-    <span class="leg-run">Running ${formatDurationMinutes(run)}</span>
-    <span class="leg-down">Stopped ${formatDurationMinutes(down)}</span>
+    <span class="leg-run">Running ${formatDurationMinutes(run)} · ${sharePct(run, total)}</span>
+    <span class="leg-down">Stopped ${formatDurationMinutes(down)} · ${sharePct(down, total)}</span>
   </div>`;
 }
 
@@ -293,22 +316,35 @@ function downtimeReasonChart(stops, siteSettings, machine) {
   const byReason = {};
   const byOwner = {};
   for (const s of stops) {
-    const key = s.reason || "Other";
+    const key = canonicalStopReason(s.reason);
     const owner = stopOwner(key, siteSettings, machine);
-    byReason[key] = (byReason[key] || 0) + Number(s.downtime_minutes || 0);
-    byOwner[owner] = (byOwner[owner] || 0) + Number(s.downtime_minutes || 0);
+    const part = detailForStop(s.reason, s.note);
+    const mins = Number(s.downtime_minutes || 0);
+    if (!byReason[key]) byReason[key] = { minutes: 0, parts: {} };
+    byReason[key].minutes += mins;
+    byReason[key].parts[part] = (byReason[key].parts[part] || 0) + mins;
+    byOwner[owner] = (byOwner[owner] || 0) + mins;
   }
-  const rows = Object.entries(byReason).sort((a, b) => b[1] - a[1]);
+  const rows = Object.entries(byReason).sort((a, b) => b[1].minutes - a[1].minutes);
   if (!rows.length) return "";
-  const max = Math.max(1, ...rows.map(([, min]) => min));
+  const total = rows.reduce((sum, [, row]) => sum + row.minutes, 0) || 1;
   const ownerSummary = Object.entries(byOwner)
     .sort((a, b) => b[1] - a[1])
-    .map(([owner, min]) => `<span class="owner-chip"><strong>${esc(owner)}</strong> ${formatDurationMinutes(min)}</span>`)
+    .map(([owner, min]) => `<span class="owner-chip"><strong>${esc(owner)}</strong> ${formatDurationMinutes(min)} · ${sharePct(min, total)}</span>`)
     .join("");
-  const bars = rows.map(([reason, min]) => `<div class="hbar">
-    <div class="hbar-label"><span>${esc(reason)} <em class="owner-tag">${esc(stopOwner(reason, siteSettings, machine))}</em></span><strong>${formatDurationMinutes(min)}</strong></div>
-    <div class="hbar-track"><div class="hbar-fill" style="width:${(min / max) * 100}%"></div></div>
-  </div>`).join("");
+  const bars = rows.map(([reason, row]) => {
+    const parts = Object.entries(row.parts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, min]) => `<div class="hbar-part"><span>${esc(label)}</span><strong>${sharePct(min, row.minutes)} · ${formatDurationMinutes(min)}</strong></div>`)
+      .join("");
+    const bar = `<div class="hbar-label"><span>${esc(reason)} <em class="owner-tag">${esc(stopOwner(reason, siteSettings, machine))}</em></span><strong>${sharePct(row.minutes, total)} · ${formatDurationMinutes(row.minutes)}</strong></div>
+    <div class="hbar-track"><div class="hbar-fill" style="width:${(row.minutes / total) * 100}%"></div></div>`;
+    if (Object.keys(row.parts).length <= 1) return `<div class="hbar">${bar}</div>`;
+    return `<details class="hbar-details">
+    <summary>${bar}<p class="note" style="margin:4px 0 0">Tap for makeup</p></summary>
+    <div class="hbar-parts">${parts}</div>
+  </details>`;
+  }).join("");
   return `<div class="owner-row">${ownerSummary}</div>${bars}`;
 }
 
@@ -339,12 +375,17 @@ async function resolveInspectionPhotoMap(items) {
 }
 
 function siteDispatchForShift(rows, shift) {
-  const day = localDayKey(shift?.started_at);
-  if (!day) return null;
-  return (rows || []).find((row) => String(row.dispatch_date || "").slice(0, 10) === day && (!shift?.site_id || row.site_id === shift.site_id)) || null;
+  const days = [localDayKey(shift?.started_at), localDayKey(shift?.ended_at)].filter(Boolean);
+  if (!days.length) return null;
+  const sameSite = (row) => !shift?.site_id || row.site_id === shift.site_id;
+  for (const day of days) {
+    const row = (rows || []).find((item) => String(item.dispatch_date || "").slice(0, 10) === day && sameSite(item));
+    if (row) return row;
+  }
+  return null;
 }
 
-export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, weighbridgePhotoUrls = [], siteDispatch, logoUrl, prestartPhotoUrls = {}, siteSettings, profiles = [], workSessions = [] }) {
+export function generateShiftDailyReportHTML(shift, { events, inspections, fuelLogs, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl, weighbridgePhotoUrls = [], siteDispatch, logoUrl, prestartPhotoUrls = {}, siteSettings, profiles = [], workSessions = [], hideBillable = false }) {
   const ticketUrls = (weighbridgePhotoUrls?.length ? weighbridgePhotoUrls : weighbridgePhotoUrl ? [weighbridgePhotoUrl] : []).filter(Boolean);
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
@@ -363,7 +404,8 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
     }
     const range = `${fmtDate(new Date(item.start).toISOString())} – ${fmtDate(new Date(item.end).toISOString())}`;
     if (item.state === "stopped") {
-      return `<tr><td>${range}</td><td>Stopped</td><td>${esc(item.reason || "Downtime")} · ${esc(stopOwner(item.reason, siteSettings, machine))}</td><td>${formatDurationMinutes(item.minutes)}${item.note ? ` · ${esc(item.note)}` : ""}</td></tr>`;
+      const shown = stopReasonDetail(item.reason, item.note);
+      return `<tr><td>${range}</td><td>Stopped</td><td>${esc(shown.category || "Downtime")} · ${esc(stopOwner(item.reason, siteSettings, machine))}${shown.detail ? ` · ${esc(shown.detail)}` : ""}</td><td>${formatDurationMinutes(item.minutes)}</td></tr>`;
     }
     return `<tr><td>${range}</td><td>Running</td><td>—</td><td>${formatDurationMinutes(item.minutes)}</td></tr>`;
   }).join("");
@@ -382,6 +424,11 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
   const prestartBad = prestart.filter((i) => /attention|need|fail/i.test(i.status || "")).length;
   const prestartProblems = prestart.filter((i) => !/^ok$/i.test(i.status || ""));
   const downtimeChart = downtimeReasonChart(stops, siteSettings, machine);
+  const stopTotalMin = stops.reduce((sum, row) => sum + Number(row.downtime_minutes || 0), 0);
+  const screened = siteDispatch ? (screenedTonnes(siteDispatch, siteSettings) ?? siteDispatch.tonnes_screened) : null;
+  const floorTonnes = siteDispatch?.tonnes_on_floor ?? null;
+  const excavatorBuckets = siteDispatch?.excavator_buckets ?? null;
+  const felBuckets = siteDispatch?.fel_buckets ?? null;
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Daily Report · ${esc(machine?.name || "Machine")} · ${titleDate}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -429,12 +476,12 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
   </header>
 
   <main class="content">
-    <div class="summary quad">
-      <div class="summary-cell highlight">
+    <div class="summary ${hideBillable ? "" : "quad"}">
+      ${hideBillable ? "" : `<div class="summary-cell highlight">
         <div class="label">Billable hours</div>
         <div class="value font-brand">${billableHours.toFixed(1)}h</div>
         <div class="sub">8h shift minus ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))} downtime</div>
-      </div>
+      </div>`}
       <div class="summary-cell highlight">
         <div class="label">Machine hours</div>
         <div class="value font-brand">${machineHours.toFixed(1)}h</div>
@@ -449,6 +496,19 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
         <div class="label">Downtime</div>
         <div class="value font-brand">${formatDurationMinutes(shift.downtime_minutes || 0)}</div>
         <div class="sub">App-tracked</div>
+      </div>
+    </div>
+
+    <div class="summary quad">
+      <div class="summary-cell highlight">
+        <div class="label">Material screened</div>
+        <div class="value font-brand">${formatTonnes(screened)}</div>
+        <div class="sub">${excavatorBuckets == null ? "Excavator buckets" : `${excavatorBuckets} excavator buckets`}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">On the floor</div>
+        <div class="value font-brand">${formatTonnes(floorTonnes)}</div>
+        <div class="sub">${felBuckets == null ? "FEL buckets" : `${felBuckets} FEL buckets`}</div>
       </div>
     </div>
 
@@ -473,14 +533,14 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
           <div class="sub">Weighbridge count</div>
         </div>
         <div class="summary-cell">
-          <div class="label">Screened</div>
-          <div class="value font-brand">${formatTonnes(siteDispatch.tonnes_screened)}</div>
-          <div class="sub">${siteDispatch.excavator_buckets == null ? "No excavator buckets" : `${siteDispatch.excavator_buckets} excavator buckets`}</div>
+          <div class="label">Material screened</div>
+          <div class="value font-brand">${formatTonnes(screened)}</div>
+          <div class="sub">${excavatorBuckets == null ? "No excavator buckets" : `${excavatorBuckets} excavator buckets`}</div>
         </div>
         <div class="summary-cell">
           <div class="label">On the floor</div>
-          <div class="value font-brand">${formatTonnes(siteDispatch.tonnes_on_floor)}</div>
-          <div class="sub">${siteDispatch.tonnes_on_floor == null ? "No stock yet" : "Previous floor + FEL − dispatched"}</div>
+          <div class="value font-brand">${formatTonnes(floorTonnes)}</div>
+          <div class="sub">${felBuckets == null ? "No FEL buckets" : `${felBuckets} FEL buckets`}</div>
         </div>
       </div>
       ${ticketUrls.length
@@ -495,7 +555,7 @@ export function generateShiftDailyReportHTML(shift, { events, inspections, fuelL
 
     <section>
       <h2 class="font-brand">Machine productivity</h2>
-      <p class="note" style="margin-top:0">Stock-style score for this shift only. Climbs while the machine runs, falls while it is stopped. End point is runtime minus downtime. Red dots are stops.</p>
+      <p class="note" style="margin-top:0">Climbs while the machine runs, falls while it is stopped. End is runtime minus downtime.</p>
       ${stockProductivitySvg(shift, events, siteSettings, machine)}
     </section>
 
@@ -536,13 +596,15 @@ ${timelineRows || '<tr class="empty"><td colspan="4">No activity logged</td></tr
     <section>
       <h2 class="font-brand">Downtime</h2>
       ${downtimeChart || ""}
-      <table><thead><tr><th>Reason</th><th>Owner</th><th>Stopped</th><th>Duration</th><th>Notes</th></tr></thead><tbody>
+      <table><thead><tr><th>Reason</th><th>Owner</th><th>Stopped</th><th>Duration</th><th>Share</th><th>Notes</th></tr></thead><tbody>
 ${stops.length
     ? stops.map((s) => {
       const endLabel = s.restarted_at ? fmtDate(s.restarted_at) : (shift.ended_at ? fmtDate(shift.ended_at) : "—");
-      return `<tr><td>${esc(s.reason)}</td><td>${esc(stopOwner(s.reason, siteSettings, machine))}</td><td>${fmtDate(s.stopped_at)}${s.restarted_at ? ` → ${endLabel}` : ""}</td><td>${formatDurationMinutes(s.downtime_minutes || 0)}</td><td>${esc(s.note || "")}</td></tr>`;
+      const shown = stopReasonDetail(s.reason, s.note);
+      const mins = Number(s.downtime_minutes || 0);
+      return `<tr><td>${esc(shown.category)}</td><td>${esc(stopOwner(s.reason, siteSettings, machine))}</td><td>${fmtDate(s.stopped_at)}${s.restarted_at ? ` → ${endLabel}` : ""}</td><td>${formatDurationMinutes(mins)}</td><td>${sharePct(mins, stopTotalMin)}</td><td>${esc(shown.detail)}</td></tr>`;
     }).join("")
-    : '<tr class="empty"><td colspan="5">No stops recorded</td></tr>'}
+    : '<tr class="empty"><td colspan="6">No stops recorded</td></tr>'}
       </tbody></table>
     </section>
 
@@ -578,7 +640,7 @@ ${shiftFuel.length
         <div class="signoff-head">
           <h2>Dual sign-off</h2>
           <div class="signoff-meta">
-            <p><strong>Billable hours signed:</strong> ${billableHours.toFixed(1)}h (8h minus ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))} downtime)</p>
+            ${hideBillable ? "" : `<p><strong>Billable hours signed:</strong> ${billableHours.toFixed(1)}h (8h minus ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))} downtime)</p>`}
             <p><strong>Verified at:</strong> ${fmtDate(shift.verified_at || shift.ended_at)}</p>
             ${shift.site_signed_at ? `<p><strong>Site signed at:</strong> ${fmtDate(shift.site_signed_at)}</p>` : ""}
             ${shift.assigned_supervisor_name ? `<p><strong>Assigned:</strong> ${esc(shift.assigned_supervisor_name)}</p>` : ""}
@@ -600,7 +662,9 @@ ${shiftFuel.length
             <p class="signature-name">${esc(shift.site_signature_name || "Not signed yet")}</p>
           </div>
         </div>
-        <p class="note">${esc(machineOwnerName(machine, OWNER_ROLES.WEAR, siteSettings))} signs billable hours and stop owners. Billable hours are an 8-hour shift minus downtime owned by ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))}. Machine hours are the hour meter. Runtime and downtime are app-tracked.</p>
+        <p class="note">${hideBillable
+    ? `${esc(machineOwnerName(machine, OWNER_ROLES.WEAR, siteSettings))} signs the stop owners. Machine hours are the hour meter. Runtime and downtime are app-tracked.`
+    : `${esc(machineOwnerName(machine, OWNER_ROLES.WEAR, siteSettings))} signs billable hours and stop owners. Billable hours are an 8-hour shift minus downtime owned by ${esc(machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings))}. Machine hours are the hour meter. Runtime and downtime are app-tracked.`}</p>
       </div>
     </section>
 
@@ -641,6 +705,8 @@ export function htmlFromSiteSummary(data, extras = {}) {
     equipment_owner_name: data.owner_name,
     client_site_name: data.client_name,
     stop_reasons: data.stop_reasons,
+    excavator_bucket_tonnes: data.excavator_bucket_tonnes,
+    fel_bucket_tonnes: data.fel_bucket_tonnes,
   };
   let events = Array.isArray(data.events) ? data.events.map((e) => ({ ...e, shift_id: e.shift_id || shift.id })) : [];
   if (!events.length && Array.isArray(data.stops)) {
@@ -690,7 +756,7 @@ export function siteSummaryReportTitle(data) {
   return `Daily Report · ${data?.machine_name || shift.machine_id || "Machine"} · ${fmtDateShort(shift.started_at)}`;
 }
 
-function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, siteSettings, profiles = [], workSessions = [], siteDispatch = null }) {
+function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs = [], machine, site, siteSettings, profiles = [], workSessions = [], siteDispatch = null, hideBillable = false }) {
   const { milestones, periods } = buildShiftActivityTimeline(shift, events);
   const stops = consolidateShiftStops(events, shift);
   const shiftFuel = (fuelLogs || []).filter((f) => f.shift_id === shift.id);
@@ -700,7 +766,7 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
     ...periods.filter((p) => p.state === "stopped").map((p) => [
       `${fmtDate(new Date(p.start).toISOString())} – ${fmtDate(new Date(p.end).toISOString())}`,
       "Stopped",
-      `${p.reason || "Downtime"} (${stopOwner(p.reason, siteSettings, machine)})`,
+      `${stopReasonDetail(p.reason, p.note).category || "Downtime"} (${stopOwner(p.reason, siteSettings, machine)})`,
       formatDurationMinutes(p.minutes),
     ]),
   ];
@@ -726,13 +792,15 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
         ["Opening meter (h)", shift.start_hour_meter ?? ""],
         ["Closing meter (h)", shift.end_hour_meter ?? ""],
         ["Machine hours", Number(shift.hours_worked || 0)],
-        ["Billable hours", shiftBillableHours(shift, events, siteSettings)],
-        ["Billable basis", `8h shift minus ${machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings)} downtime`],
+        ...(hideBillable ? [] : [
+          ["Billable hours", shiftBillableHours(shift, events, siteSettings)],
+          ["Billable basis", `8h shift minus ${machineOwnerName(machine, OWNER_ROLES.CONTRACTOR, siteSettings)} downtime`],
+        ]),
         ["Runtime (min)", Number(shift.runtime_minutes || 0)],
         ["Downtime (min)", Number(shift.downtime_minutes || 0)],
         ["Site tonnes dispatched", siteDispatch?.tonnes_dispatched ?? ""],
         ["Site trucks", siteDispatch?.trucks_dispatched ?? ""],
-        ["Site tonnes screened", siteDispatch?.tonnes_screened ?? ""],
+        ["Site tonnes screened", screenedTonnes(siteDispatch, siteSettings) ?? siteDispatch?.tonnes_screened ?? ""],
         ["Excavator buckets", siteDispatch?.excavator_buckets ?? ""],
         ["Site tonnes on the floor", siteDispatch?.tonnes_on_floor ?? ""],
         ["FEL buckets", siteDispatch?.fel_buckets ?? ""],
@@ -742,17 +810,24 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
     {
       name: "Downtime",
       rows: [
-        ["Reason", "Owner", "Stopped", "Duration", "Notes"],
-        ...stops.map((s) => [
-          s.reason || "",
-          stopOwner(s.reason, siteSettings, machine),
-          fmtDate(s.stopped_at),
-          formatDurationMinutes(s.downtime_minutes || 0),
-          s.note || "",
-        ]),
-        [],
-        ["Owner totals"],
-        ...Object.entries(ownerTotals).map(([owner, min]) => [owner, "", "", formatDurationMinutes(min), ""]),
+        ["Reason", "Owner", "Stopped", "Duration", "Share", "Notes"],
+        ...(() => {
+          const totalDown = stops.reduce((sum, row) => sum + Number(row.downtime_minutes || 0), 0);
+          const ownerTotal = Object.values(ownerTotals).reduce((sum, n) => sum + n, 0);
+          return [
+            ...stops.map((s) => [
+              stopReasonDetail(s.reason, s.note).category,
+              stopOwner(s.reason, siteSettings, machine),
+              fmtDate(s.stopped_at),
+              formatDurationMinutes(s.downtime_minutes || 0),
+              sharePct(s.downtime_minutes || 0, totalDown),
+              stopReasonDetail(s.reason, s.note).detail,
+            ]),
+            [],
+            ["Owner totals"],
+            ...Object.entries(ownerTotals).map(([owner, min]) => [owner, "", "", formatDurationMinutes(min), sharePct(min, ownerTotal), ""]),
+          ];
+        })(),
       ],
     },
     {
@@ -778,35 +853,42 @@ function buildDailyReportSheets(shift, { events = [], inspections = [], fuelLogs
   ];
 }
 
-export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [], siteSettings, profiles = [], workSessions = [], siteDispatch: siteDispatchRows = [] }) {
+export async function prepareShiftDailyReport(shift, { events = [], inspections = [], fuelLogs = [], machine, site, shifts = [], hourReadings = [], siteSettings, profiles = [], workSessions = [], siteDispatch: siteDispatchRows = [], hideBillable = false }) {
+  const shiftEvents = (events || []).filter((e) => !shift?.id || e.shift_id === shift.id);
+  const shiftFuel = (fuelLogs || []).filter((f) => f.shift_id === shift.id);
+  const shiftReadings = (hourReadings || []).filter((r) => r.shift_id === shift.id);
   const sigRef = firstMedia(shift.machine_signature_ref, shift.supervisor_signature_ref, shift.machine_signature, shift.supervisor_signature);
   const siteSigRef = firstMedia(shift.site_signature_ref, shift.site_signature);
   const prestartItems = shiftPrestart(inspections, shift);
-  const prestartPhotoMap = await resolveInspectionPhotoMap(prestartItems);
-  const prestartPhotoUrls = Object.fromEntries(
-    Object.entries(prestartPhotoMap).map(([id, { url }]) => [id, url])
-  );
-
-  const dayDispatch = siteDispatchForShift(siteDispatchRows, shift);
+  const dayDispatch = (() => {
+    const balanced = runningFloor(siteDispatchRows, siteSettings);
+    const row = siteDispatchForShift(balanced, shift);
+    if (!row) return null;
+    return { ...row, tonnes_screened: screenedTonnes(row, siteSettings) ?? row.tonnes_screened };
+  })();
   const ticketRefs = weighbridgePhotoRefs(dayDispatch);
-  const [{ openingPhotoUrl, closingPhotoUrl }, signatureUrl, siteSignatureUrl, ticketUrls, logoUrl] = await Promise.all([
-    resolveMeterPhotos(shift, events, hourReadings),
+  const [prestartPhotoMap, { openingPhotoUrl, closingPhotoUrl }, signatureUrl, siteSignatureUrl, ticketUrls, logoUrl] = await Promise.all([
+    resolveInspectionPhotoMap(prestartItems),
+    resolveMeterPhotos(shift, shiftEvents, shiftReadings),
     embedMedia(sigRef),
     embedMedia(siteSigRef),
     Promise.all(ticketRefs.map((ref) => embedMedia(ref))),
     resolveLogoDataUrl(),
   ]);
+  const prestartPhotoUrls = Object.fromEntries(
+    Object.entries(prestartPhotoMap).map(([id, { url }]) => [id, url])
+  );
   const weighbridgePhotoUrls = (ticketUrls || []).filter(Boolean);
 
   const names = shiftNameLines(shift, { profiles, workSessions });
   const html = generateShiftDailyReportHTML(shift, {
-    events, inspections, fuelLogs, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl: weighbridgePhotoUrls[0], weighbridgePhotoUrls, siteDispatch: dayDispatch, logoUrl, prestartPhotoUrls, siteSettings, profiles, workSessions,
+    events: shiftEvents, inspections, fuelLogs: shiftFuel, machine, site, signatureUrl, siteSignatureUrl, openingPhotoUrl, closingPhotoUrl, weighbridgePhotoUrl: weighbridgePhotoUrls[0], weighbridgePhotoUrls, siteDispatch: dayDispatch, logoUrl, prestartPhotoUrls, siteSettings, profiles, workSessions, hideBillable,
   });
 
   return {
     html,
     title: `Daily Report · ${machine?.name || names.machineOperator} · ${fmtDateShort(shift.started_at)}`,
-    sheets: buildDailyReportSheets(shift, { events, inspections, fuelLogs, machine, site, siteSettings, profiles, workSessions, siteDispatch: dayDispatch }),
+    sheets: buildDailyReportSheets(shift, { events: shiftEvents, inspections, fuelLogs: shiftFuel, machine, site, siteSettings, profiles, workSessions, siteDispatch: dayDispatch, hideBillable }),
   };
 }
 
@@ -821,7 +903,7 @@ export async function downloadShiftDailyReport(shift, ctx) {
   return downloadReportFile(html, title);
 }
 
-export function generateFullReportHTML(data, period, periodLabel, machine, site, { logoUrl, machines = [] } = {}) {
+export function generateFullReportHTML(data, period, periodLabel, machine, site, { logoUrl, machines = [], hideBillable = false } = {}) {
   const machineList = machines.length ? machines : machine ? [machine] : [];
   const { shifts: runs = [], events = [], expenses = [], fuelLogs = [] } = data || {};
   const inRange = (iso) => inPeriod(iso, period);
@@ -844,15 +926,26 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
   const totalLitres = periodFuels.reduce((a, f) => a + Number(f.litres || 0), 0);
   const consumption = machineHours > 0 ? totalLitres / machineHours : 0;
   const runtimeMin = verified.reduce((a, s) => a + Number(s.runtime_minutes || 0), 0);
+  const periodDispatch = runningFloor(data?.dispatches || [], siteSettings)
+    .filter((row) => inRange(row.dispatch_date))
+    .map((row) => ({ ...row, tonnes_screened: screenedTonnes(row, siteSettings) ?? row.tonnes_screened }));
 
   const downtimeByReason = {};
   for (const e of closedStops) {
-    const reason = e.reason || "Other";
-    downtimeByReason[reason] = (downtimeByReason[reason] || 0) + Number(e.downtime_minutes || 0);
+    const reason = canonicalStopReason(e.reason);
+    const evMachine = machineList.find((m) => m.id === e.machine_id) || machine || machineList[0];
+    const mins = Number(e.downtime_minutes || 0);
+    if (!downtimeByReason[reason]) {
+      downtimeByReason[reason] = {
+        minutes: 0,
+        owner: ownerForStopReasonMachine(reason, evMachine, siteSettings),
+      };
+    }
+    downtimeByReason[reason].minutes += mins;
   }
   const downtimeRows = Object.entries(downtimeByReason)
-    .sort((a, b) => b[1] - a[1])
-    .map(([reason, min]) => `<tr><td>${esc(reason)}</td><td>${formatDurationMinutes(min)}</td></tr>`)
+    .sort((a, b) => b[1].minutes - a[1].minutes)
+    .map(([reason, row]) => `<tr><td>${esc(reason)}</td><td>${esc(row.owner)}</td><td>${formatDurationMinutes(row.minutes)}</td><td>${sharePct(row.minutes, totalDowntimeMin)}</td></tr>`)
     .join("");
 
   const expenseByCategory = {};
@@ -872,7 +965,14 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
 
   const shiftRows = verified
     .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
-    .map((s) => `<tr>
+    .map((s) => hideBillable
+      ? `<tr>
+      <td>${esc(s.operator_name)}</td>
+      <td>${fmtDateShort(s.started_at)}</td>
+      <td>${Number(s.hours_worked || 0).toFixed(1)}h</td>
+      <td>${esc(s.supervisor_signature_name || "—")}</td>
+    </tr>`
+      : `<tr>
       <td>${esc(s.operator_name)}</td>
       <td>${fmtDateShort(s.started_at)}</td>
       <td>${Number(s.hours_worked || 0).toFixed(1)}h</td>
@@ -900,7 +1000,7 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
         <div class="header-meta">
           <span>${esc(site?.name || "Site")}</span>
           <span>${esc(machine?.name || machine?.id || "Machine")}</span>
-          <span>${money(machine?.billable_rate)}/h</span>
+          ${hideBillable ? "" : `<span>${money(machine?.billable_rate)}/h</span>`}
         </div>
       </div>
     </div>
@@ -908,17 +1008,17 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
 
   <main class="content">
     <div class="summary">
-      <div class="summary-cell highlight">
+      ${hideBillable ? "" : `<div class="summary-cell highlight">
         <div class="label">Billable hours</div>
         <div class="value">${billableHours.toFixed(1)}h</div>
         <div class="sub">${shifts.length} shifts · 8h each minus ${esc(machineOwnerName(machine || machineList[0], OWNER_ROLES.CONTRACTOR, siteSettings))} downtime</div>
-      </div>
+      </div>`}
       <div class="summary-cell highlight">
         <div class="label">Machine hours</div>
         <div class="value">${machineHours.toFixed(1)}h</div>
         <div class="sub">${verified.length} verified shift${verified.length !== 1 ? "s" : ""} · hour meter</div>
       </div>
-      <div class="summary-cell highlight">
+      ${hideBillable ? "" : `<div class="summary-cell highlight">
         <div class="label">Revenue</div>
         <div class="value">${money(revenue)}</div>
         <div class="sub">Billable hours × rate</div>
@@ -927,7 +1027,7 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
         <div class="label">Net (approx)</div>
         <div class="value">${money(revenue - totalExpenses)}</div>
         <div class="sub">Revenue minus expenses</div>
-      </div>
+      </div>`}
       <div class="summary-cell">
         <div class="label">Runtime</div>
         <div class="value">${formatDurationMinutes(runtimeMin)}</div>
@@ -951,27 +1051,27 @@ export function generateFullReportHTML(data, period, periodLabel, machine, site,
       <div class="item"><div class="label">Expenses</div><div class="value">${money(totalExpenses)}</div></div>
     </div>
 
-    ${pendingBillable > 0 ? `<div class="callout">⚠ ${pending.length} shift(s) pending supervisor verification (${pendingBillable.toFixed(1)}h billable)</div>` : ""}
+    ${pending.length > 0 ? `<div class="callout">⚠ ${pending.length} shift(s) pending supervisor verification${hideBillable ? "" : ` (${pendingBillable.toFixed(1)}h billable)`}</div>` : ""}
 
     <section>
       <h2>Site dispatch</h2>
       <p class="note">One weighbridge entry per day for the site.</p>
       <table><thead><tr><th>Date</th><th>Tonnes</th><th>Trucks</th><th>Screened</th><th>Excavator buckets</th><th>On the floor</th><th>FEL buckets</th><th>Recorded by</th></tr></thead><tbody>
-${(data?.dispatches || []).filter((row) => inRange(row.dispatch_date)).map((row) => `<tr><td>${esc(String(row.dispatch_date || "").slice(0, 10))}</td><td>${formatTonnes(row.tonnes_dispatched)}</td><td>${row.trucks_dispatched ?? "—"}</td><td>${row.tonnes_screened == null ? "—" : formatTonnes(row.tonnes_screened)}</td><td>${row.excavator_buckets ?? "—"}</td><td>${row.tonnes_on_floor == null ? "—" : formatTonnes(row.tonnes_on_floor)}</td><td>${row.fel_buckets ?? "—"}</td><td>${esc(row.recorded_by_name || "—")}</td></tr>`).join("") || '<tr class="empty"><td colspan="8">No dispatch recorded in this period</td></tr>'}
+${periodDispatch.map((row) => `<tr><td>${esc(String(row.dispatch_date || "").slice(0, 10))}</td><td>${formatTonnes(row.tonnes_dispatched)}</td><td>${row.trucks_dispatched ?? "—"}</td><td>${row.tonnes_screened == null ? "—" : formatTonnes(row.tonnes_screened)}</td><td>${row.excavator_buckets ?? "—"}</td><td>${row.tonnes_on_floor == null ? "—" : formatTonnes(row.tonnes_on_floor)}</td><td>${row.fel_buckets ?? "—"}</td><td>${esc(row.recorded_by_name || "—")}</td></tr>`).join("") || '<tr class="empty"><td colspan="8">No dispatch recorded in this period</td></tr>'}
       </tbody></table>
     </section>
 
     <section>
       <h2>Verified shifts</h2>
-      <table><thead><tr><th>Operator</th><th>Date</th><th>Machine hours</th><th>Billable</th><th>Value</th><th>Signed by</th></tr></thead><tbody>
-${shiftRows || '<tr class="empty"><td colspan="6">No verified shifts in this period</td></tr>'}
+      <table><thead><tr><th>Operator</th><th>Date</th><th>Machine hours</th>${hideBillable ? "" : "<th>Billable</th><th>Value</th>"}<th>Signed by</th></tr></thead><tbody>
+${shiftRows || `<tr class="empty"><td colspan="${hideBillable ? 4 : 6}">No verified shifts in this period</td></tr>`}
       </tbody></table>
     </section>
 
     <section>
-      <h2>Downtime by reason</h2>
-      <table><thead><tr><th>Reason</th><th>Duration</th></tr></thead><tbody>
-${downtimeRows || '<tr class="empty"><td colspan="2">No downtime recorded</td></tr>'}
+      <h2>Downtime by category</h2>
+      <table><thead><tr><th>Category</th><th>Owner</th><th>Duration</th><th>Share</th></tr></thead><tbody>
+${downtimeRows || '<tr class="empty"><td colspan="4">No downtime recorded</td></tr>'}
       </tbody></table>
     </section>
 
@@ -989,7 +1089,9 @@ ${expenseRows || '<tr class="empty"><td colspan="2">No expenses recorded</td></t
       </tbody></table>
     </section>
 
-    <p class="note">Billable hours are an 8-hour shift minus downtime owned by ${esc(machineOwnerName(machine || machineList[0], OWNER_ROLES.CONTRACTOR, siteSettings))}, on supervisor-signed shifts. Machine hours are the hour meter. Runtime and downtime are app-tracked. Generated from local OPS data.</p>
+    <p class="note">${hideBillable
+    ? "Machine hours are the hour meter. Runtime and downtime are app-tracked. Generated from local OPS data."
+    : `Billable hours are an 8-hour shift minus downtime owned by ${esc(machineOwnerName(machine || machineList[0], OWNER_ROLES.CONTRACTOR, siteSettings))}, on supervisor-signed shifts. Machine hours are the hour meter. Runtime and downtime are app-tracked. Generated from local OPS data.`}</p>
 
     <footer class="footer">
       <span>OPS Operations · ${esc(site?.name || "Site")}</span>
@@ -1131,11 +1233,12 @@ export async function openMechanicInspectionReport(batch, items, { machine, site
   return { html, title, sheets };
 }
 
-export async function prepareOperationsReport(data, period, machine, site) {
+export async function prepareOperationsReport(data, period, machine, site, { hideBillable = false } = {}) {
   const logoUrl = await resolveLogoDataUrl();
   const html = generateFullReportHTML(data, period, period.label, machine, site, {
     logoUrl,
     machines: machine ? [machine] : [],
+    hideBillable,
   });
   const runs = data?.shifts || [];
   const inRange = (iso) => inPeriod(iso, period);
@@ -1144,29 +1247,40 @@ export async function prepareOperationsReport(data, period, machine, site) {
     {
       name: "Shifts",
       rows: [
-        ["Operator", "Date", "Machine hours", "Billable hours", "Runtime min", "Downtime min", "Signed by"],
-        ...periodShifts.map((s) => [
-          s.operator_name || "",
-          fmtDateShort(s.started_at),
-          Number(s.hours_worked || 0),
-          shiftBillableHours(s, data?.events || [], data?.siteSettings),
-          Number(s.runtime_minutes || 0),
-          Number(s.downtime_minutes || 0),
-          s.supervisor_signature_name || "",
-        ]),
+        hideBillable
+          ? ["Operator", "Date", "Machine hours", "Runtime min", "Downtime min", "Signed by"]
+          : ["Operator", "Date", "Machine hours", "Billable hours", "Runtime min", "Downtime min", "Signed by"],
+        ...periodShifts.map((s) => hideBillable
+          ? [
+            s.operator_name || "",
+            fmtDateShort(s.started_at),
+            Number(s.hours_worked || 0),
+            Number(s.runtime_minutes || 0),
+            Number(s.downtime_minutes || 0),
+            s.supervisor_signature_name || "",
+          ]
+          : [
+            s.operator_name || "",
+            fmtDateShort(s.started_at),
+            Number(s.hours_worked || 0),
+            shiftBillableHours(s, data?.events || [], data?.siteSettings),
+            Number(s.runtime_minutes || 0),
+            Number(s.downtime_minutes || 0),
+            s.supervisor_signature_name || "",
+          ]),
       ],
     },
     {
       name: "Dispatch",
       rows: [
         ["Date", "Tonnes dispatched", "Trucks", "Tonnes screened", "Excavator buckets", "Tonnes on the floor", "FEL buckets", "Recorded by"],
-        ...(data?.dispatches || [])
+        ...runningFloor(data?.dispatches || [], data?.siteSettings)
           .filter((row) => inPeriod(row.dispatch_date, period))
           .map((row) => [
             String(row.dispatch_date || "").slice(0, 10),
             row.tonnes_dispatched ?? "",
             row.trucks_dispatched ?? "",
-            row.tonnes_screened ?? "",
+            screenedTonnes(row, data?.siteSettings) ?? "",
             row.excavator_buckets ?? "",
             row.tonnes_on_floor ?? "",
             row.fel_buckets ?? "",
@@ -1179,8 +1293,8 @@ export async function prepareOperationsReport(data, period, machine, site) {
 }
 
 /** Returns { html, title } for in-app full-screen viewer */
-export async function printOperationsReport(data, period, machine, site) {
-  return prepareOperationsReport(data, period, machine, site);
+export async function printOperationsReport(data, period, machine, site, options = {}) {
+  return prepareOperationsReport(data, period, machine, site, options);
 }
 
 export function generateTimesheetReportHTML(workSessions, period, site, { logoUrl, machines = [] } = {}) {
@@ -1194,9 +1308,10 @@ export function generateTimesheetReportHTML(workSessions, period, site, { logoUr
       <td>${esc(op.operator_name)}</td>
       <td>${op.sessions}</td>
       <td>${op.hours.toFixed(1)}h</td>
+      <td>${(op.overtimeHours || 0).toFixed(1)}h</td>
       <td>${op.leftEarly}</td>
     </tr>`)
-    .join("") || `<tr class="empty"><td colspan="4">No operators in this period.</td></tr>`;
+    .join("") || `<tr class="empty"><td colspan="5">No operators in this period.</td></tr>`;
 
   const sessionRows = rows
     .map((r) => `<tr>
@@ -1205,11 +1320,12 @@ export function generateTimesheetReportHTML(workSessions, period, site, { logoUr
       <td>${esc(r.inLabel)}</td>
       <td>${esc(r.outLabel)}</td>
       <td>${r.hours.toFixed(1)}h</td>
+      <td>${(r.overtimeHours || 0).toFixed(1)}h</td>
       <td>${esc(r.statusLabel)}</td>
       <td>${esc(machineName(r.machine_id))}</td>
       <td>${esc(r.notes || "—")}</td>
     </tr>`)
-    .join("") || `<tr class="empty"><td colspan="8">No clock-in records for this period.</td></tr>`;
+    .join("") || `<tr class="empty"><td colspan="9">No clock-in records for this period.</td></tr>`;
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Timesheet · ${esc(periodLabel)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -1239,7 +1355,7 @@ export function generateTimesheetReportHTML(workSessions, period, site, { logoUr
       <div class="summary-cell highlight">
         <div class="label">Hours on site</div>
         <div class="value">${summary.hours.toFixed(1)}h</div>
-        <div class="sub">${summary.sessions} session${summary.sessions !== 1 ? "s" : ""}</div>
+        <div class="sub">${summary.sessions} session${summary.sessions !== 1 ? "s" : ""}${(summary.overtimeHours || 0) > 0 ? ` · ${summary.overtimeHours.toFixed(1)}h overtime` : ""}</div>
       </div>
       <div class="summary-cell">
         <div class="label">Clocked out</div>
@@ -1258,12 +1374,12 @@ export function generateTimesheetReportHTML(workSessions, period, site, { logoUr
       </div>
     </div>
 
-    <p class="callout">Hours are time on site (clock-in → clock-out). Machine hours and billable hours stay on the operations report.</p>
+    <p class="callout">Hours are time on site (clock-in → clock-out). Machine hours stay on the daily and operations reports.</p>
 
     <section>
       <h2>By operator</h2>
       <table>
-        <thead><tr><th>Operator</th><th>Sessions</th><th>Hours</th><th>Left early</th></tr></thead>
+        <thead><tr><th>Operator</th><th>Sessions</th><th>Hours</th><th>Overtime</th><th>Left early</th></tr></thead>
         <tbody>${operatorRows}</tbody>
       </table>
     </section>
@@ -1271,7 +1387,7 @@ export function generateTimesheetReportHTML(workSessions, period, site, { logoUr
     <section>
       <h2>Clock-in / clock-out</h2>
       <table>
-        <thead><tr><th>Operator</th><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th><th>Machine</th><th>Note</th></tr></thead>
+        <thead><tr><th>Operator</th><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Overtime</th><th>Status</th><th>Machine</th><th>Note</th></tr></thead>
         <tbody>${sessionRows}</tbody>
       </table>
     </section>
@@ -1299,6 +1415,7 @@ export async function printTimesheetReport(workSessions, period, site, machines 
         ["Timesheet", label],
         ["Site", site?.name || ""],
         ["Hours on site", summary.hours],
+        ["Overtime", summary.overtimeHours || 0],
         ["Sessions", summary.sessions],
         ["Clocked out", summary.ended],
         ["Left without starting", summary.leftEarly],
@@ -1308,15 +1425,15 @@ export async function printTimesheetReport(workSessions, period, site, machines 
     {
       name: "By operator",
       rows: [
-        ["Operator", "Sessions", "Hours", "Left early"],
-        ...summary.byOperator.map((op) => [op.operator_name, op.sessions, op.hours, op.leftEarly]),
+        ["Operator", "Sessions", "Hours", "Overtime", "Left early"],
+        ...summary.byOperator.map((op) => [op.operator_name, op.sessions, op.hours, op.overtimeHours || 0, op.leftEarly]),
       ],
     },
     {
       name: "Clock in out",
       rows: [
-        ["Operator", "Date", "In", "Out", "Hours", "Status", "Machine", "Note"],
-        ...rows.map((r) => [r.operator_name, r.dateLabel, r.inLabel, r.outLabel, r.hours, r.statusLabel, machineName(r.machine_id), r.notes || ""]),
+        ["Operator", "Date", "In", "Out", "Hours", "Overtime", "Status", "Machine", "Note"],
+        ...rows.map((r) => [r.operator_name, r.dateLabel, r.inLabel, r.outLabel, r.hours, r.overtimeHours || 0, r.statusLabel, machineName(r.machine_id), r.notes || ""]),
       ],
     },
   ];

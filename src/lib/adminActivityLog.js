@@ -1,6 +1,7 @@
 import { ISSUE, SHIFT } from "./constants.js";
 import { fmtDate, money, onSiteRecord, whenMs } from "./utils.js";
 import { shiftBillableHours } from "./shiftMetrics.js";
+import { stopReasonDetail } from "./stopReasons.js";
 
 const TYPE_FILTERS = {
   all: () => true,
@@ -79,7 +80,11 @@ export function buildAdminActivityLog({
       site: siteName(e.site_id),
       operator: e.operator_name,
       machine: machineName(e.machine_id),
-      detail: [e.reason, e.note].filter(Boolean).join(" — "),
+      detail: (() => {
+        if (e.type !== "STOP") return [e.reason, e.note].filter(Boolean).join(" — ");
+        const shown = stopReasonDetail(e.reason, e.note);
+        return [shown.category, shown.detail].filter(Boolean).join(" — ");
+      })(),
     });
   }
 

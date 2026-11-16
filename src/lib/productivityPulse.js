@@ -1,7 +1,7 @@
 import { buildShiftActivityTimeline } from "./shiftMetrics.js";
 import { SHIFT } from "./constants.js";
 import { dedupeShifts, getShiftStatus } from "./utils.js";
-import { canonicalStopReason, machineOwnerName, ownerForStopReasonMachine, stopOwnerRole } from "./stopReasons.js";
+import { canonicalStopReason, detailForStop, machineOwnerName, ownerForStopReasonMachine, stopOwnerRole } from "./stopReasons.js";
 
 function dayBounds(ref = new Date()) {
   const start = new Date(ref);
@@ -116,13 +116,12 @@ function flattenToSingleTimeline(periods, fromMs, toMs) {
       minutes: Math.max(0, Math.round((end - start) / 60000)),
     };
     const last = slices[slices.length - 1];
-    const sameReason = !last?.reason || !slice.reason
-      || canonicalStopReason(last.reason) === canonicalStopReason(slice.reason);
-    if (last && last.state === slice.state && Math.abs(slice.start - last.end) < 2 && (last.state === "running" || sameReason)) {
+    const sameDetail = last?.state !== "stopped" || detailForStop(last.reason, last.note) === detailForStop(slice.reason, slice.note);
+    if (last && last.state === slice.state && Math.abs(slice.start - last.end) < 2 && (last.state === "running" || sameDetail)) {
       last.end = slice.end;
       last.minutes = Math.max(0, Math.round((last.end - last.start) / 60000));
       if (!last.reason && slice.reason) last.reason = slice.reason;
-      else if (last.reason && slice.reason) last.reason = canonicalStopReason(last.reason);
+      if (!last.note && slice.note) last.note = slice.note;
       if (!last.operatorName && slice.operatorName) last.operatorName = slice.operatorName;
     } else {
       slices.push(slice);
@@ -209,6 +208,7 @@ export function buildStopReasonTotals(periods, machine, siteSettings) {
   for (const p of periods) {
     if (p.state !== "stopped" || Number(p.minutes || 0) < 1) continue;
     const reason = canonicalStopReason(p.reason, siteSettings);
+    const part = detailForStop(p.reason, p.note);
     if (!totals[reason]) {
       const role = stopOwnerRole(reason, siteSettings);
       totals[reason] = {
@@ -217,12 +217,22 @@ export function buildStopReasonTotals(periods, machine, siteSettings) {
         role,
         minutes: 0,
         count: 0,
+        parts: {},
       };
     }
-    totals[reason].minutes += Number(p.minutes || 0);
+    const mins = Number(p.minutes || 0);
+    totals[reason].minutes += mins;
     totals[reason].count += 1;
+    if (!totals[reason].parts[part]) totals[reason].parts[part] = { label: part, minutes: 0, count: 0 };
+    totals[reason].parts[part].minutes += mins;
+    totals[reason].parts[part].count += 1;
   }
-  return Object.values(totals).sort((a, b) => b.minutes - a.minutes);
+  return Object.values(totals)
+    .map((row) => ({
+      ...row,
+      parts: Object.values(row.parts).sort((a, b) => b.minutes - a.minutes),
+    }))
+    .sort((a, b) => b.minutes - a.minutes);
 }
 
 export function buildPulseSnapshot({

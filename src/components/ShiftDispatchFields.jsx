@@ -1,6 +1,51 @@
 import { pickGalleryPhoto, takePhoto } from "../lib/media.js";
-import { WEIGHBRIDGE_PHOTO_MAX, WEIGHBRIDGE_PHOTO_MIN } from "../lib/dispatchPhotos.js";
+import { WEIGHBRIDGE_PHOTO_MAX } from "../lib/dispatchPhotos.js";
 import { Button } from "./ui/Button.jsx";
+
+function tonneText(n) {
+  if (n == null || n === "" || !Number.isFinite(Number(n))) return "—";
+  return `${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })} t`;
+}
+
+export function ProductionReadout({
+  screened,
+  floor,
+  excavatorBuckets,
+  felBuckets,
+  excavatorEach,
+  felEach,
+  floorNote,
+}) {
+  const excavatorCount = excavatorBuckets === "" || excavatorBuckets == null ? null : excavatorBuckets;
+  const felCount = felBuckets === "" || felBuckets == null ? null : felBuckets;
+  return (
+    <div className="grid grid-cols-1 gap-2">
+      <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
+        <p className="font-ui text-xs font-semibold uppercase tracking-wide text-[#F2F0EA]/55">Material screened</p>
+        <p className="font-ui text-4xl font-semibold text-[#22C55E] mt-1 leading-none">{tonneText(screened)}</p>
+        <p className="font-body text-xs text-[#F2F0EA]/55 mt-2">
+          {excavatorCount == null ? "Excavator buckets" : `${excavatorCount} excavator buckets`}
+          {excavatorEach ? ` · ${excavatorEach} t each` : ""}
+        </p>
+        {screened == null && excavatorCount != null && !excavatorEach && (
+          <p className="font-body text-xs text-[#F5C518] mt-1">Set tonnes per excavator bucket in Site setup.</p>
+        )}
+      </div>
+      <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
+        <p className="font-ui text-xs font-semibold uppercase tracking-wide text-[#F2F0EA]/55">On the floor</p>
+        <p className="font-ui text-4xl font-semibold text-[#F97316] mt-1 leading-none">{tonneText(floor)}</p>
+        <p className="font-body text-xs text-[#F2F0EA]/55 mt-2">
+          {felCount == null ? "FEL buckets" : `${felCount} FEL buckets`}
+          {felEach ? ` · ${felEach} t each` : ""}
+        </p>
+        {floorNote && <p className="font-body text-xs text-[#F2F0EA]/45 mt-1">{floorNote}</p>}
+        {floor == null && felCount != null && !felEach && (
+          <p className="font-body text-xs text-[#F5C518] mt-1">Set tonnes per FEL bucket in Site setup.</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function CountField({ label, hint, value, onChange, step = "1", placeholder = "0" }) {
   return (
@@ -49,20 +94,20 @@ export function ShiftDispatchFields({
     <div className="space-y-3">
       <CountField
         label="Excavator buckets"
-        hint={eachLabel(excavatorEach) ? `Screened - ${eachLabel(excavatorEach)}` : "Screened"}
+        hint={eachLabel(excavatorEach) ? `Becomes material screened · ${eachLabel(excavatorEach)}` : "Becomes material screened"}
         value={excavatorBuckets}
         onChange={onExcavator}
       />
       <CountField
         label="FEL buckets"
-        hint={eachLabel(felEach) ? `Onto the floor - ${eachLabel(felEach)}` : "Onto the floor"}
+        hint={eachLabel(felEach) ? `Adds to the floor · ${eachLabel(felEach)}` : "Adds to the floor"}
         value={felBuckets}
         onChange={onFel}
       />
       <div>
         <p className="ops-field-label">Weighbridge tickets</p>
         <p className="font-body text-sm text-[#F2F0EA]/70 mb-2">
-          {WEIGHBRIDGE_PHOTO_MIN} or {WEIGHBRIDGE_PHOTO_MAX} photos of the weighbridge report, then the tonnes and trucks on them.
+          Photos of the weighbridge tickets if you have them, then the tonnes and trucks on them.
         </p>
         {photos.length > 0 && (
           <div className="grid grid-cols-3 gap-2 mb-2">

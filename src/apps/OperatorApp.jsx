@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useOps } from "../context/OpsContext.jsx";
 import { useLiveTimer } from "../hooks/useLiveTimer.js";
 import { useInspectionDraft } from "../hooks/useInspectionDraft.js";
@@ -12,30 +12,34 @@ import { MeterPhoto } from "../components/ui/MeterPhoto.jsx";
 import { FormSection } from "../components/ui/FormSection.jsx";
 import { Modal, AlertModal } from "../components/ui/Modal.jsx";
 import { VoiceInput } from "../components/ui/VoiceInput.jsx";
-import { ISSUE, SHIFT, MECHANICAL_STOP_REASONS, EARLY_CLOCK_OUT_REASONS } from "../lib/constants.js";
-import { stopReasonLabels } from "../lib/stopReasons.js";
+import { ISSUE, SHIFT, EARLY_CLOCK_OUT_REASONS } from "../lib/constants.js";
+import { OWNER_ROLES, isCompleteStopSelection, isOtherStopReason, stopOwnerRole } from "../lib/stopReasons.js";
+import { StopReasonPicker } from "../components/StopReasonPicker.jsx";
 import { RolePulse } from "../components/RolePulse.jsx";
 import { hasCompletedPrestart, getSiteSupervisors, suggestSupervisor, shiftBelongsToWorkSession, stopReasonToIssueArea, getShiftStatus, sameOperatorId } from "../lib/utils.js";
 import { prestartItemsForMachine } from "../lib/siteConfig.js";
 import { rememberUsualOperator, usualOperatorName } from "../lib/shiftPeople.js";
 import { OperatorMachineBoard } from "../components/OperatorMachineBoard.jsx";
 import { ShiftCorrectionPanel } from "../components/ShiftCorrectionPanel.jsx";
-import { shiftDowntimeMinutes, formatDurationMinutes, formatDurationSeconds, shiftBillableHours } from "../lib/shiftMetrics.js";
+import { shiftDowntimeMinutes, formatDurationMinutes, formatDurationSeconds } from "../lib/shiftMetrics.js";
 import { SupervisorPicker, SupervisorWhatsAppButtons } from "../components/SupervisorPicker.jsx";
 import * as wf from "../services/workflows.js";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { FuelModal } from "../components/FuelModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
-import { OperatorReportsModal, reportBucket } from "../components/OperatorReportsModal.jsx";
-import { OperatorWelcome } from "../components/OperatorWelcome.jsx";
-import { OperatorDayTools } from "../components/OperatorDayTools.jsx";
+import { OperatorReportsModal, OperatorReportsDash, buildOperatorReportDash, reportBucket } from "../components/OperatorReportsModal.jsx";
+import { OperatorGreeting } from "../components/OperatorWelcome.jsx";
+import { STANDARD_SITE_HOURS } from "../lib/timesheet.js";
 import { OperatorShiftTools } from "../components/OperatorShiftTools.jsx";
+import { OperatorTonnageBlock } from "../components/OperatorTonnageBlock.jsx";
 import { FieldSelect } from "../components/ui/FieldSelect.jsx";
+import { tonnesPerBucket } from "../lib/siteConfig.js";
+import { weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
 
 export function OperatorApp() {
   const {
     user, activeSite, machines, workSession, events,
-    shifts, profiles, issues, issueMessages, inspections, workSessions, fuelLogs, hourReadings, refreshLocal, syncNow,
+    shifts, profiles, issues, issueMessages, inspections, workSessions, fuelLogs, hourReadings, siteDispatch, refreshLocal, syncNow,
     getSettingsForSite,
   } = useOps();
 
@@ -43,6 +47,10 @@ export function OperatorApp() {
     () => getSettingsForSite(activeSite?.id),
     [getSettingsForSite, activeSite?.id]
   );
+  const dispatchFactors = useMemo(() => ({
+    excavator_bucket_tonnes: tonnesPerBucket(siteConfig.excavator_bucket_tonnes),
+    fel_bucket_tonnes: tonnesPerBucket(siteConfig.fel_bucket_tonnes),
+  }), [siteConfig.excavator_bucket_tonnes, siteConfig.fel_bucket_tonnes]);
 
   const [startHour, setStartHour] = useState("");
   const [startPhotoRef, setStartPhotoRef] = useState(null);
@@ -68,6 +76,9 @@ export function OperatorApp() {
   const [restartNote, setRestartNote] = useState("");
   const [startPhotoError, setStartPhotoError] = useState(false);
   const [endPhotoError, setEndPhotoError] = useState(false);
+  const [tonnageReady, setTonnageReady] = useState(false);
+  const [tonnageMissing, setTonnageMissing] = useState(["excavator buckets", "FEL buckets", "tonnes", "trucks"]);
+  const tonnageRef = useRef({ ready: false, fields: null, missing: [] });
 
   const [submittedShift, setSubmittedShift] = useState(null);
   const [clockedOutAfterSubmit, setClockedOutAfterSubmit] = useState(false);
@@ -75,13 +86,6 @@ export function OperatorApp() {
   const [clockInSupervisorId, setClockInSupervisorId] = useState("");
   const [pickedMachineId, setPickedMachineId] = useState("");
   const [cabName, setCabName] = useState("");
-  const [dayReady, setDayReady] = useState(() => {
-    try {
-      return sessionStorage.getItem(`ops-day-ready:${user?.id || "me"}`) === "1";
-    } catch {
-      return false;
-    }
-  });
 
   const [alert, setAlert] = useState({ isOpen: false });
   const [actionBusy, setActionBusy] = useState("");
@@ -96,8 +100,6 @@ export function OperatorApp() {
     () => siteMachines.find((m) => m.id === pickedMachineId) || null,
     [siteMachines, pickedMachineId]
   );
-
-  const stopReasons = useMemo(() => stopReasonLabels(siteConfig), [siteConfig]);
 
   const prestartItems = useMemo(
     () => prestartItemsForMachine(siteConfig, workMachine),
@@ -151,6 +153,7 @@ export function OperatorApp() {
 
   const runningSeconds = useLiveTimer(sessionShift?.started_at, !!sessionShift);
   const downtimeSeconds = useLiveTimer(sessionDowntime?.stopped_at, !!sessionDowntime);
+  const siteSeconds = useLiveTimer(workSession?.clock_in, !!workSession);
   const openingMeter = sessionShift
     ? Number(sessionShift.start_hour_meter).toFixed(1)
     : Number(machineHourMeter).toFixed(1);
@@ -192,18 +195,30 @@ export function OperatorApp() {
     [shifts, user?.id]
   );
 
+  const homeDash = useMemo(
+    () => buildOperatorReportDash({
+      user,
+      shifts,
+      workSessions,
+      site: activeSite,
+      cycleStartDay: siteConfig.billing_cycle_start_day,
+    }),
+    [user, shifts, workSessions, activeSite, siteConfig.billing_cycle_start_day]
+  );
+
   const operatorTabs = useMemo(() => [
     { id: "diesel", label: "Diesel" },
     { id: "inbox", label: "Inbox", badge: inboxCount },
     { id: "issues", label: "Problem" },
     { id: "pulse", label: "Pulse" },
-  ], [inboxCount]);
+    { id: "reports", label: "Reports", badge: reportsAttention },
+  ], [inboxCount, reportsAttention]);
 
-  const operatorTab = showFuel ? "diesel" : sheet === "inbox" ? "inbox" : showReportIssue ? "issues" : sheet === "pulse" ? "pulse" : "";
+  const operatorTab = showFuel ? "diesel" : sheet === "inbox" ? "inbox" : showReportIssue ? "issues" : sheet === "pulse" ? "pulse" : sheet === "reports" ? "reports" : "";
 
   const leftoverOpen = useMemo(
     () => (shifts || []).filter((s) =>
-      s.operator_id === user?.id
+      sameOperatorId(s.operator_id, user?.id)
       && getShiftStatus(s) === SHIFT.RUNNING
       && (!workSession || !shiftBelongsToWorkSession(s, workSession, user.id))
     ),
@@ -246,13 +261,6 @@ export function OperatorApp() {
   }, [workSession, siteSupervisors, suggestedSupervisor]);
 
   useEffect(() => {
-    if (!user?.id) return;
-    try {
-      if (sessionStorage.getItem(`ops-day-ready:${user.id}`) === "1") setDayReady(true);
-    } catch {}
-  }, [user?.id]);
-
-  useEffect(() => {
     if (!workSession && suggestedSupervisor?.id && !clockInSupervisorId) {
       setClockInSupervisorId(suggestedSupervisor.id);
     }
@@ -269,15 +277,6 @@ export function OperatorApp() {
     && sameOperatorId(machineRunForWork.operator_id, user?.id)
     ? machineRunForWork
     : null;
-
-  const showWelcome = !workSession && !submittedShift && !correctionShift && !dayReady;
-
-  const startDay = () => {
-    try {
-      sessionStorage.setItem(`ops-day-ready:${user?.id || "me"}`, "1");
-    } catch {}
-    setDayReady(true);
-  };
 
   useEffect(() => {
     setCabName(usualOperatorName(workMachine?.id));
@@ -318,7 +317,6 @@ export function OperatorApp() {
     try {
       await wf.clockIn(user, siteMachines[0] || null, activeSite, { assignedSupervisor: sup });
       await refreshLocal();
-      showAlert("Clocked in", `You are on site. Supervisor: ${sup.name}. Choose a machine.`, "success");
     } catch (e) { showAlert("Could not clock in", e.message, "error"); }
     finally { setActionBusy(""); }
   };
@@ -391,8 +389,6 @@ export function OperatorApp() {
       const result = await wf.startMachine(user, workMachine, activeSite, {
         hourMeter: startHour,
         photoRef: startPhotoRef,
-        verifiedShifts: shifts.filter((s) => s.machine_id === workMachine?.id),
-        workSessionClockIn: workSession?.clock_in,
         machineOperatorName: name,
       });
       setStartHour(""); setStartPhotoRef(null); setStartPhotoPreview(null);
@@ -416,8 +412,8 @@ export function OperatorApp() {
       setShowStop(false); setStopReason(""); setStopNote("");
       await refreshLocal();
       showAlert("Machine stopped", reason, "info");
-      const reportableStops = [...MECHANICAL_STOP_REASONS, "No diesel", "Strike", "Waiting for material", "Waiting for loader", "Weather"];
-      if (reportableStops.includes(reason)) {
+      const role = stopOwnerRole(reason, siteConfig);
+      if (role === OWNER_ROLES.CONTRACTOR || role === OWNER_ROLES.WEAR) {
         setSuggestReport({
           area: stopReasonToIssueArea(reason),
           description: note?.trim() || reason,
@@ -453,8 +449,25 @@ export function OperatorApp() {
     }
     setActionBusy("end");
     try {
+      const tonnage = tonnageRef.current || {};
+      if (!tonnage.ready || !tonnage.fields) {
+        const need = (tonnage.missing || []).join(", ") || "excavator buckets, FEL buckets, trucks and tonnes";
+        showAlert("Today’s tonnes", `Enter ${need}.`, "warning");
+        setActionBusy("");
+        return;
+      }
+      const dispatchRow = await wf.saveSiteDispatch(user, activeSite, tonnage.fields, dispatchFactors);
       const { ended } = await wf.endMachineDay(user, workMachine, activeSite, sessionShift, {
         endHour, photoRef: endPhotoRef, assignedSupervisor: sup,
+        dispatch: dispatchRow ? {
+          tonnes_dispatched: dispatchRow.tonnes_dispatched,
+          trucks_dispatched: dispatchRow.trucks_dispatched,
+          tonnes_on_floor: dispatchRow.tonnes_on_floor,
+          tonnes_screened: dispatchRow.tonnes_screened,
+          excavator_buckets: dispatchRow.excavator_buckets,
+          fel_buckets: dispatchRow.fel_buckets,
+          weighbridge_photo: weighbridgePhotoRefs(dispatchRow)[0] || null,
+        } : null,
       });
       setShowEndDay(false);
       setShowRestart(false);
@@ -546,7 +559,7 @@ export function OperatorApp() {
   };
 
   const machineStatus = sessionShift && sessionDowntime ? "stopped" : sessionShift ? "running" : null;
-  const machineFab = submittedShift || showWelcome || sheet || correctionShift
+  const machineFab = submittedShift || sheet || correctionShift
     ? null
     : sessionShift && sessionDowntime
       ? "restart"
@@ -561,10 +574,10 @@ export function OperatorApp() {
   return (
     <AppPage
       subtitle="Operator"
+      context={activeSite?.name || "Site"}
       showSite={false}
       maxWidth="max-w-2xl"
       outdoor
-      openHeaderTools
       tabs={operatorTabs}
       activeTab={operatorTab}
       onTabChange={(id) => {
@@ -572,6 +585,7 @@ export function OperatorApp() {
         if (id === "inbox") setSheet("inbox");
         if (id === "issues") setShowReportIssue(true);
         if (id === "pulse") setSheet("pulse");
+        if (id === "reports") setSheet("reports");
       }}
       alert={<AlertModal {...alert} confirmText="OK" />}
       banner={
@@ -590,10 +604,22 @@ export function OperatorApp() {
         ) : null
       }
     >
-        {workSession && (
+        {!submittedShift && (
+          <>
+            <OperatorGreeting name={user?.name} />
+            <OperatorReportsDash
+              className="mb-4"
+              dash={homeDash}
+              onOpen={() => setSheet("reports")}
+            />
+          </>
+        )}
+        {workSession && !submittedShift && (
           <div className="operator-time-bar mb-4">
             <div className="min-w-0">
-              <p className="font-ui text-sm font-semibold text-[#F5C518]">On site</p>
+              <p className="font-ui text-sm font-semibold text-[#F5C518]">
+                On site · {(siteSeconds / 3600).toFixed(1)}h{(siteSeconds / 3600) > STANDARD_SITE_HOURS ? " OT" : ""}
+              </p>
               <p className="font-body text-sm text-ops-text truncate">
                 Since {new Date(workSession.clock_in).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
               </p>
@@ -603,29 +629,7 @@ export function OperatorApp() {
             </Button>
           </div>
         )}
-
-        {showWelcome && (
-          <OperatorWelcome
-            name={user?.name}
-            siteName={activeSite?.name}
-            reportsAttention={reportsAttention}
-            onReady={startDay}
-            onMyReports={() => setSheet("reports")}
-            onPulse={() => setSheet("pulse")}
-          />
-        )}
-
-        {!showWelcome && (
-          <>
-            <OperatorDayTools
-              className="mb-4"
-              onPulse={() => setSheet("pulse")}
-              onReports={() => setSheet("reports")}
-              reportsAttention={reportsAttention}
-            />
-            {!submittedShift && <OperatorFlowGuide currentStep={currentStep} />}
-          </>
-        )}
+        {workMachine && !submittedShift && <OperatorFlowGuide currentStep={currentStep} />}
 
         {correctionShift && !submittedShift && (
           <ShiftCorrectionPanel
@@ -633,6 +637,8 @@ export function OperatorApp() {
             machine={correctionMachine}
             site={activeSite}
             user={user}
+            siteDispatch={siteDispatch}
+            factors={dispatchFactors}
             onDone={refreshLocal}
             onResubmitted={(updated) => setSubmittedShift(updated)}
           />
@@ -653,6 +659,9 @@ export function OperatorApp() {
                   shift={shift}
                   user={user}
                   supervisors={siteSupervisors}
+                  site={activeSite}
+                  siteDispatch={siteDispatch}
+                  factors={dispatchFactors}
                   onDone={refreshLocal}
                 />
               </div>
@@ -663,7 +672,7 @@ export function OperatorApp() {
 
         {/* Day complete — WhatsApp supervisor */}
         {submittedShift && (
-          <div className={`bg-[#141414] border-2 rounded-2xl p-5 ${
+          <div className={`mb-4 bg-[#141414] border-2 rounded-2xl p-5 ${
             getShiftStatus(submittedShift) === SHIFT.RESUBMITTED ? "border-[#F97316]" : "border-[#22C55E]"
           }`}>
             <h2 className={`font-ui text-2xl font-semibold mb-2 ${
@@ -674,9 +683,34 @@ export function OperatorApp() {
             <p className="font-body text-sm text-ops-text mb-1">
               Machine hours: {Number(submittedShift.hours_worked || 0).toFixed(1)}h ({submittedShift.start_hour_meter}h → {submittedShift.end_hour_meter}h)
             </p>
-            <p className="font-body text-sm text-ops-text mb-1">
-              Billable hours: {shiftBillableHours(submittedShift, events, siteConfig).toFixed(1)}h
-            </p>
+            {(submittedShift.tonnes_dispatched != null || submittedShift.trucks_dispatched != null || submittedShift.excavator_buckets != null || submittedShift.fel_buckets != null) && (
+              <div className="grid grid-cols-1 gap-2 my-3">
+                <div className="rounded-2xl border border-[#2A2A2A] bg-[#0A0A0A] p-4">
+                  <p className="font-ui text-xs font-semibold uppercase tracking-wide text-[#F2F0EA]/55">Material screened</p>
+                  <p className="font-ui text-4xl font-semibold text-[#22C55E] mt-1 leading-none">
+                    {submittedShift.tonnes_screened == null ? "—" : `${Number(submittedShift.tonnes_screened).toLocaleString("en-US")} t`}
+                  </p>
+                  <p className="font-body text-xs text-[#F2F0EA]/55 mt-2">
+                    {submittedShift.excavator_buckets == null ? "Excavator buckets" : `${submittedShift.excavator_buckets} excavator buckets`}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[#2A2A2A] bg-[#0A0A0A] p-4">
+                  <p className="font-ui text-xs font-semibold uppercase tracking-wide text-[#F2F0EA]/55">On the floor</p>
+                  <p className="font-ui text-4xl font-semibold text-[#F97316] mt-1 leading-none">
+                    {submittedShift.tonnes_on_floor == null ? "—" : `${Number(submittedShift.tonnes_on_floor).toLocaleString("en-US")} t`}
+                  </p>
+                  <p className="font-body text-xs text-[#F2F0EA]/55 mt-2">
+                    {submittedShift.fel_buckets == null ? "FEL buckets" : `${submittedShift.fel_buckets} FEL buckets`}
+                  </p>
+                </div>
+              </div>
+            )}
+            {(submittedShift.tonnes_dispatched != null || submittedShift.trucks_dispatched != null) && (
+              <p className="font-body text-sm text-ops-text mb-1">
+                {submittedShift.trucks_dispatched != null ? `${submittedShift.trucks_dispatched} trucks · ` : ""}
+                {submittedShift.tonnes_dispatched != null ? `${Number(submittedShift.tonnes_dispatched).toLocaleString("en-US")} t dispatched` : ""}
+              </p>
+            )}
             {(submittedShift.runtime_minutes > 0 || submittedShift.downtime_minutes > 0) && (
               <p className="font-body text-sm text-ops-muted mb-1">
                 Runtime {formatDurationMinutes(submittedShift.runtime_minutes || 0)} · Downtime {formatDurationMinutes(submittedShift.downtime_minutes || 0)}
@@ -701,11 +735,15 @@ export function OperatorApp() {
               events={events}
               siteSettings={siteConfig}
               assignedSupervisorId={submittedShift.assigned_supervisor_id}
+              label="Resend on WhatsApp"
             />
             <OperatorShiftTools
               shift={submittedShift}
               user={user}
               supervisors={siteSupervisors}
+              site={activeSite}
+              siteDispatch={siteDispatch}
+              factors={dispatchFactors}
               onDone={(updated) => {
                 if (updated?.removed) setSubmittedShift(null);
                 else if (updated) setSubmittedShift(updated);
@@ -729,7 +767,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {!workSession && !showWelcome && (
+        {!workSession && !submittedShift && (
           <div className="operator-work-panel rounded-2xl border border-ops-border bg-ops-card p-4 sm:p-5">
             <p className="operator-group-explain">Starts your time. Does not start a machine.</p>
             <SupervisorPicker
@@ -745,7 +783,7 @@ export function OperatorApp() {
           </div>
         )}
 
-        {workSession && !showWelcome && !submittedShift && (
+        {workSession && !submittedShift && (
           <OperatorMachineBoard
             machines={siteMachines}
             shifts={shifts}
@@ -759,7 +797,7 @@ export function OperatorApp() {
           />
         )}
 
-        {workMachine && !submittedShift && !showWelcome && (
+        {workMachine && !submittedShift && (
           <div className="operator-work-panel rounded-2xl border border-ops-border bg-ops-card p-4 sm:p-5">
             {machineStatus && (
               <div className={`mb-4 px-4 py-3 rounded-xl border text-center font-ui text-sm font-semibold ${
@@ -780,6 +818,9 @@ export function OperatorApp() {
                   shift={staleOwnShift}
                   user={user}
                   supervisors={siteSupervisors}
+                  site={activeSite}
+                  siteDispatch={siteDispatch}
+                  factors={dispatchFactors}
                   onDone={refreshLocal}
                 />
               </div>
@@ -899,6 +940,7 @@ export function OperatorApp() {
           site={activeSite}
           cycleStartDay={siteConfig.billing_cycle_start_day}
           siteSettings={siteConfig}
+          siteDispatch={siteDispatch}
           onChanged={refreshLocal}
         />
       )}
@@ -965,23 +1007,32 @@ export function OperatorApp() {
       )}
       {showStop && (
         <Modal title="Stop machine" color="red" onClose={() => setShowStop(false)}>
-          <label className="block mb-4">
-            <span className="ops-field-label">Reason</span>
-            <FieldSelect
+          <div className="mb-4">
+            <span className="ops-field-label">Category</span>
+            <StopReasonPicker
+              machine={workMachine}
+              siteSettings={siteConfig}
               value={stopReason}
               onChange={setStopReason}
-              placeholder="Select reason…"
-            >
-              {stopReasons.map((reason) => (
-                <option key={reason} value={reason}>{reason}</option>
-              ))}
-            </FieldSelect>
-          </label>
+            />
+          </div>
           <label className="block mb-4">
-            <span className="ops-field-label">Details</span>
-            <VoiceInput value={stopNote} onChange={setStopNote} placeholder="What happened?" rows={2} />
+            <span className="ops-field-label">{isOtherStopReason(stopReason) ? "Details (required)" : "Details (optional)"}</span>
+            <VoiceInput
+              value={stopNote}
+              onChange={setStopNote}
+              placeholder={isOtherStopReason(stopReason) ? "What happened?" : "Anything else? Optional."}
+              rows={2}
+            />
           </label>
-          <Button type="button" variant="stop" size="lg" className="w-full min-h-14 text-lg" onClick={handleStop} disabled={!stopReason || !!actionBusy}>
+          <Button
+            type="button"
+            variant="stop"
+            size="lg"
+            className="w-full min-h-14 text-lg"
+            onClick={handleStop}
+            disabled={!isCompleteStopSelection(stopReason) || (isOtherStopReason(stopReason) && !stopNote.trim()) || !!actionBusy}
+          >
             {actionBusy === "stop" ? "Stopping…" : "Stop machine"}
           </Button>
         </Modal>
@@ -1016,13 +1067,30 @@ export function OperatorApp() {
               showPhotoError={endPhotoError}
             />
           </FormSection>
+          <div className="mb-4">
+            <OperatorTonnageBlock
+              records={siteDispatch}
+              siteId={user?.site_id || activeSite?.id}
+              factors={dispatchFactors}
+              onSnapshot={(snapshot) => {
+                tonnageRef.current = snapshot;
+                setTonnageReady(Boolean(snapshot.ready));
+                setTonnageMissing(snapshot.missing || []);
+              }}
+            />
+          </div>
+          {!tonnageReady && (
+            <p className="font-body text-sm text-[#F5C518] mb-3">
+              Still need {tonnageMissing.join(", ") || "excavator buckets, FEL buckets, trucks and tonnes"}.
+            </p>
+          )}
           <Button
             type="button"
             variant="primary"
             size="lg"
             className="w-full min-h-14 text-lg"
             onClick={() => handleEndDay(!otherOpenShifts.length)}
-            disabled={!!actionBusy || !shiftSupervisor?.id || !endHour || !endPhotoRef}
+            disabled={!!actionBusy || !shiftSupervisor?.id || !endHour || !endPhotoRef || !tonnageReady}
           >
             {actionBusy === "end" ? "Sending…" : otherOpenShifts.length ? "Send this machine’s shift" : "Send and clock out"}
           </Button>
@@ -1033,7 +1101,7 @@ export function OperatorApp() {
               size="lg"
               className="w-full mt-2"
               onClick={() => handleEndDay(false)}
-              disabled={!!actionBusy || !shiftSupervisor?.id || !endHour || !endPhotoRef}
+              disabled={!!actionBusy || !shiftSupervisor?.id || !endHour || !endPhotoRef || !tonnageReady}
             >
               Send, stay on site
             </Button>

@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { supabase } from "../lib/supabase.js";
 import { initDB, readTable, saveLocal, getPendingCount, clearSyncedTables } from "../lib/db.js";
 import { loadProfile, signIn, signOut, readCachedAuthUser, cacheAuthUser } from "../lib/auth.js";
+import { beginLoginClaim, claimDeviceLogin } from "../lib/deviceLogin.js";
 import { runSync, initSyncListeners, onSyncStateChange } from "../lib/sync/engine.js";
 import { syncMachineLocks } from "../lib/machineLock.js";
 import { fetchMachineStatus, reconcileMachineOpenState } from "../lib/machineStatus.js";
@@ -148,18 +149,24 @@ export function OpsProvider({ children }) {
     return Number(activeMachine?.start_hour_meter || 0);
   }, [shifts, activeMachine]);
 
+  const userSignedOutRef = useRef(false);
+
   const handleSignIn = async (email, password) => {
     setAuthError("");
+    beginLoginClaim();
     try {
       await signIn(email, password);
       const { data: { session: s } } = await supabase.auth.getSession();
       if (s) {
         const profile = await loadProfile(s.user.id, s.user.email);
         if (profile.active === false) {
+          userSignedOutRef.current = true;
           await signOut();
           setAuthError("This account has been deactivated. Contact your admin.");
           return;
         }
+        userSignedOutRef.current = false;
+        await claimDeviceLogin(s.user.id);
         const merged = { ...s.user, ...profile };
         setUser(merged);
         cacheAuthUser(s.user.id, profile, s.user.email);
@@ -170,6 +177,7 @@ export function OpsProvider({ children }) {
   };
 
   const handleSignOut = async () => {
+    userSignedOutRef.current = true;
     try {
       await clearSyncedTables({ keepPending: true });
     } catch (e) {
@@ -252,7 +260,8 @@ export function OpsProvider({ children }) {
         if (session?.user) {
           try {
             const profile = await loadProfile(session.user.id, session.user.email);
-            if (profile.active === false) {
+            if (profile.active === false && navigator.onLine) {
+              userSignedOutRef.current = true;
               await signOut();
               setUser(null);
               setSession(null);
@@ -265,7 +274,7 @@ export function OpsProvider({ children }) {
               applyUser(session, cached.profile);
             }
           }
-        } else if (!navigator.onLine) {
+        } else {
           const cached = readCachedAuthUser();
           if (cached?.profile) {
             setUser({ id: cached.userId, email: cached.email, ...cached.profile });
@@ -296,6 +305,7 @@ export function OpsProvider({ children }) {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         if (!s?.user) return;
         try {
+          if (event === "SIGNED_IN") await claimDeviceLogin(s.user.id);
           const profile = await loadProfile(s.user.id, s.user.email);
           if (profile.active === false) {
             await signOut();
@@ -309,6 +319,13 @@ export function OpsProvider({ children }) {
           if (cached?.userId === s.user.id) applyUser(s, cached.profile);
         }
       } else if (event === "SIGNED_OUT") {
+        if (!userSignedOutRef.current) {
+          const cached = readCachedAuthUser();
+          if (cached?.profile) {
+            setUser({ id: cached.userId, email: cached.email, ...cached.profile });
+            return;
+          }
+        }
         setSession(null);
         setUser(null);
       }
@@ -327,19 +344,14 @@ export function OpsProvider({ children }) {
       try {
         await refreshLocal();
         const siteId = user?.site_id || activeSite?.id || null;
+        cleanupSync = initSyncListeners({ siteId });
         if (navigator.onLine) {
-          try {
-            const syncWait = runSync({ silent: true, siteId });
-            const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("sync-timeout")), 12000));
-            await Promise.race([syncWait, timeout]);
-            await refreshLocal();
-          } catch {
-            setSyncState((prev) => ({ ...prev, status: "idle" }));
-          }
+          runSync({ silent: true, siteId })
+            .then(() => refreshLocal())
+            .catch(() => setSyncState((prev) => ({ ...prev, status: "idle" })));
         } else {
           setSyncState((prev) => ({ ...prev, status: "offline" }));
         }
-        cleanupSync = initSyncListeners({ siteId });
       } catch (e) {
         console.warn("Data bootstrap:", e);
         try { await refreshLocal(); } catch {}

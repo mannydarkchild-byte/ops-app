@@ -6,9 +6,13 @@ const stroke = {
   strokeLinejoin: "round",
 };
 
-export function IconFuel() {
+function svgProps(size, extra = {}) {
+  return { width: size, height: size, viewBox: "0 0 24 24", "aria-hidden": true, ...extra };
+}
+
+export function IconFuel({ size = 26 }) {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden {...stroke}>
+    <svg {...svgProps(size, stroke)}>
       <path d="M4 20V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v14" />
       <path d="M4 20h11" />
       <path d="M15 10h2.5a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V9l-3-3" />
@@ -17,9 +21,9 @@ export function IconFuel() {
   );
 }
 
-export function IconAlert() {
+export function IconAlert({ size = 26 }) {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden {...stroke}>
+    <svg {...svgProps(size, stroke)}>
       <path d="M12 4 3 19h18L12 4z" />
       <path d="M12 10v4" />
       <path d="M12 16.5h.01" />
@@ -27,9 +31,9 @@ export function IconAlert() {
   );
 }
 
-export function IconReports() {
+export function IconReports({ size = 22 }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...stroke}>
+    <svg {...svgProps(size, stroke)}>
       <path d="M7 3h8l4 4v14H7z" />
       <path d="M15 3v4h4" />
       <path d="M10 12h6M10 16h6" />
@@ -37,44 +41,70 @@ export function IconReports() {
   );
 }
 
-export function IconPulse() {
+export function IconFolder({ size = 26 }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...stroke}>
+    <svg {...svgProps(size)}>
+      <path fill="currentColor" d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-11z" />
+    </svg>
+  );
+}
+
+export function IconPulse({ size = 22 }) {
+  return (
+    <svg {...svgProps(size, stroke)}>
       <path d="M3 12h4l2-6 4 12 2-6h6" />
     </svg>
   );
 }
 
-export function IconInbox() {
+export function IconInbox({ size = 26 }) {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden {...stroke}>
+    <svg {...svgProps(size, stroke)}>
       <path d="M4 6h16v12H4z" />
       <path d="m4 7 8 6 8-6" />
     </svg>
   );
 }
 
-export function IconPlay() {
+export function IconPlay({ size = 22 }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
+    <svg {...svgProps(size)}>
       <path fill="currentColor" d="M8 5v14l11-7z" />
     </svg>
   );
 }
 
-export function IconStop() {
+export function IconStop({ size = 20 }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
+    <svg {...svgProps(size)}>
       <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
     </svg>
   );
 }
 
-export function IconClock() {
+export function IconClock({ size = 22 }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden {...stroke}>
+    <svg {...svgProps(size, stroke)}>
       <circle cx="12" cy="12" r="8" />
       <path d="M12 8v5l3 2" />
+    </svg>
+  );
+}
+
+export function IconCheck({ size = 26 }) {
+  return (
+    <svg {...svgProps(size, stroke)}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="m8.5 12 2.5 2.5L16 9.5" />
+    </svg>
+  );
+}
+
+export function IconCalendar({ size = 26 }) {
+  return (
+    <svg {...svgProps(size, stroke)}>
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M8 3v4M16 3v4M4 10h16" />
     </svg>
   );
 }

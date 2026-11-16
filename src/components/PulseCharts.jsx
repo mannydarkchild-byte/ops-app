@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatDurationMinutes } from "../lib/shiftMetrics.js";
 import { OWNER_ROLES } from "../lib/stopReasons.js";
 
@@ -9,6 +10,13 @@ const ROLE_COLOR = {
 
 function ownerColor(role) {
   return ROLE_COLOR[role] || "#A8A59C";
+}
+
+function sharePct(part, total) {
+  const t = Number(total) || 0;
+  const p = Number(part) || 0;
+  if (t <= 0 || p <= 0) return "0%";
+  return `${Math.round((p / t) * 100)}%`;
 }
 
 function polar(cx, cy, r, angle) {
@@ -70,7 +78,7 @@ export function OwnerDowntimeChart({ rows = [] }) {
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: ownerColor(row.role) }} />
             <span className="font-body text-sm text-[#F2F0EA] truncate flex-1">{row.owner}</span>
             <span className="font-ui text-sm shrink-0" style={{ color: ownerColor(row.role) }}>
-              {formatDurationMinutes(row.minutes)}
+              {sharePct(row.minutes, total)} · {formatDurationMinutes(row.minutes)}
             </span>
           </li>
         ))}
@@ -79,32 +87,59 @@ export function OwnerDowntimeChart({ rows = [] }) {
   );
 }
 
-/** Horizontal bars of stop reasons by minutes. */
+/** Horizontal bars of stop reasons by minutes. Tap a reason for makeup. */
 export function StopReasonChart({ rows = [] }) {
+  const [openReason, setOpenReason] = useState("");
   const bars = (rows || []).filter((row) => Number(row.minutes) > 0);
   if (!bars.length) {
     return <p className="font-body text-sm text-[#F2F0EA]/50">No stops in this window.</p>;
   }
-  const max = Math.max(...bars.map((row) => Number(row.minutes) || 0), 1);
+  const total = bars.reduce((sum, row) => sum + Number(row.minutes || 0), 0) || 1;
 
   return (
-    <div className="space-y-3" role="img" aria-label="Stops by reason">
+    <div className="space-y-2" aria-label="Stops by reason">
       {bars.map((row) => {
-        const pct = Math.max(4, (Number(row.minutes) / max) * 100);
+        const minutes = Number(row.minutes) || 0;
+        const pct = (minutes / total) * 100;
         const color = ownerColor(row.role);
+        const parts = (row.parts || []).filter((part) => part.label !== row.reason);
+        const canOpen = parts.length > 0;
+        const open = openReason === row.reason;
         return (
-          <div key={row.reason}>
-            <div className="flex justify-between gap-3 mb-1">
-              <p className="font-ui text-sm text-[#F2F0EA] truncate">{row.reason}</p>
-              <p className="font-ui text-sm shrink-0" style={{ color }}>{formatDurationMinutes(row.minutes)}</p>
-            </div>
-            <div className="h-2 rounded-full bg-black/35 overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
-            </div>
-            {row.owner && (
+          <div key={row.reason} className="rounded-xl">
+            <button
+              type="button"
+              className="w-full text-left rounded-xl px-1 py-1 -mx-1"
+              aria-expanded={canOpen ? open : undefined}
+              onClick={() => {
+                if (!canOpen) return;
+                setOpenReason(open ? "" : row.reason);
+              }}
+            >
+              <div className="flex justify-between gap-3 mb-1">
+                <p className="font-ui text-sm text-[#F2F0EA] truncate">{row.reason}</p>
+                <p className="font-ui text-sm shrink-0" style={{ color }}>{sharePct(minutes, total)} · {formatDurationMinutes(minutes)}</p>
+              </div>
+              <div className="h-2 rounded-full bg-black/35 overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${Math.max(3, pct)}%`, background: color }} />
+              </div>
               <p className="font-body text-[11px] text-[#F2F0EA]/45 mt-1">
-                {row.owner}{row.count > 1 ? ` · ${row.count} stops` : ""}
+                {row.owner || ""}
+                {row.count > 1 ? ` · ${row.count} stops` : ""}
+                {canOpen ? (open ? " · Hide makeup" : " · Tap for makeup") : ""}
               </p>
+            </button>
+            {open && (
+              <ul className="mt-1 mb-2 space-y-1.5 pl-3 border-l border-[#2A2A2A]">
+                {parts.map((part) => (
+                  <li key={part.label} className="flex justify-between gap-3">
+                    <p className="font-body text-[12px] text-[#F2F0EA]/70 truncate">{part.label}</p>
+                    <p className="font-ui text-[12px] shrink-0 text-[#F2F0EA]/55">
+                      {sharePct(part.minutes, minutes)} · {formatDurationMinutes(part.minutes)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         );

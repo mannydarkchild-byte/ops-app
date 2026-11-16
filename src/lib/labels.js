@@ -60,6 +60,13 @@ export function parseSyncError(raw) {
   const isMedia = /^MEDIA_/i.test(s) || s.includes("Photo ");
 
   if (isMedia) {
+    if (/sign in again|session expired|refresh_token|JWT expired|invalid JWT/i.test(mediaDetail)) {
+      return {
+        title: "Photo didn’t save",
+        body: "Sign in again, then tap Update. The photo is still on this phone.",
+        technical: mediaDetail || s,
+      };
+    }
     if (/row-level security|policy|403|401|permission|JWT/i.test(mediaDetail)) {
       return {
         title: "Photo didn’t save",
@@ -100,6 +107,14 @@ export function parseSyncError(raw) {
     return {
       title: "Shift sign-off record blocked",
       body: "Server permissions blocked the submission row. Run migration 014 in Supabase, and confirm your profile has the correct site.",
+      technical: s,
+    };
+  }
+
+  if (/site_dispatch/i.test(s) && /row-level security|42501/i.test(s)) {
+    return {
+      title: "Today’s tonnes didn’t upload",
+      body: "Run migration 038 in Supabase (site_dispatch operator write), then tap Update.",
       technical: s,
     };
   }

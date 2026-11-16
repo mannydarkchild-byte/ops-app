@@ -2,29 +2,26 @@ import { useEffect, useMemo, useState } from "react";
 import { updateSiteSettings } from "../services/admin.js";
 import { resolveSiteSettings } from "../lib/siteConfig.js";
 import {
-  parseStopReasonsText,
-  serializeStopReasons,
+  DEFAULT_STOP_REASONS,
+  STOP_CATEGORY_META,
 } from "../lib/stopReasons.js";
 
-/** Admin + Manager: edit stop reasons and who owns the downtime. */
+/** Admin + Manager: lock the six stop categories and name the owners. */
 export function StopReasonsEditor({ siteId, siteSettingsRow, onSaved, showAlert }) {
   const settings = useMemo(
     () => resolveSiteSettings(siteSettingsRow || { site_id: siteId }),
     [siteSettingsRow, siteId]
   );
-  const [text, setText] = useState("");
   const [contractorName, setContractorName] = useState(settings.contractor_name || "Darkchild");
   const [equipmentOwnerName, setEquipmentOwnerName] = useState(settings.equipment_owner_name || "Berlington");
   const [clientSiteName, setClientSiteName] = useState(settings.client_site_name || "Site / operations");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setText(serializeStopReasons(settings.stop_reasons));
     setContractorName(settings.contractor_name || "Darkchild");
     setEquipmentOwnerName(settings.equipment_owner_name || "Berlington");
     setClientSiteName(settings.client_site_name || "Site / operations");
   }, [
-    settings.stop_reasons,
     settings.contractor_name,
     settings.equipment_owner_name,
     settings.client_site_name,
@@ -35,16 +32,14 @@ export function StopReasonsEditor({ siteId, siteSettingsRow, onSaved, showAlert 
     if (!siteId) return;
     setBusy(true);
     try {
-      const stop_reasons = parseStopReasonsText(text);
-      if (!stop_reasons.length) throw new Error("Add at least one stop reason");
       await updateSiteSettings(siteId, {
-        stop_reasons,
+        stop_reasons: DEFAULT_STOP_REASONS.map((r) => ({ ...r })),
         contractor_name: contractorName.trim() || "Darkchild",
         equipment_owner_name: equipmentOwnerName.trim() || "Berlington",
         client_site_name: clientSiteName.trim() || "Site / operations",
       });
       await onSaved?.();
-      showAlert?.("Saved", "Stop reasons and entity owners updated for this site.");
+      showAlert?.("Saved", "Stop categories and owners updated for this site.");
     } catch (e) {
       showAlert?.("Failed", e.message);
     } finally {
@@ -53,7 +48,6 @@ export function StopReasonsEditor({ siteId, siteSettingsRow, onSaved, showAlert 
   };
 
   const resetDefaults = () => {
-    setText(serializeStopReasons(null));
     setContractorName("Darkchild");
     setEquipmentOwnerName("Berlington");
     setClientSiteName("Site / operations");
@@ -98,23 +92,38 @@ export function StopReasonsEditor({ siteId, siteSettingsRow, onSaved, showAlert 
       </div>
 
       <p className="font-body text-xs text-[#F2F0EA]/70 bg-[#16140F] p-3 rounded-xl border border-[#2A2A2A]">
-        One line per reason: <span className="text-[#F5C518] font-mono">Reason | Owner</span>.<br />
-        • <strong className="text-[#F2F0EA]">{contractorName}</strong> downtime (mechanical breakdowns) is <strong>deducted</strong> from shift hours.<br />
-        • <strong className="text-[#F2F0EA]">{clientSiteName}</strong> (waiting for material, haul trucks, weather) and <strong className="text-[#F2F0EA]">{equipmentOwnerName}</strong> (wear parts) are <strong>standing time</strong> — shift hours are <strong>not deducted</strong>.
+        Every stop falls into one of six categories. {contractorName} owns mechanical, hydraulic, engine, and electrical
+        (deducted). {equipmentOwnerName} owns consumables — wear, diesel, oil, grease, meshes (no deduction).
+        {" "}{clientSiteName} owns weather, strike, no material, and blockages (standing time).
+        Operators still add a note after they pick the category.
       </p>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={12}
-        className="w-full bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA] text-sm font-mono"
-      />
+
+      <div className="space-y-2">
+        {STOP_CATEGORY_META.map((row) => {
+          const owner = row.role === "contractor"
+            ? contractorName
+            : row.role === "wear"
+              ? equipmentOwnerName
+              : clientSiteName;
+          return (
+            <div key={row.reason} className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl px-3 py-2.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-ui text-sm text-[#F2F0EA]">{row.reason}</p>
+                <p className="font-body text-[11px] text-[#F5C518] shrink-0">{owner}</p>
+              </div>
+              <p className="font-body text-[12px] text-[#F2F0EA]/55 mt-0.5">{row.hint}. {row.examples}.</p>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="flex gap-2">
         <button
           type="button"
           onClick={resetDefaults}
           className="flex-1 border border-[#2A2A2A] text-[#F2F0EA]/70 py-3 rounded-xl font-logo text-xs"
         >
-          Reset defaults
+          Reset names
         </button>
         <button
           type="button"

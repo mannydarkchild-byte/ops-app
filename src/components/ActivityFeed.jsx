@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { buildActivityFeed } from "../lib/activityFeed.js";
 import { issueStatusLabel } from "../lib/issueTimeline.js";
+import { stopReasonDetail } from "../lib/stopReasons.js";
 import { IssueTimeline } from "./IssueTimeline.jsx";
 import { Modal } from "./ui/Modal.jsx";
 
@@ -65,24 +66,24 @@ function ActivityDetail({ item, issueMessages }) {
       <DetailRow label="When" value={fullWhen(item.at)} />
       <DetailRow label="Machine" value={item.machine} />
       <DetailRow label="Operator" value={item.operator} />
-      <DetailRow label="Reason" value={source.reason} />
-      <DetailRow label="Note" value={source.note} />
+      <DetailRow label="Reason" value={source.reason ? stopReasonDetail(source.reason, source.note).category : ""} />
+      <DetailRow label="Note" value={source.reason ? stopReasonDetail(source.reason, source.note).detail : source.note} />
       <DetailRow label="Status" value={source.status && source.status !== "closed" ? source.status : ""} />
     </div>
   );
 }
 
 /** One line per event. Tap a row for the full record. */
-export function ActivityFeed({ events, fuelLogs, issues, issueMessages = [], machines, siteId, limit = 40 }) {
+export function ActivityFeed({ events, fuelLogs, issues, issueMessages = [], machines, siteId, machineId = null, fromMs = null, toMs = null, limit = 40 }) {
   const items = useMemo(
-    () => buildActivityFeed({ events, fuelLogs, issues, machines, siteId }, { limit }),
-    [events, fuelLogs, issues, machines, siteId, limit]
+    () => buildActivityFeed({ events, fuelLogs, issues, machines, siteId, machineId }, { limit, fromMs, toMs }),
+    [events, fuelLogs, issues, machines, siteId, machineId, fromMs, toMs, limit]
   );
   const [openId, setOpenId] = useState(null);
   const open = items.find((item) => item.id === openId) || null;
 
   if (!items.length) {
-    return <p className="text-sm text-ops-muted text-center py-6">No activity yet today.</p>;
+    return <p className="text-sm text-ops-muted text-center py-6">No activity for this machine in this window.</p>;
   }
 
   return (
