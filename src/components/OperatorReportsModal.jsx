@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Modal } from "./ui/Modal.jsx";
 import { ReportPreviewModal } from "./ReportPreviewModal.jsx";
 import { SHIFT } from "../lib/constants.js";
-import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod, dedupeShifts, getSiteSupervisors, sameOperatorId } from "../lib/utils.js";
+import { fmtDateShort, getBillingPeriod, getShiftStatus, inPeriod, dedupeShifts, getSiteSupervisors, localDayKey, sameOperatorId } from "../lib/utils.js";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { downloadShiftDailyReport, openShiftDailyReport, printTimesheetReport } from "../services/reports.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
@@ -139,8 +139,7 @@ export function OperatorReportsModal({
     return { need, pending, signed };
   }, [mine]);
 
-  const defaultSection = groups.need.length ? "need" : groups.pending.length ? "pending" : null;
-  const section = openSection === null ? defaultSection : openSection;
+  const section = openSection || "";
   const toggleSection = (id) => setOpenSection(section === id ? "" : id);
 
   const machineName = (id) => machines.find((m) => m.id === id)?.name || "Machine";
@@ -278,9 +277,6 @@ export function OperatorReportsModal({
 
       {section === "signed" ? (
         <div className="mt-3">
-          <p className="font-body text-sm text-[#F2F0EA]/55 mb-2">
-            Open a signed report to correct the hours, buckets, trucks and tonnes.
-          </p>
           <ShiftGroup shifts={groups.signed} {...shiftList} />
         </div>
       ) : null}
@@ -388,68 +384,83 @@ function ShiftGroup({
   onSave,
   onChanged,
 }) {
+  const [openDay, setOpenDay] = useState(null);
+
   if (!shifts.length) {
     return <p className="font-body text-sm text-[#F2F0EA]/50 px-1 py-2">Nothing here.</p>;
   }
 
-  const byMachine = new Map();
+  const days = [];
   for (const shift of shifts) {
-    const name = machineName(shift.machine_id);
-    if (!byMachine.has(name)) byMachine.set(name, []);
-    byMachine.get(name).push(shift);
+    const iso = shift.started_at || shift.ended_at;
+    const key = iso ? (localDayKey(iso) || "undated") : "undated";
+    const last = days[days.length - 1];
+    if (last?.key === key) last.rows.push(shift);
+    else days.push({ key, label: dayLabel(iso), rows: [shift] });
   }
-  const machinesInList = [...byMachine.entries()];
-  const showMachineHeads = machinesInList.length > 1;
 
-  return machinesInList.map(([name, rows]) => {
-    const days = [];
-    for (const shift of rows) {
-      const label = dayLabel(shift.started_at || shift.ended_at);
-      const last = days[days.length - 1];
-      if (last?.label === label) last.rows.push(shift);
-      else days.push({ label, rows: [shift] });
-    }
-    return (
-      <div key={name} className="space-y-2">
-        {showMachineHeads ? <p className="font-ui text-xs font-semibold text-[#F2F0EA]/50 px-1">{name}</p> : null}
-        {days.map((day) => (
-          <div key={`${name}-${day.label}`} className="space-y-2">
-            <p className="font-ui text-xs font-semibold text-[#F2F0EA]/40 px-1">{day.label}</p>
-            {day.rows.map((shift) => (
-              <ShiftRow
-                key={shift.id}
-                shift={shift}
-                machineLabel={machineName(shift.machine_id)}
-                hideMachine={showMachineHeads}
-                open={openShiftId === shift.id}
-                onToggle={() => onToggleShift(openShiftId === shift.id ? null : shift.id)}
-                busy={busyId === shift.id}
-                profiles={profiles}
-                workSessions={workSessions}
-                machines={machines}
-                site={site}
-                user={user}
-                supervisors={supervisors}
-                events={events}
-                siteSettings={siteSettings}
-                siteDispatch={siteDispatch}
-                factors={factors}
-                onView={onView}
-                onSave={onSave}
-                onChanged={onChanged}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  });
+  return (
+    <div className="space-y-2">
+      {days.map((day) => {
+        const dayOpen = openDay === day.key;
+        const count = day.rows.length;
+        return (
+          <section key={day.key} className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl overflow-hidden">
+            <button
+              type="button"
+              aria-expanded={dayOpen}
+              onClick={() => {
+                setOpenDay(dayOpen ? null : day.key);
+                onToggleShift(null);
+              }}
+              className="w-full flex items-center justify-between gap-3 px-3 py-3 min-h-12 text-left"
+            >
+              <span className="font-ui font-semibold text-[#F5C518]">{day.label}</span>
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="font-body text-sm text-[#F2F0EA]/55">{count} {count === 1 ? "entry" : "entries"}</span>
+                <span className={`text-[#F5C518] text-lg transition-transform ${dayOpen ? "rotate-90" : ""}`} aria-hidden>›</span>
+              </span>
+            </button>
+            {dayOpen && (
+              <div className="border-t border-[#2A2A2A] px-2 py-2 space-y-2">
+                {day.rows.map((shift) => (
+                  <ShiftRow
+                    key={shift.id}
+                    shift={shift}
+                    machineLabel={machineName(shift.machine_id)}
+                    hideDate
+                    open={openShiftId === shift.id}
+                    onToggle={() => onToggleShift(openShiftId === shift.id ? null : shift.id)}
+                    busy={busyId === shift.id}
+                    profiles={profiles}
+                    workSessions={workSessions}
+                    machines={machines}
+                    site={site}
+                    user={user}
+                    supervisors={supervisors}
+                    events={events}
+                    siteSettings={siteSettings}
+                    siteDispatch={siteDispatch}
+                    factors={factors}
+                    onView={onView}
+                    onSave={onSave}
+                    onChanged={onChanged}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
 }
 
 function ShiftRow({
   shift,
   machineLabel,
   hideMachine,
+  hideDate,
   open,
   onToggle,
   busy,
@@ -485,7 +496,7 @@ function ShiftRow({
           </p>
           <p className={`font-body text-sm mt-0.5 ${BUCKET_COLOR[bucket]}`}>
             {BUCKET_LABEL[bucket]}
-            {hideMachine ? "" : ` · ${fmtDateShort(shift.started_at)}`}
+            {hideMachine || hideDate ? "" : ` · ${fmtDateShort(shift.started_at)}`}
           </p>
         </div>
         <span className="flex items-center gap-2 shrink-0">

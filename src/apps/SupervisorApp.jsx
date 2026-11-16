@@ -1153,6 +1153,8 @@ function DailyReportsByDate({
   onSend,
   onEdit,
 }) {
+  const [openDay, setOpenDay] = useState(null);
+  const [openShiftId, setOpenShiftId] = useState(null);
   const days = [];
   for (const shift of shifts) {
     const key = localDayKey(shift.started_at || shift.ended_at || shift.verified_at) || "undated";
@@ -1166,52 +1168,88 @@ function DailyReportsByDate({
   }
 
   return (
-    <div className="space-y-5">
-      {days.map((day) => (
-        <section key={day.key} className="space-y-2">
-          <p className="font-ui text-sm font-semibold text-[#F5C518]">{day.label}</p>
-          {day.rows.map((row) => {
-            const status = reportStatus(row, berlingtonName);
-            const waiting = status.label === "Waiting for you";
-            const sending = status.label.startsWith("Send to");
-            return (
-              <div key={row.id} className="bg-ops-card border border-ops-border rounded-2xl p-4">
-                <p className="font-ui font-semibold text-ops-text">{machineName(row.machine_id)}</p>
-                <p className="font-body text-sm text-ops-muted mt-1">
-                  {row.operator_name || "Operator"} · {Number(row.hours_worked || 0).toFixed(1)}h
-                </p>
-                <p className={`font-ui text-sm font-semibold mt-1 ${status.tone}`}>{status.label}</p>
-                <ShiftProductionLines shift={row} dispatches={siteDispatch} siteConfig={siteConfig} />
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  {waiting && (
-                    <Button className="w-full" size="lg" disabled={verifyBusy === row.id} onClick={() => onOpen(row)}>
-                      Open and sign
-                    </Button>
-                  )}
-                  {waiting && (
-                    <Button className="w-full" size="lg" variant="secondary" disabled={verifyBusy === row.id} onClick={() => onSendBack(row)}>
-                      Send back
-                    </Button>
-                  )}
-                  {sending && (
-                    <Button className="w-full" variant="whatsapp" disabled={resendBusy === row.id} onClick={() => onSend(row)}>
-                      {resendBusy === row.id ? "Opening..." : `WhatsApp ${berlingtonName}`}
-                    </Button>
-                  )}
-                  {!waiting && (
-                    <Button className="w-full" size="lg" variant="secondary" onClick={() => onView(row)}>
-                      Open report
-                    </Button>
-                  )}
-                  <Button className="w-full" size="lg" variant="secondary" onClick={() => onEdit(row)}>
-                    Edit
-                  </Button>
-                </div>
+    <div className="space-y-2">
+      {days.map((day) => {
+        const dayOpen = openDay === day.key;
+        const count = day.rows.length;
+        return (
+          <section key={day.key} className="bg-ops-card border border-ops-border rounded-2xl overflow-hidden">
+            <button
+              type="button"
+              aria-expanded={dayOpen}
+              onClick={() => {
+                setOpenDay(dayOpen ? null : day.key);
+                setOpenShiftId(null);
+              }}
+              className="w-full flex items-center justify-between gap-3 px-4 py-3 min-h-[64px] text-left"
+            >
+              <span className="font-ui font-semibold text-[#F5C518]">{day.label}</span>
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="font-body text-sm text-ops-muted">{count} {count === 1 ? "entry" : "entries"}</span>
+                <span className={`text-[#F5C518] text-lg transition-transform ${dayOpen ? "rotate-90" : ""}`} aria-hidden>›</span>
+              </span>
+            </button>
+            {dayOpen && (
+              <div className="border-t border-ops-border">
+                {day.rows.map((row) => {
+                  const open = openShiftId === row.id;
+                  const status = reportStatus(row, berlingtonName);
+                  const waiting = status.label === "Waiting for you";
+                  const sending = status.label.startsWith("Send to");
+                  return (
+                    <div key={row.id} className="border-b border-ops-border last:border-b-0">
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        onClick={() => setOpenShiftId(open ? null : row.id)}
+                        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+                      >
+                        <span className="min-w-0">
+                          <span className="block font-ui font-semibold text-ops-text truncate">{machineName(row.machine_id)}</span>
+                          <span className="block font-body text-sm text-ops-muted mt-0.5 truncate">{row.operator_name || "Operator"}</span>
+                        </span>
+                        <span className={`text-[#F5C518] text-lg shrink-0 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>›</span>
+                      </button>
+                      {open && (
+                        <div className="px-4 pb-4">
+                          <p className="font-body text-sm text-ops-muted">{Number(row.hours_worked || 0).toFixed(1)}h</p>
+                          <p className={`font-ui text-sm font-semibold mt-1 ${status.tone}`}>{status.label}</p>
+                          <ShiftProductionLines shift={row} dispatches={siteDispatch} siteConfig={siteConfig} />
+                          <div className="grid grid-cols-2 gap-2 mt-4">
+                            {waiting && (
+                              <Button className="w-full" size="lg" disabled={verifyBusy === row.id} onClick={() => onOpen(row)}>
+                                Open and sign
+                              </Button>
+                            )}
+                            {waiting && (
+                              <Button className="w-full" size="lg" variant="secondary" disabled={verifyBusy === row.id} onClick={() => onSendBack(row)}>
+                                Send back
+                              </Button>
+                            )}
+                            {sending && (
+                              <Button className="w-full" variant="whatsapp" disabled={resendBusy === row.id} onClick={() => onSend(row)}>
+                                {resendBusy === row.id ? "Opening..." : `WhatsApp ${berlingtonName}`}
+                              </Button>
+                            )}
+                            {!waiting && (
+                              <Button className="w-full" size="lg" variant="secondary" onClick={() => onView(row)}>
+                                Open report
+                              </Button>
+                            )}
+                            <Button className="w-full" size="lg" variant="secondary" onClick={() => onEdit(row)}>
+                              Edit
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </section>
-      ))}
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
