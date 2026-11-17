@@ -8,8 +8,8 @@ const FILTERS = [
   { id: "all", label: "All" },
 ];
 
-export function SiteExpensesPanel({ expenses = [], machines = [], siteId, cycleStartDay = 26, scopeLabel = "This site", canEdit = false, onSaved }) {
-  const [filter, setFilter] = useState("cycle");
+export function SiteExpensesPanel({ expenses = [], machines = [], siteId, cycleStartDay = 26, scopeLabel = "This site", canEdit = false, onSaved, categories }) {
+  const [filter, setFilter] = useState("all");
   const [editing, setEditing] = useState(null);
 
   const period = useMemo(() => {
@@ -21,7 +21,7 @@ export function SiteExpensesPanel({ expenses = [], machines = [], siteId, cycleS
 
   const rows = useMemo(() => {
     return (expenses || [])
-      .filter((e) => onSiteRecord(e, siteId, machines))
+      .filter((e) => !e.site_id || onSiteRecord(e, siteId, machines))
       .filter((e) => !period || inPeriod(e.date || e.created_at, period))
       .sort((a, b) => (whenSort(b) - whenSort(a)));
   }, [expenses, machines, siteId, period]);
@@ -85,6 +85,7 @@ export function SiteExpensesPanel({ expenses = [], machines = [], siteId, cycleS
         <EditExpenseModal
           expense={editing}
           onClose={() => setEditing(null)}
+          categories={categories}
           onDone={async () => { await onSaved?.(); }}
         />
       )}

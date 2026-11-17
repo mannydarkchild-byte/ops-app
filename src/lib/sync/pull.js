@@ -1,6 +1,6 @@
 import { supabase } from "../supabase.js";
 import { SYNC_TABLES } from "../constants.js";
-import { getSyncMeta, setSyncMeta, mergeServerRow } from "../db.js";
+import { ensureDB, getSyncMeta, setSyncMeta, mergeServerRow } from "../db.js";
 
 const PAGE_SIZE = 500;
 const PULL_CONCURRENCY = 3;
@@ -82,6 +82,58 @@ async function fetchIncrementalFallback(table, since, siteId = null) {
     from += PAGE_SIZE;
   }
   return out;
+}
+
+async function fetchAll(table, filter) {
+  const out = [];
+  let from = 0;
+  while (true) {
+    let query = supabase.from(table).select("*").order("updated_at", { ascending: true });
+    if (filter) query = filter(query);
+    const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    out.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return out;
+}
+
+/** Bank imports are dated months back. The 21-day bootstrap never brings them down. */
+export async function pullExpenseHistory({ siteId = null } = {}) {
+  if (!navigator.onLine) return { pulled: 0, errors: ["offline"] };
+  try {
+    const seen = new Set();
+    const rows = [];
+    const add = (list) => {
+      for (const row of list || []) {
+        if (!row?.id || seen.has(row.id)) continue;
+        seen.add(row.id);
+        rows.push(row);
+      }
+    };
+    if (siteId) add(await fetchAll("expenses", (query) => query.eq("site_id", siteId)));
+    else add(await fetchAll("expenses"));
+
+    if (siteId) {
+      const database = await ensureDB();
+      const machines = await database.machines.toArray();
+      const machineIds = machines.filter((machine) => machine.site_id === siteId && machine.id).map((machine) => machine.id);
+      for (let i = 0; i < machineIds.length; i += 40) {
+        const chunk = machineIds.slice(i, i + 40);
+        add(await fetchAll("expenses", (query) => query.in("machine_id", chunk)));
+      }
+    }
+
+    let pulled = 0;
+    for (const row of rows) {
+      if (await mergeServerRow("expenses", row)) pulled += 1;
+    }
+    return { pulled, errors: [] };
+  } catch (e) {
+    return { pulled: 0, errors: [`expenses: ${e.message || "Could not load expense history"}`] };
+  }
 }
 
 export async function pullIncremental({ tables = SYNC_TABLES, siteId = null } = {}) {

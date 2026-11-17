@@ -401,6 +401,7 @@ export function AdminApp() {
             cycleStartDay={getSettingsForSite(activeSite?.id).billing_cycle_start_day}
             scopeLabel={activeSite?.name || "This site"}
             canEdit
+            categories={getSettingsForSite(activeSite?.id).expense_categories}
             onSaved={refreshLocal}
           />
         )}

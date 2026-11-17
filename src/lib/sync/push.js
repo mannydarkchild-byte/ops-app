@@ -105,7 +105,13 @@ export async function pushOneQueueItem(item) {
 
   const payload = buildPayload(item.table, resolved);
 
-  const { error } = await supabase.from(item.table).upsert(payload, { onConflict: "id" });
+  let { error } = await supabase.from(item.table).upsert(payload, { onConflict: "id" });
+  if (error && item.table === "site_settings" && /expense_categories/.test(error.message || "")) {
+    const withoutCategories = { ...payload };
+    delete withoutCategories.expense_categories;
+    const retry = await supabase.from(item.table).upsert(withoutCategories, { onConflict: "id" });
+    error = retry.error;
+  }
   if (error) {
     const duplicateRunning = item.table === "shifts"
       && resolved.shift_status === SHIFT.RUNNING

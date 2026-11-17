@@ -1,7 +1,7 @@
 import { getPendingCount, getStuckQueueErrors, getSyncMeta, setSyncMeta, ensureDB } from "../db.js";
 import { syncMachineLocks } from "../machineLock.js";
 import { pushPendingQueue } from "./push.js";
-import { pullIncremental, pullBootstrap, pullStaffDirectory } from "./pull.js";
+import { pullIncremental, pullBootstrap, pullExpenseHistory, pullStaffDirectory } from "./pull.js";
 import { uploadPendingMedia } from "../media.js";
 
 let syncInProgress = false;
@@ -82,6 +82,10 @@ export async function runSync({ silent = true, forceBootstrap = false, forcePush
       const pull = await pullIncremental({ siteId: effectiveSiteId });
       state.pulled += pull.pulled;
       if (pull.errors?.length) state.errors.push(...pull.errors);
+
+      const expenseHistory = await pullExpenseHistory({ siteId: effectiveSiteId });
+      state.pulled += expenseHistory.pulled || 0;
+      if (expenseHistory.errors?.length) state.errors.push(...expenseHistory.errors);
 
       const staff = await pullStaffDirectory({ siteId: effectiveSiteId });
       state.pulled += staff.pulled || 0;

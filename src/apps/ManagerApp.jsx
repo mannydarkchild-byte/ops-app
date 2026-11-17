@@ -3,13 +3,13 @@ import { useOps } from "../context/OpsContext.jsx";
 import { useLiveTimer } from "../hooks/useLiveTimer.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { BackdateReadingModal } from "../components/BackdateReadingModal.jsx";
-import { EditExpenseModal, ExpenseModal, ViewReceiptButton } from "../components/ExpenseModal.jsx";
+import { EditExpenseModal, ExpenseCategoriesModal, ExpenseModal, ViewReceiptButton } from "../components/ExpenseModal.jsx";
 import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
-import { EXPENSE_CATEGORIES, ISSUE, SHIFT } from "../lib/constants.js";
+import { ISSUE, SHIFT } from "../lib/constants.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
@@ -30,6 +30,8 @@ import { WorkHoursPanel } from "../components/WorkHoursPanel.jsx";
 import { MoreMenu } from "../components/MoreMenu.jsx";
 import { StopReasonsEditor } from "../components/StopReasonsEditor.jsx";
 import { currentShiftWindow } from "../lib/shiftAgreement.js";
+import { normalizeExpenseCategories } from "../lib/siteConfig.js";
+import { updateSiteSettings } from "../services/admin.js";
 import { BucketSizeEditor } from "../components/BucketSizeEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
 import { Button } from "../components/ui/Button.jsx";
@@ -106,6 +108,7 @@ export function ManagerApp() {
   const [expenseFilter, setExpenseFilter] = useState("all");
   const [moneyMachineId, setMoneyMachineId] = useState("");
   const [moneyCategory, setMoneyCategory] = useState("");
+  const [showCategories, setShowCategories] = useState(false);
   const [showBackdate, setShowBackdate] = useState(false);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
@@ -360,14 +363,16 @@ export function ManagerApp() {
     [expenses, machines, user?.site_id]
   );
   const expenseCategories = useMemo(() => {
-    const known = new Set(EXPENSE_CATEGORIES);
+    const picker = normalizeExpenseCategories(siteConfig.expense_categories);
     const extra = [];
     for (const expense of siteExpenses) {
       const name = expense.category || "Other";
-      if (!known.has(name) && !extra.includes(name)) extra.push(name);
+      if (!picker.some((item) => item.toLowerCase() === name.toLowerCase()) && !extra.some((item) => item.toLowerCase() === name.toLowerCase())) {
+        extra.push(name);
+      }
     }
-    return [...EXPENSE_CATEGORIES, ...extra];
-  }, [siteExpenses]);
+    return [...picker, ...extra];
+  }, [siteConfig.expense_categories, siteExpenses]);
   const periodExpenses = useMemo(
     () => siteExpenses
       .filter((e) => !moneyMachineId || e.machine_id === moneyMachineId)
@@ -638,7 +643,7 @@ export function ManagerApp() {
             <label className="block">
               <span className="ops-field-label">Category</span>
               <select
-                value={moneyCategory}
+                value={expenseCategories.includes(moneyCategory) ? moneyCategory : ""}
                 onChange={(event) => setMoneyCategory(event.target.value)}
                 className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA]"
               >
@@ -648,11 +653,14 @@ export function ManagerApp() {
                 ))}
               </select>
             </label>
-            {moneyCategory && (
-              <p className="font-body text-sm text-ops-muted">
-                {moneyCategory} · {filteredExpenses.length} {filteredExpenses.length === 1 ? "payment" : "payments"} · {money(ledgerTotal)}
-              </p>
-            )}
+            <button type="button" onClick={() => setShowCategories(true)} className="font-ui text-sm text-[#F5C518] text-left">
+              Add or remove categories
+            </button>
+            <p className="font-body text-sm text-ops-muted">
+              {moneyCategory ? `${moneyCategory} · ` : ""}
+              {filteredExpenses.length} {filteredExpenses.length === 1 ? "payment" : "payments"}
+              {moneyCategory ? ` · ${money(ledgerTotal)}` : ""}
+            </p>
             <ExpenseDays expenses={filteredExpenses} machines={machines} onEdit={setEditingExpense} />
           </div>
         )}
@@ -787,6 +795,7 @@ export function ManagerApp() {
           site={activeSite}
           onDone={refreshLocal}
           allowCustomDate
+          categories={normalizeExpenseCategories(siteConfig.expense_categories)}
         />
       )}
 
@@ -795,6 +804,18 @@ export function ManagerApp() {
           expense={editingExpense}
           onClose={() => setEditingExpense(null)}
           onDone={refreshLocal}
+          categories={normalizeExpenseCategories(siteConfig.expense_categories)}
+        />
+      )}
+
+      {showCategories && (
+        <ExpenseCategoriesModal
+          categories={normalizeExpenseCategories(siteConfig.expense_categories)}
+          onClose={() => setShowCategories(false)}
+          onSave={async (list) => {
+            await updateSiteSettings(user?.site_id || activeSite?.id, { expense_categories: list });
+            await refreshLocal();
+          }}
         />
       )}
 

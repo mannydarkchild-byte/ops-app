@@ -848,7 +848,7 @@ export async function addExpense(user, machine, site, { category, amount, vendor
   return row;
 }
 
-export async function updateExpense(expense, { category, receiptRef } = {}) {
+export async function updateExpense(expense, { category, receiptRef, date } = {}) {
   if (!expense?.id) throw new Error("Missing expense");
   const now = nowISO();
   const row = {
@@ -857,6 +857,11 @@ export async function updateExpense(expense, { category, receiptRef } = {}) {
     updated_at: now,
     _sync_status: "pending",
   };
+  if (date) {
+    row.date = /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? new Date(`${date}T12:00:00`).toISOString()
+      : new Date(date).toISOString();
+  }
   if (receiptRef) row.receipt_ref = receiptRef;
   await saveLocal("expenses", row);
   scheduleSync();

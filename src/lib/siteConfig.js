@@ -6,6 +6,7 @@ import {
   INSPECTION_GROUPS,
   EARTHMOVING_INSPECTION_GROUPS,
   PRIMARY_MACHINE_CODE,
+  EXPENSE_CATEGORIES,
 } from "./constants.js";
 import { DEFAULT_STOP_REASONS, normalizeStopReasons } from "./stopReasons.js";
 
@@ -35,6 +36,7 @@ export function defaultSiteSettings(siteId) {
     inspection_groups: JSON.parse(JSON.stringify(INSPECTION_GROUPS)),
     earthmoving_inspection_groups: JSON.parse(JSON.stringify(EARTHMOVING_INSPECTION_GROUPS)),
     stop_reasons: DEFAULT_STOP_REASONS.map((r) => ({ ...r })),
+    expense_categories: [...EXPENSE_CATEGORIES],
     created_at: now,
     updated_at: now,
   };
@@ -56,6 +58,7 @@ export function resolveSiteSettings(row) {
       ? row.earthmoving_inspection_groups
       : defaults.earthmoving_inspection_groups,
     stop_reasons: normalizeStopReasons(row?.stop_reasons),
+    expense_categories: normalizeExpenseCategories(row?.expense_categories),
     billing_cycle_start_day: clampCycleDay(row?.billing_cycle_start_day),
   };
 }
@@ -109,6 +112,17 @@ export function prestartItemsForMachine(settings, machine) {
       : [...EARTHMOVING_PRESTART_ITEMS];
   }
   return settings?.prestart_items?.length ? settings.prestart_items : [...PRESTART_INSPECTION_ITEMS];
+}
+
+export function normalizeExpenseCategories(value) {
+  const source = Array.isArray(value) && value.length ? value : EXPENSE_CATEGORIES;
+  const names = [];
+  for (const item of source) {
+    const name = String(item || "").trim();
+    if (!name || names.some((existing) => existing.toLowerCase() === name.toLowerCase())) continue;
+    names.push(name);
+  }
+  return names.length ? names : [...EXPENSE_CATEGORIES];
 }
 
 export function clampCycleDay(day) {
