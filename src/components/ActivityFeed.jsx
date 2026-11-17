@@ -5,9 +5,14 @@ import { stopReasonDetail } from "../lib/stopReasons.js";
 import { IssueTimeline } from "./IssueTimeline.jsx";
 import { Modal } from "./ui/Modal.jsx";
 
-function shortTime(iso) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
+function whenParts(iso) {
+  if (!iso) return { date: "", time: "" };
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return { date: "", time: "" };
+  return {
+    date: date.toLocaleDateString("en-ZA", { day: "numeric", month: "short" }),
+    time: date.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }),
+  };
 }
 
 function fullWhen(iso) {
@@ -91,14 +96,18 @@ export function ActivityFeed({ events, fuelLogs, issues, issueMessages = [], mac
       <div className="max-h-[50vh] overflow-y-auto">
         {items.map((item) => {
           const summary = [item.label, item.operator, item.detail].filter(Boolean).join(" · ");
+          const when = whenParts(item.at);
           return (
             <button
               key={item.id}
               type="button"
               onClick={() => setOpenId(item.id)}
-              className="w-full flex items-baseline gap-3 py-2.5 border-b border-ops-border last:border-0 text-left"
+              className="w-full flex items-center gap-3 py-2.5 border-b border-ops-border last:border-0 text-left"
             >
-              <span className="font-ui text-xs text-ops-muted w-12 shrink-0">{shortTime(item.at)}</span>
+              <span className="font-ui text-[11px] leading-tight text-ops-muted w-14 shrink-0">
+                <span className="block">{when.date}</span>
+                <span className="block">{when.time}</span>
+              </span>
               <p className="font-ui text-sm text-ops-text min-w-0 truncate flex-1">{summary}</p>
               <span className="font-ui text-xs text-[#F5C518] shrink-0">Open</span>
             </button>

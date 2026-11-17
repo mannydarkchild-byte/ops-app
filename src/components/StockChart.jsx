@@ -11,9 +11,15 @@ export function formatNetMinutes(mins) {
   return n > 0 ? `+${body}` : `−${body}`;
 }
 
+function sameLocalDay(t0, t1) {
+  const a = new Date(t0);
+  const b = new Date(t1);
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 function chartAxes(t0, t1) {
   const span = Math.max(0, t1 - t0);
-  const multiDay = span > 36 * 60 * 60 * 1000;
+  const multiDay = !sameLocalDay(t0, t1);
   return {
     multiDay,
     span,

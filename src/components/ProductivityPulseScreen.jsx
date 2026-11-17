@@ -162,10 +162,12 @@ export function ProductivityPulseScreen({
     return values;
   }, [historyDay]);
 
+  const dayStamp = new Date(windowMode === "history" ? `${historyDay}T12:00:00` : nowMs)
+    .toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
   const windowLabel = windowMode === "today"
-    ? "Today since midnight"
+    ? `Today · ${dayStamp}`
     : windowMode === "history"
-      ? new Date(`${historyDay}T12:00:00`).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })
+      ? dayStamp
       : cycle.label || "This cycle";
 
   const netLabel = !pulse ? "—" : formatNetMinutes(pulse.endScore);
