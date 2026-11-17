@@ -3,7 +3,7 @@ import { useOps } from "../context/OpsContext.jsx";
 import { useLiveTimer } from "../hooks/useLiveTimer.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { BackdateReadingModal } from "../components/BackdateReadingModal.jsx";
-import { EditExpenseModal, ExpenseModal } from "../components/ExpenseModal.jsx";
+import { EditExpenseModal, ExpenseModal, ViewReceiptButton, expenseReceiptRef } from "../components/ExpenseModal.jsx";
 import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
@@ -663,21 +663,23 @@ export function ManagerApp() {
             ) : (
               <div className="space-y-2">
                 {filteredExpenses.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    onClick={() => setEditingExpense(e)}
-                    className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3 flex justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-logo text-xs">{e.category}</p>
-                      <p className="text-[10px] text-[#F2F0EA]/40 truncate">{e.description || e.vendor || "—"}</p>
-                      <p className="text-[9px] text-[#F2F0EA]/30 mt-0.5">
-                        {fmtDateShort(e.date)} · {e.receipt_ref || e.receipt_photo ? "Receipt on file" : "No receipt"}
-                      </p>
-                    </div>
-                    <p className="font-logo text-[#F5C518] shrink-0">{money(e.amount)}</p>
-                  </button>
+                  <div key={e.id} className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingExpense(e)}
+                      className="w-full text-left flex justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-logo text-xs">{e.category}</p>
+                        <p className="text-[10px] text-[#F2F0EA]/40 truncate">{e.description || e.vendor || "—"}</p>
+                        <p className="text-[9px] text-[#F2F0EA]/30 mt-0.5">
+                          {fmtDateShort(e.date)}{expenseReceiptRef(e) ? "" : " · No receipt"}
+                        </p>
+                      </div>
+                      <p className="font-logo text-[#F5C518] shrink-0">{money(e.amount)}</p>
+                    </button>
+                    <ViewReceiptButton expense={e} className="mt-2" />
+                  </div>
                 ))}
               </div>
             )}

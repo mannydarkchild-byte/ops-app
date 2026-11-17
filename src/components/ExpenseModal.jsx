@@ -7,6 +7,71 @@ import { pickGalleryPhoto, resolveMediaUrl } from "../lib/media.js";
 import { money } from "../lib/utils.js";
 import * as wf from "../services/workflows.js";
 
+export function expenseReceiptRef(expense) {
+  const photo = expense?.receipt_photo;
+  const ref = expense?.receipt_ref;
+  if (typeof photo === "string" && (photo.startsWith("http") || photo.startsWith("data:") || photo.startsWith("blob:"))) return photo;
+  return ref || photo || null;
+}
+
+export function ViewReceiptButton({ expense, receiptRef: chosenRef, className = "" }) {
+  const ref = chosenRef || expenseReceiptRef(expense);
+  const [open, setOpen] = useState(false);
+  if (!ref) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen(true);
+        }}
+        className={`font-ui text-sm font-semibold text-[#F5C518] text-left ${className}`.trim()}
+      >
+        View receipt
+      </button>
+      {open && <ReceiptViewModal receiptRef={ref} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function ReceiptViewModal({ receiptRef, onClose }) {
+  const [url, setUrl] = useState(null);
+  const [missing, setMissing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUrl(null);
+    setMissing(false);
+    resolveMediaUrl(receiptRef).then((next) => {
+      if (cancelled) return;
+      if (!next) setMissing(true);
+      else setUrl(next);
+    });
+    return () => { cancelled = true; };
+  }, [receiptRef]);
+
+  return (
+    <div className="ops-sheet fixed inset-0 bg-black/95 z-[80] flex flex-col">
+      <div className="flex justify-between items-center gap-3 px-5 py-5 border-b-2 border-[#00A4A6] shrink-0">
+        <h3 className="font-logo text-xl tracking-wide text-[#00A4A6]">RECEIPT</h3>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 px-5 py-4 bg-[#141414] text-[#F2F0EA] rounded-xl border-2 border-[#00A4A6] font-ui text-base font-semibold"
+        >
+          CLOSE
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 py-5">
+        {missing && <p className="font-body text-base text-[#F2F0EA]/70">This receipt is not on this phone.</p>}
+        {!url && !missing && <p className="font-body text-base text-[#F2F0EA]/70">Opening receipt…</p>}
+        {url && <img src={url} alt="Receipt" className="w-full object-contain rounded-2xl bg-[#0A0A0A]" />}
+      </div>
+    </div>
+  );
+}
+
 export function ExpenseModal({ onClose, user, machine, site, onDone, allowCustomDate = true }) {
   const [category, setCategory] = useState("Parts");
   const [amount, setAmount] = useState("");
@@ -150,6 +215,9 @@ export function EditExpenseModal({ expense, onClose, onDone }) {
       <FormSection step={2} title="Receipt" description="Add a photo of the receipt for this payment." accent="#00A4A6">
         {preview && (
           <img src={preview} alt="Receipt" className="w-full max-h-48 object-contain rounded-2xl bg-[#0A0A0A] mb-2" />
+        )}
+        {(receiptRef || savedReceipt) && (
+          <ViewReceiptButton receiptRef={receiptRef || savedReceipt} className="block mb-2" />
         )}
         <button
           type="button"
