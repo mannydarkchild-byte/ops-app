@@ -16,7 +16,7 @@ import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHou
 import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
 import { DispatchKpis } from "../components/DispatchKpis.jsx";
 import {
-  fmtDateShort, getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, money, shiftBillableValue, dedupeShifts,
+  getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, localDayKey, money, onSiteRecord, shiftBillableValue, dedupeShifts,
 } from "../lib/utils.js";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
@@ -138,13 +138,16 @@ export function ManagerApp() {
   }, [timesheetFilter, billingPeriod, siteConfig.billing_cycle_start_day]);
 
   const timesheetRows = useMemo(
-    () => buildTimesheetRows(workSessions, { siteId: user?.site_id, period: timesheetPeriod }),
-    [workSessions, user?.site_id, timesheetPeriod]
+    () => buildTimesheetRows(
+      (workSessions || []).filter((row) => onSiteRecord(row, user?.site_id, machines)),
+      { period: timesheetPeriod }
+    ),
+    [workSessions, machines, user?.site_id, timesheetPeriod]
   );
 
   const warriorShifts = useMemo(
-    () => shifts.filter((s) => s.machine_id === primaryMachine?.id),
-    [shifts, primaryMachine?.id]
+    () => shifts.filter((s) => onSiteRecord(s, user?.site_id, machines) && (!focusMachineId || s.machine_id === focusMachineId)),
+    [shifts, machines, user?.site_id, focusMachineId]
   );
 
   const cycleShifts = useMemo(
@@ -160,19 +163,22 @@ export function ManagerApp() {
     const runtimeMin = cycleShifts.reduce((sum, s) => sum + Number(s.runtime_minutes || 0), 0);
     const downtimeMin = cycleShifts.reduce((sum, s) => sum + Number(s.downtime_minutes || 0), 0);
 
+    const onThisSite = (row) => onSiteRecord(row, user?.site_id, machines);
+    const inFocus = (row) => !focusMachineId || row.machine_id === focusMachineId;
     const warriorFuel = fuelLogs.filter(
-      (f) => f.machine_id === primaryMachine?.id && inPeriod(f.timestamp, billingPeriod)
+      (f) => onThisSite(f) && inFocus(f) && inPeriod(f.timestamp, billingPeriod)
     );
     const litres = warriorFuel.reduce((sum, f) => sum + Number(f.litres || 0), 0);
 
     const warriorExpenses = expenses.filter(
-      (e) => e.machine_id === primaryMachine?.id && inPeriod(e.date || e.created_at, billingPeriod)
+      (e) => onThisSite(e) && inFocus(e) && inPeriod(e.date || e.created_at, billingPeriod)
     );
     const expenseTotal = warriorExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
     const closedStops = events.filter(
       (e) =>
-        e.machine_id === primaryMachine?.id &&
+        onThisSite(e) &&
+        inFocus(e) &&
         e.type === "STOP" &&
         e.status === "closed" &&
         inPeriod(e.stopped_at, billingPeriod)
@@ -183,7 +189,7 @@ export function ManagerApp() {
     const utilization = utilDenom > 0 ? (machineHours / utilDenom) * 100 : 0;
 
     const machineName = (id) => machines.find((m) => m.id === id)?.name || primaryMachine?.name || "Machine";
-    const scope = `${primaryMachine?.name || "This machine"} · ${billingPeriod.label}`;
+    const scope = `${focusMachineId ? (primaryMachine?.name || "This machine") : "All machines"} · ${billingPeriod.label}`;
     const withScope = (detail) => ({ ...detail, scope });
     return {
       hours: machineHours,
@@ -216,40 +222,42 @@ export function ManagerApp() {
         },
       },
     };
-  }, [cycleShifts, fuelLogs, expenses, events, primaryMachine?.id, primaryMachine?.name, machines, billingPeriod, siteConfig]);
+  }, [cycleShifts, fuelLogs, expenses, events, focusMachineId, primaryMachine?.name, machines, user?.site_id, billingPeriod, siteConfig]);
 
-  const fleetStatus = useMemo(() => {
-    if (!primaryMachine) return null;
-    const runningShift = shifts.find(
-      (s) => s.machine_id === primaryMachine.id && s.shift_status === SHIFT.RUNNING && isLiveShift(s)
-    ) || null;
-    const openStop = runningShift
-      ? events.find((e) => e.shift_id === runningShift.id && e.type === "STOP" && e.status === "open")
-      : null;
-    const activeSession = workSessions.find(
-      (s) => s.status === "active" && isLiveSince(s.clock_in) && (
-        s.machine_id === primaryMachine.id
-        || (runningShift && s.operator_id === runningShift.operator_id)
-      )
-    );
-    return {
-      machine: primaryMachine,
-      runningShift,
-      openStop,
-      activeSession,
-      isRunning: !!runningShift && !openStop,
-      isStopped: !!openStop,
-    };
-  }, [primaryMachine, shifts, events, workSessions]);
+  const fleets = useMemo(() => {
+    const list = focusMachineId ? siteMachines.filter((machine) => machine.id === focusMachineId) : siteMachines;
+    return list.map((machine) => {
+      const runningShift = shifts.find(
+        (s) => s.machine_id === machine.id && s.shift_status === SHIFT.RUNNING && isLiveShift(s)
+      ) || null;
+      const openStop = runningShift
+        ? events.find((e) => e.shift_id === runningShift.id && e.type === "STOP" && e.status === "open")
+        : null;
+      const activeSession = workSessions.find(
+        (s) => s.status === "active" && isLiveSince(s.clock_in) && (
+          s.machine_id === machine.id
+          || (runningShift && s.operator_id === runningShift.operator_id)
+        )
+      );
+      return {
+        machine,
+        runningShift,
+        openStop,
+        activeSession,
+        isRunning: !!runningShift && !openStop,
+        isStopped: !!openStop,
+      };
+    });
+  }, [focusMachineId, siteMachines, shifts, events, workSessions]);
 
-  const myIssues = useMemo(
+  const siteOpenIssues = useMemo(
     () => issues.filter(
-      (i) =>
-        i.status !== ISSUE.RESOLVED &&
-        (i.machine_id === primaryMachine?.id || !i.machine_id) &&
-        (i.current_owner_id === user?.id || i.reporter_id === user?.id)
+      (issue) =>
+        issue.status !== ISSUE.RESOLVED &&
+        onSiteRecord(issue, user?.site_id, machines) &&
+        (!focusMachineId || !issue.machine_id || issue.machine_id === focusMachineId)
     ),
-    [issues, user?.id, primaryMachine?.id]
+    [issues, user?.site_id, machines, focusMachineId]
   );
 
   const assignedToMe = useMemo(
@@ -260,29 +268,13 @@ export function ManagerApp() {
   );
 
   const partsRequests = useMemo(
-    () => issues.filter(
-      (i) => i.machine_id === primaryMachine?.id && i.status === ISSUE.WAITING_FOR_PARTS
-    ),
-    [issues, primaryMachine?.id]
-  );
-
-  const warriorOpenIssues = useMemo(
-    () => issues.filter(
-      (i) =>
-        i.status !== ISSUE.RESOLVED &&
-        (i.machine_id === primaryMachine?.id || (!i.machine_id && i.site_id === user?.site_id))
-    ),
-    [issues, primaryMachine?.id, user?.site_id]
+    () => siteOpenIssues.filter((issue) => issue.status === ISSUE.WAITING_FOR_PARTS),
+    [siteOpenIssues]
   );
 
   const criticalWarriorIssues = useMemo(
-    () => issues.filter(
-      (i) =>
-        i.status !== ISSUE.RESOLVED &&
-        (i.machine_id === primaryMachine?.id || (!i.machine_id && i.site_id === user?.site_id)) &&
-        i.priority === "Critical"
-    ),
-    [issues, primaryMachine?.id, user?.site_id]
+    () => siteOpenIssues.filter((issue) => issue.priority === "Critical"),
+    [siteOpenIssues]
   );
 
   const pendingVerify = useMemo(
@@ -303,14 +295,14 @@ export function ManagerApp() {
     () => dedupeShifts(shifts
       .filter(
         (s) =>
-          s.site_id === user?.site_id &&
+          onSiteRecord(s, user?.site_id, machines) &&
           s.shift_status === SHIFT.VERIFIED &&
           (s.supervisor_signature_ref || s.supervisor_signature_name || s.verified_at)
       )
       .filter((s) => !signedPeriod || inPeriod(s.verified_at || s.ended_at, signedPeriod))
       .filter((s) => !reportMachineId || s.machine_id === reportMachineId))
       .sort((a, b) => new Date(b.verified_at || b.ended_at || 0) - new Date(a.verified_at || a.ended_at || 0)),
-    [shifts, user?.site_id, signedPeriod, reportMachineId]
+    [shifts, machines, user?.site_id, signedPeriod, reportMachineId]
   );
 
   const reportMachineCounts = useMemo(() => {
@@ -339,10 +331,11 @@ export function ManagerApp() {
 
   const filteredExpenses = useMemo(
     () => expenses
-      .filter((e) => e.machine_id === primaryMachine?.id)
+      .filter((e) => onSiteRecord(e, user?.site_id, machines))
+      .filter((e) => !focusMachineId || e.machine_id === focusMachineId)
       .filter((e) => !expensePeriod || inPeriod(e.date || e.created_at, expensePeriod))
-      .sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at)),
-    [expenses, primaryMachine?.id, expensePeriod]
+      .sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0)),
+    [expenses, machines, user?.site_id, focusMachineId, expensePeriod]
   );
 
   const expenseByCategory = useMemo(() => {
@@ -422,25 +415,28 @@ export function ManagerApp() {
     assignedToMe.length > 0 ||
     partsRequests.length > 0 ||
     criticalWarriorIssues.length > 0 ||
-    fleetStatus?.isStopped ||
+    fleets.some((fleet) => fleet.isStopped) ||
     pendingVerify > 0 ||
     awaitingSiteCount > 0;
 
   const tabItems = useMemo(
     () => TABS.map((t) => ({
       ...t,
-      badge: t.id === "issues" ? myIssues.length + partsRequests.length : 0,
+      badge: t.id === "issues" ? siteOpenIssues.length : 0,
     })),
-    [myIssues.length, partsRequests.length]
+    [siteOpenIssues.length]
   );
 
   const headerContext = activeSite?.name || "Site";
 
-  if (!primaryMachine) {
+  const scopeName = focusMachineId ? (primaryMachine?.name || "This machine") : "All machines";
+  const logMachine = primaryMachine || siteMachines[0] || null;
+
+  if (!siteMachines.length) {
     return (
       <AppPage subtitle="Manager" context={headerContext} onSync={syncNow} alert={<AlertModal {...alert} confirmText="OK" />}>
         <p className="py-12 text-center text-sm text-[#F2F0EA]/40">
-          No primary machine configured for this site. Ask admin to add a machine and set the primary in Sites.
+          No machines on this site yet. Ask admin to add one under Sites.
         </p>
       </AppPage>
     );
@@ -476,9 +472,9 @@ export function ManagerApp() {
                 {criticalWarriorIssues.length} critical
               </button>
             )}
-            {fleetStatus?.isStopped && (
+            {fleets.some((fleet) => fleet.isStopped) && (
               <button type="button" onClick={() => setTab("today")} className="btn-link font-ui text-xs text-[#F97316] hover:underline">
-                Warrior stopped — {fleetStatus.openStop?.reason}
+                {fleets.filter((fleet) => fleet.isStopped).map((fleet) => fleet.machine.name).join(", ")} stopped
               </button>
             )}
             {pendingVerify > 0 && (
@@ -504,10 +500,11 @@ export function ManagerApp() {
           <label className="block mb-4">
             <span className="ops-field-label">Machine</span>
             <select
-              value={primaryMachine?.id || ""}
+              value={focusMachineId}
               onChange={(e) => setFocusMachineId(e.target.value)}
               className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA]"
             >
+              <option value="">All machines</option>
               {siteMachines.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
@@ -519,18 +516,18 @@ export function ManagerApp() {
 
         {tab === "today" && (
           <div className="space-y-4">
-            <p className="font-body text-xs text-[#F2F0EA]/50">{primaryMachine?.name || "This machine"} · {billingPeriod.label} · {currentShift.label}</p>
+            <p className="font-body text-xs text-[#F2F0EA]/50">{scopeName} · {billingPeriod.label} · {currentShift.label}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <DashboardKpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts started · 8h minus Darkchild downtime`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.billable)} />
-              <DashboardKpi label={HOUR_LABELS.machine} value={`${cycleStats.machineHours.toFixed(1)}h`} sub={`${primaryMachine?.name || "This machine"} · ${cycleStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.machine)} />
-              <DashboardKpi label={HOUR_LABELS.revenue} value={money(cycleStats.revenue)} sub={`${money(primaryMachine?.billable_rate)}/h on ${primaryMachine?.name || "this machine"}`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.revenue)} />
-              <DashboardKpi label={HOUR_LABELS.expenses} value={money(cycleStats.expenseTotal)} sub={`${primaryMachine?.name || "This machine"} · this cycle`} color="#F5C518" onClick={() => setKpiDetail(cycleStats.details.expenses)} />
+              <DashboardKpi label={HOUR_LABELS.machine} value={`${cycleStats.machineHours.toFixed(1)}h`} sub={`${scopeName} · ${cycleStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.machine)} />
+              <DashboardKpi label={HOUR_LABELS.revenue} value={money(cycleStats.revenue)} sub={focusMachineId ? `${money(primaryMachine?.billable_rate)}/h on ${scopeName}` : `${scopeName} · each machine uses its own rate`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.revenue)} />
+              <DashboardKpi label={HOUR_LABELS.expenses} value={money(cycleStats.expenseTotal)} sub={`${scopeName} · this cycle`} color="#F5C518" onClick={() => setKpiDetail(cycleStats.details.expenses)} />
               <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(cycleStats.downtimeMin)} sub="Stopped time on shifts this cycle" color="#EF4444" onClick={() => setKpiDetail(cycleStats.details.downtime)} />
-              <DashboardKpi label={HOUR_LABELS.diesel} value={`${cycleStats.litres.toFixed(1)} L`} sub={cycleStats.machineHours > 0 ? `${(cycleStats.litres / cycleStats.machineHours).toFixed(2)} L per machine hour` : `${primaryMachine?.name || "This machine"} · this cycle`} color="#F5C518" onClick={() => setKpiDetail(cycleStats.details.diesel)} />
+              <DashboardKpi label={HOUR_LABELS.diesel} value={`${cycleStats.litres.toFixed(1)} L`} sub={cycleStats.machineHours > 0 ? `${(cycleStats.litres / cycleStats.machineHours).toFixed(2)} L per machine hour` : `${scopeName} · this cycle`} color="#F5C518" onClick={() => setKpiDetail(cycleStats.details.diesel)} />
               <DashboardKpi
                 label={HOUR_LABELS.net}
                 value={money(cycleStats.revenue - cycleStats.expenseTotal)}
-                sub={`${primaryMachine?.name || "This machine"} · revenue minus expenses`}
+                sub={`${scopeName} · revenue minus expenses`}
                 color="#F2F0EA"
                 onClick={() => setKpiDetail(cycleStats.details.net)}
               />
@@ -538,7 +535,9 @@ export function ManagerApp() {
 
             <DispatchKpis records={siteDispatch} siteId={user?.site_id || activeSite?.id} period={billingPeriod} factors={siteConfig} onOpen={setKpiDetail} />
 
-            {fleetStatus && <WarriorStatusCard fleet={fleetStatus} workSessions={workSessions} profiles={profiles} />}
+            {fleets.map((fleet) => (
+              <WarriorStatusCard key={fleet.machine.id} fleet={fleet} workSessions={workSessions} profiles={profiles} />
+            ))}
 
             <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-2">
               <Button variant="secondary" className="w-full" onClick={() => setSetupOpen((v) => !v)}>{setupOpen ? "Hide site setup" : "Site setup"}</Button>
@@ -571,7 +570,7 @@ export function ManagerApp() {
               variant="inline"
               scope="manager"
               user={user}
-              issues={warriorOpenIssues}
+              issues={siteOpenIssues}
               issueMessages={issueMessages}
               onDone={refreshLocal}
               machines={machines}
@@ -608,7 +607,7 @@ export function ManagerApp() {
               ))}
             </div>
 
-            <p className="text-[10px] text-[#F2F0EA]/40">{primaryMachine.name} · {expenseDashboard.periodLabel}</p>
+            <p className="text-[10px] text-[#F2F0EA]/40">{scopeName} · {expenseDashboard.periodLabel}</p>
             <p className="text-[10px] text-[#F2F0EA]/40">Tap a payment to change its category or add a receipt.</p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -658,31 +657,7 @@ export function ManagerApp() {
               </div>
             )}
 
-            {filteredExpenses.length === 0 ? (
-              <p className="text-sm text-[#F2F0EA]/40 text-center py-8">No expenses for this period.</p>
-            ) : (
-              <div className="space-y-2">
-                {filteredExpenses.map((e) => (
-                  <div key={e.id} className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-3">
-                    <button
-                      type="button"
-                      onClick={() => setEditingExpense(e)}
-                      className="w-full text-left flex justify-between gap-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-logo text-xs">{e.category}</p>
-                        <p className="text-[10px] text-[#F2F0EA]/40 truncate">{e.description || e.vendor || "—"}</p>
-                        <p className="text-[9px] text-[#F2F0EA]/30 mt-0.5">
-                          {fmtDateShort(e.date)}{expenseReceiptRef(e) ? "" : " · No receipt"}
-                        </p>
-                      </div>
-                      <p className="font-logo text-[#F5C518] shrink-0">{money(e.amount)}</p>
-                    </button>
-                    <ViewReceiptButton expense={e} className="mt-2" />
-                  </div>
-                ))}
-              </div>
-            )}
+            <ExpenseDays expenses={filteredExpenses} onEdit={setEditingExpense} />
           </div>
         )}
 
@@ -772,7 +747,7 @@ export function ManagerApp() {
                 group="dispatch"
                 period={signedPeriod}
                 periodLabel={signedPeriod?.label || "All time"}
-                dispatches={(siteDispatch || []).filter((row) => row.site_id === user?.site_id)}
+                dispatches={(siteDispatch || []).filter((row) => onSiteRecord(row, user?.site_id, machines))}
                 onOpenDispatch={async (row) => {
                   try {
                     setReportPreview(await dispatchDayReport(row, activeSite));
@@ -789,7 +764,7 @@ export function ManagerApp() {
         <BackdateReadingModal
           onClose={() => setShowBackdate(false)}
           user={user}
-          machine={primaryMachine}
+          machine={logMachine}
           site={activeSite}
           onDone={refreshLocal}
         />
@@ -799,7 +774,7 @@ export function ManagerApp() {
         <ReportIssueModal
           onClose={() => setShowReportIssue(false)}
           user={user}
-          machine={primaryMachine}
+          machine={logMachine}
           machines={siteMachines.length ? siteMachines : (primaryMachine ? [primaryMachine] : [])}
           site={activeSite}
           profiles={profiles}
@@ -811,7 +786,7 @@ export function ManagerApp() {
         <ImportExpensesModal
           onClose={() => setShowImportExpenses(false)}
           user={user}
-          machine={primaryMachine}
+          machine={logMachine}
           machines={siteMachines}
           site={activeSite}
           existing={expenses}
@@ -823,7 +798,7 @@ export function ManagerApp() {
         <ExpenseModal
           onClose={() => setShowExpense(false)}
           user={user}
-          machine={primaryMachine}
+          machine={logMachine}
           site={activeSite}
           onDone={refreshLocal}
           allowCustomDate
@@ -912,6 +887,85 @@ function WarriorStatusCard({ fleet, workSessions = [], profiles = [] }) {
       {!isRunning && !isStopped && !activeSession && (
         <p className="text-sm text-[#F2F0EA]/40">No active shift</p>
       )}
+    </div>
+  );
+}
+
+function expenseDayKey(iso) {
+  const value = String(iso || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  return iso ? (localDayKey(iso) || "undated") : "undated";
+}
+
+function managerDayLabel(iso) {
+  const key = expenseDayKey(iso);
+  if (!key || key === "undated") return "Undated";
+  const today = localDayKey();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (key === today) return "Today";
+  if (key === localDayKey(yesterday)) return "Yesterday";
+  return new Date(`${key}T12:00:00`).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function ExpenseDays({ expenses, onEdit }) {
+  const [openDay, setOpenDay] = useState(null);
+  if (!expenses.length) {
+    return <p className="text-sm text-[#F2F0EA]/40 text-center py-8">No expenses for this period.</p>;
+  }
+  const days = [];
+  for (const expense of expenses) {
+    const iso = expense.date || expense.created_at;
+    const key = expenseDayKey(iso);
+    const last = days[days.length - 1];
+    if (last?.key === key) last.rows.push(expense);
+    else days.push({ key, label: managerDayLabel(iso), rows: [expense] });
+  }
+  return (
+    <div className="space-y-2">
+      {days.map((day) => {
+        const open = openDay === day.key;
+        const count = day.rows.length;
+        return (
+          <section key={day.key} className="bg-[#141414] border border-[#2A2A2A] rounded-2xl overflow-hidden">
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setOpenDay(open ? null : day.key)}
+              className="w-full flex items-center justify-between gap-3 px-4 py-3 min-h-[64px] text-left"
+            >
+              <span className="font-ui font-semibold text-[#F5C518]">{day.label}</span>
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="font-body text-sm text-[#F2F0EA]/55">{count} {count === 1 ? "entry" : "entries"}</span>
+                <span className={`text-[#F5C518] text-lg transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>›</span>
+              </span>
+            </button>
+            {open && (
+              <div className="border-t border-[#2A2A2A]">
+                {day.rows.map((expense) => (
+                  <div key={expense.id} className="px-4 py-3 border-b border-[#2A2A2A] last:border-b-0">
+                    <button
+                      type="button"
+                      onClick={() => onEdit(expense)}
+                      className="w-full text-left flex justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-logo text-xs">{expense.category || "Expense"}</p>
+                        <p className="text-[10px] text-[#F2F0EA]/40 truncate">{expense.description || expense.vendor || "—"}</p>
+                        {!expenseReceiptRef(expense) && (
+                          <p className="text-[9px] text-[#F2F0EA]/30 mt-0.5">No receipt</p>
+                        )}
+                      </div>
+                      <p className="font-logo text-[#F5C518] shrink-0">{money(expense.amount)}</p>
+                    </button>
+                    <ViewReceiptButton expense={expense} className="mt-2" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { summarizeTimesheet } from "../lib/timesheet.js";
+import { localDayKey } from "../lib/utils.js";
 
 const FILTERS = [
   { id: "today", label: "Today" },
@@ -74,34 +75,83 @@ export function TimesheetPanel({
         </div>
       )}
 
-      {rows.length === 0 ? (
-        <p className="text-sm text-[#F2F0EA]/40 text-center py-4">No clock-in records for this period.</p>
-      ) : (
-        <div className="space-y-2">
-          {rows.map((r) => (
-            <div key={r.id} className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg p-3">
-              <div className="flex justify-between gap-3">
-                <p className="font-logo text-sm text-[#F2F0EA] truncate">{r.operator_name || "Operator"}</p>
-                <p className="font-logo text-sm text-[#F5C518] shrink-0">
-                  {r.hours.toFixed(1)}h{r.overtimeHours > 0 ? ` · ${r.overtimeHours.toFixed(1)} OT` : ""}
+      <TimesheetDays rows={rows} machineName={machineName} />
+    </div>
+  );
+}
+
+function timesheetDayLabel(key) {
+  if (!key || key === "undated") return "Undated";
+  const today = localDayKey();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (key === today) return "Today";
+  if (key === localDayKey(yesterday)) return "Yesterday";
+  return new Date(`${key}T12:00:00`).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function TimesheetDays({ rows, machineName }) {
+  const [openDay, setOpenDay] = useState(null);
+  const days = useMemo(() => {
+    const map = new Map();
+    for (const row of rows) {
+      const key = row.clock_in ? (localDayKey(row.clock_in) || "undated") : "undated";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(row);
+    }
+    return [...map.entries()]
+      .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
+      .map(([key, dayRows]) => ({ key, label: timesheetDayLabel(key), rows: dayRows }));
+  }, [rows]);
+
+  if (!rows.length) {
+    return <p className="text-sm text-[#F2F0EA]/40 text-center py-4">No clock-in records for this period.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {days.map((day) => {
+        const open = openDay === day.key;
+        const count = day.rows.length;
+        return (
+          <section key={day.key} className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl overflow-hidden">
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setOpenDay(open ? null : day.key)}
+              className="w-full flex items-center justify-between gap-3 px-3 py-3 text-left"
+            >
+              <span className="font-ui font-semibold text-[#F5C518]">{day.label}</span>
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="font-body text-sm text-[#F2F0EA]/55">{count} {count === 1 ? "entry" : "entries"}</span>
+                <span className={`text-[#F5C518] transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>›</span>
+              </span>
+            </button>
+            {open && day.rows.map((row) => (
+              <div key={row.id} className="px-3 py-3 border-t border-[#2A2A2A]">
+                <div className="flex justify-between gap-3">
+                  <p className="font-logo text-sm text-[#F2F0EA] truncate">{row.operator_name || "Operator"}</p>
+                  <p className="font-logo text-sm text-[#F5C518] shrink-0">
+                    {row.hours.toFixed(1)}h{row.overtimeHours > 0 ? ` · ${row.overtimeHours.toFixed(1)} OT` : ""}
+                  </p>
+                </div>
+                <p className="font-body text-xs text-[#F2F0EA]/55 mt-1">
+                  {row.inLabel} → {row.outLabel}
+                  {machineName(row.machine_id) ? ` · ${machineName(row.machine_id)}` : ""}
                 </p>
+                <p className={`font-logo text-[10px] mt-1 ${
+                  row.status === "ended_early" ? "text-[#F97316]" : row.status === "active" ? "text-[#22C55E]" : "text-[#F2F0EA]/50"
+                }`}>
+                  {row.statusLabel}
+                </p>
+                {row.notes && (
+                  <p className="font-body text-xs text-[#F2F0EA]/45 mt-1">{row.notes}</p>
+                )}
               </div>
-              <p className="font-body text-xs text-[#F2F0EA]/55 mt-1">
-                {r.dateLabel} · {r.inLabel} → {r.outLabel}
-                {machineName(r.machine_id) ? ` · ${machineName(r.machine_id)}` : ""}
-              </p>
-              <p className={`font-logo text-[10px] mt-1 ${
-                r.status === "ended_early" ? "text-[#F97316]" : r.status === "active" ? "text-[#22C55E]" : "text-[#F2F0EA]/50"
-              }`}>
-                {r.statusLabel}
-              </p>
-              {r.notes && (
-                <p className="font-body text-xs text-[#F2F0EA]/45 mt-1">{r.notes}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </section>
+        );
+      })}
     </div>
   );
 }

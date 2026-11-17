@@ -4,7 +4,7 @@ import { VoiceInput } from "./ui/VoiceInput.jsx";
 import { IssueTimeline } from "./IssueTimeline.jsx";
 import { ISSUE, issueAreaRequiresMachine } from "../lib/constants.js";
 import { issueStatusLabel } from "../lib/issueTimeline.js";
-import { canCloseIssue, sameOperatorId } from "../lib/utils.js";
+import { canCloseIssue, localDayKey, sameOperatorId } from "../lib/utils.js";
 import * as wf from "../services/workflows.js";
 
 const PRIORITY_COLOR = { Critical: "#EF4444", High: "#F97316", Medium: "#F5C518", Low: "#22C55E" };
@@ -19,6 +19,29 @@ function avatarColor(name) {
 
 function initial(name) {
   return (String(name || "?").trim().charAt(0) || "?").toUpperCase();
+}
+
+function issueDayLabel(key) {
+  if (!key || key === "undated") return "Undated";
+  const today = localDayKey();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (key === today) return "Today";
+  if (key === localDayKey(yesterday)) return "Yesterday";
+  return new Date(`${key}T12:00:00`).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function groupIssuesByDay(issues) {
+  const map = new Map();
+  for (const issue of issues) {
+    const iso = issue.created_at || issue.updated_at;
+    const key = iso ? (localDayKey(iso) || "undated") : "undated";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(issue);
+  }
+  return [...map.entries()]
+    .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
+    .map(([key, rows]) => ({ key, label: issueDayLabel(key), rows }));
 }
 
 function inboxWhen(iso) {
@@ -80,6 +103,7 @@ export function IssueInboxModal({
   initialIssueId = null,
 }) {
   const [selectedId, setSelectedId] = useState(initialIssueId);
+  const [openIssueDay, setOpenIssueDay] = useState(null);
   const [reply, setReply] = useState("");
   const [closeNote, setCloseNote] = useState("");
   const [showClose, setShowClose] = useState(false);
@@ -97,9 +121,7 @@ export function IssueInboxModal({
     } else if (scope === "mine") {
       list = list.filter((i) => i.reporter_id === user.id || i.current_owner_id === user.id);
     } else if (scope === "manager") {
-      list = list.filter(
-        (i) => i.reporter_id === user.id || i.current_owner_id === user.id || i.status === ISSUE.WAITING_FOR_PARTS
-      );
+      list = list.filter((issue) => issue.status !== ISSUE.RESOLVED);
     }
     return list.sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
   }, [issues, scope, siteId, user.id]);
@@ -245,50 +267,80 @@ export function IssueInboxModal({
     );
   }
 
+  const renderIssue = (issue) => {
+    const msgs = threadOf(issue, issueMessages);
+    const last = msgs[msgs.length - 1];
+    const unread = isUnread(issue, msgs, user.id);
+    const from = last?.sender_name || issue.reporter_name || "Someone";
+    const snippet = (last?.text || issue.description || "").replace(/\s+/g, " ").trim();
+    const when = inboxWhen(last?.created_at || issue.updated_at || issue.created_at);
+    return (
+      <li key={issue.id}>
+        <button
+          type="button"
+          onClick={() => setSelectedId(issue.id)}
+          className={`flex w-full items-start gap-3 px-2 py-3 text-left ${unread ? "bg-[#1A73E8]/5" : ""}`}
+        >
+          <Avatar name={from} unread={unread} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className={`truncate text-[15px] ${unread ? "font-semibold text-[#F2F0EA]" : "font-medium text-[#F2F0EA]/85"}`}>
+                {from}
+              </p>
+              <p className={`shrink-0 text-[11px] ${unread ? "text-[#1A73E8]" : "text-[#F2F0EA]/40"}`}>{when}</p>
+            </div>
+            <p className={`truncate text-[13px] mt-0.5 ${unread ? "text-[#F2F0EA]" : "text-[#F2F0EA]/70"}`}>
+              {issue.area}
+              <span className="text-[#F2F0EA]/40"> · {machineName(issue.machine_id)}</span>
+            </p>
+            <p className="truncate text-[12px] text-[#F2F0EA]/45 mt-0.5">{snippet || issueStatusLabel(issue.status)}</p>
+          </div>
+          <span
+            className="mt-1.5 w-2 h-2 rounded-full shrink-0"
+            style={{ background: PRIORITY_COLOR[issue.priority] || "#A8A59C" }}
+            title={issue.priority}
+          />
+        </button>
+      </li>
+    );
+  };
+
+  const issueDays = scope === "manager" ? groupIssuesByDay(filteredIssues) : [];
+
   const listContent = (
     <div className={`${variant === "modal" ? "max-h-[70vh]" : ""} overflow-y-auto -mx-1`}>
       {filteredIssues.length === 0 && (
         <p className="text-sm text-[#F2F0EA]/50 text-center py-12">Inbox is empty.</p>
       )}
-      <ul className="divide-y divide-[#2A2A2A]">
-        {filteredIssues.map((issue) => {
-          const msgs = threadOf(issue, issueMessages);
-          const last = msgs[msgs.length - 1];
-          const unread = isUnread(issue, msgs, user.id);
-          const from = last?.sender_name || issue.reporter_name || "Someone";
-          const snippet = (last?.text || issue.description || "").replace(/\s+/g, " ").trim();
-          const when = inboxWhen(last?.created_at || issue.updated_at || issue.created_at);
-          return (
-            <li key={issue.id}>
-              <button
-                type="button"
-                onClick={() => setSelectedId(issue.id)}
-                className={`flex w-full items-start gap-3 px-2 py-3 text-left ${unread ? "bg-[#1A73E8]/5" : ""}`}
-              >
-                <Avatar name={from} unread={unread} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className={`truncate text-[15px] ${unread ? "font-semibold text-[#F2F0EA]" : "font-medium text-[#F2F0EA]/85"}`}>
-                      {from}
-                    </p>
-                    <p className={`shrink-0 text-[11px] ${unread ? "text-[#1A73E8]" : "text-[#F2F0EA]/40"}`}>{when}</p>
-                  </div>
-                  <p className={`truncate text-[13px] mt-0.5 ${unread ? "text-[#F2F0EA]" : "text-[#F2F0EA]/70"}`}>
-                    {issue.area}
-                    <span className="text-[#F2F0EA]/40"> · {machineName(issue.machine_id)}</span>
-                  </p>
-                  <p className="truncate text-[12px] text-[#F2F0EA]/45 mt-0.5">{snippet || issueStatusLabel(issue.status)}</p>
-                </div>
-                <span
-                  className="mt-1.5 w-2 h-2 rounded-full shrink-0"
-                  style={{ background: PRIORITY_COLOR[issue.priority] || "#A8A59C" }}
-                  title={issue.priority}
-                />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {scope === "manager" ? (
+        <div className="space-y-2">
+          {issueDays.map((day) => {
+            const open = openIssueDay === day.key;
+            const count = day.rows.length;
+            return (
+              <section key={day.key} className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() => setOpenIssueDay(open ? null : day.key)}
+                  className="w-full flex items-center justify-between gap-3 px-3 py-3 text-left"
+                >
+                  <span className="font-ui font-semibold text-[#F5C518]">{day.label}</span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="font-body text-sm text-[#F2F0EA]/55">{count} {count === 1 ? "entry" : "entries"}</span>
+                    <span className={`text-[#F5C518] transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>›</span>
+                  </span>
+                </button>
+                {open && <ul className="divide-y divide-[#2A2A2A] border-t border-[#2A2A2A]">{day.rows.map(renderIssue)}</ul>}
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <ul className="divide-y divide-[#2A2A2A]">
+          {filteredIssues.map(renderIssue)}
+        </ul>
+      )}
     </div>
   );
 
