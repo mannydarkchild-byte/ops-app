@@ -3,7 +3,7 @@ import { useOps } from "../context/OpsContext.jsx";
 import { useLiveTimer } from "../hooks/useLiveTimer.js";
 import { AppPage } from "../components/AppShell.jsx";
 import { BackdateReadingModal } from "../components/BackdateReadingModal.jsx";
-import { EditExpenseModal, ExpenseModal, ViewReceiptButton, expenseReceiptRef } from "../components/ExpenseModal.jsx";
+import { EditExpenseModal, ExpenseModal, ViewReceiptButton } from "../components/ExpenseModal.jsx";
 import { ImportExpensesModal } from "../components/ImportExpensesModal.jsx";
 import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
@@ -16,7 +16,7 @@ import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHou
 import { DashboardKpi, KpiDetailModal } from "../components/DashboardKpi.jsx";
 import { DispatchKpis } from "../components/DispatchKpis.jsx";
 import {
-  getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, localDayKey, money, onSiteRecord, shiftBillableValue, dedupeShifts,
+  getBillingPeriod, getDatePresets, getPrimaryMachine, hoursBetween, inPeriod, isLiveShift, isLiveSince, localDayKey, money, onSiteRecord, shiftBillableValue, dedupeShifts, whenMs,
 } from "../lib/utils.js";
 import { TimesheetPanel } from "../components/TimesheetPanel.jsx";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
@@ -54,11 +54,20 @@ const MANAGER_REPORT_KINDS = [
   REPORT_KIND.dispatch,
 ];
 
-const EXPENSE_FILTERS = [
-  { id: "cycle", label: "This cycle" },
-  { id: "month", label: "This month" },
-  { id: "all", label: "All" },
-];
+function listBillingCycles(cycleStartDay, count = 24) {
+  const cycles = [];
+  let cursor = new Date();
+  for (let i = 0; i < count; i += 1) {
+    const period = getBillingPeriod(cursor, cycleStartDay);
+    cycles.push({
+      id: `cycle-${period.start.toISOString().slice(0, 10)}`,
+      ...period,
+      label: i === 0 ? `This cycle · ${period.label}` : period.label,
+    });
+    cursor = new Date(period.start.getTime() - 86400000);
+  }
+  return cycles;
+}
 
 export function ManagerApp() {
   const {
@@ -75,7 +84,7 @@ export function ManagerApp() {
   const [reportPreset, setReportPreset] = useState("cycle");
   const [timesheetFilter, setTimesheetFilter] = useState("cycle");
   const [signedFilter, setSignedFilter] = useState("cycle");
-  const [expenseFilter, setExpenseFilter] = useState("cycle");
+  const [expenseFilter, setExpenseFilter] = useState("all");
   const [showBackdate, setShowBackdate] = useState(false);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
@@ -116,12 +125,14 @@ export function ManagerApp() {
     [siteConfig.billing_cycle_start_day]
   );
 
+  const expenseCycles = useMemo(
+    () => listBillingCycles(siteConfig.billing_cycle_start_day, 24),
+    [siteConfig.billing_cycle_start_day]
+  );
   const expensePeriod = useMemo(() => {
     if (expenseFilter === "all") return null;
-    if (expenseFilter === "cycle") return billingPeriod;
-    const preset = getDatePresets(siteConfig.billing_cycle_start_day).find((p) => p.id === expenseFilter);
-    return preset ? { start: preset.start, end: preset.end, label: preset.label } : billingPeriod;
-  }, [expenseFilter, billingPeriod, siteConfig.billing_cycle_start_day]);
+    return expenseCycles.find((cycle) => cycle.id === expenseFilter) || null;
+  }, [expenseFilter, expenseCycles]);
 
   const signedPeriod = useMemo(() => {
     if (signedFilter === "all") return null;
@@ -331,49 +342,12 @@ export function ManagerApp() {
 
   const filteredExpenses = useMemo(
     () => expenses
-      .filter((e) => onSiteRecord(e, user?.site_id, machines))
-      .filter((e) => !focusMachineId || e.machine_id === focusMachineId)
+      .filter((e) => !e.site_id || onSiteRecord(e, user?.site_id, machines))
       .filter((e) => !expensePeriod || inPeriod(e.date || e.created_at, expensePeriod))
-      .sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0)),
-    [expenses, machines, user?.site_id, focusMachineId, expensePeriod]
+      .sort((a, b) => whenMs(b.date || b.created_at) - whenMs(a.date || a.created_at)),
+    [expenses, machines, user?.site_id, expensePeriod]
   );
-
-  const expenseByCategory = useMemo(() => {
-    const map = {};
-    for (const e of filteredExpenses) {
-      const cat = e.category || "Other";
-      map[cat] = (map[cat] || 0) + Number(e.amount || 0);
-    }
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
-  }, [filteredExpenses]);
-
-  const expensePeriodHours = useMemo(() => {
-    const inScope = expensePeriod
-      ? warriorShifts.filter((s) => inPeriod(s.started_at, expensePeriod))
-      : warriorShifts;
-    return {
-      machine: inScope.reduce((sum, s) => sum + Number(s.hours_worked || 0), 0),
-      billable: inScope.reduce((sum, s) => sum + shiftBillableHours(s, events, siteConfig), 0),
-    };
-  }, [warriorShifts, expensePeriod, events, siteConfig]);
-
-  const expensePeriodRevenue = useMemo(() => {
-    const inScope = expensePeriod
-      ? warriorShifts.filter((s) => inPeriod(s.started_at, expensePeriod))
-      : warriorShifts;
-    return inScope.reduce((sum, s) => sum + shiftBillableValue(s, machines, events, siteConfig), 0);
-  }, [warriorShifts, expensePeriod, machines, events, siteConfig]);
-
-  const expenseDashboard = useMemo(() => {
-    const total = filteredExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const count = filteredExpenses.length;
-    const [topCat, topAmt] = expenseByCategory[0] || ["—", 0];
-    const avg = count > 0 ? total / count : 0;
-    const costPerHour = expensePeriodHours.billable > 0 ? total / expensePeriodHours.billable : null;
-    const pctRevenue = expensePeriodRevenue > 0 ? (total / expensePeriodRevenue) * 100 : null;
-    const periodLabel = expensePeriod?.label || "All time";
-    return { total, count, topCat, topAmt, avg, costPerHour, pctRevenue, periodLabel };
-  }, [filteredExpenses, expenseByCategory, expensePeriodHours, expensePeriodRevenue, expensePeriod]);
+  const expenseTotal = filteredExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
 
   const warriorActivity = useMemo(() => ({
     events: events.filter((e) => e.machine_id === primaryMachine?.id),
@@ -496,7 +470,7 @@ export function ManagerApp() {
           </div>
         )}
 
-        {tab !== "pulse" && tab !== "issues" && !(tab === "money" && moneyView === "reports") && siteMachines.length > 1 && (
+        {tab !== "pulse" && tab !== "issues" && tab !== "money" && siteMachines.length > 1 && (
           <label className="block mb-4">
             <span className="ops-field-label">Machine</span>
             <select
@@ -594,70 +568,21 @@ export function ManagerApp() {
               Upload bank recon
             </Button>
 
-            <div className="flex flex-wrap gap-1">
-              {EXPENSE_FILTERS.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setExpenseFilter(f.id)}
-                  className={`px-3 py-2 rounded-lg font-logo text-[10px] tracking-wider ${expenseFilter === f.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            <p className="text-[10px] text-[#F2F0EA]/40">{scopeName} · {expenseDashboard.periodLabel}</p>
-            <p className="text-[10px] text-[#F2F0EA]/40">Tap a payment to change its category or add a receipt.</p>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Kpi label={HOUR_LABELS.expenses} value={money(expenseDashboard.total)} sub={`${expenseDashboard.count} entries`} color="#F5C518" />
-              <Kpi
-                label="Top Category"
-                value={expenseDashboard.topCat}
-                sub={expenseDashboard.topAmt ? money(expenseDashboard.topAmt) : "—"}
-                color="#F2F0EA"
-              />
-              <Kpi label="Avg Entry" value={money(expenseDashboard.avg)} sub="Per transaction" color="#00A4A6" />
-              <Kpi
-                label="Cost / Hour"
-                value={expenseDashboard.costPerHour != null ? money(expenseDashboard.costPerHour) : "—"}
-                sub={expensePeriodHours.billable > 0 ? `${expensePeriodHours.billable.toFixed(1)}h billable hours · ${expensePeriodHours.machine.toFixed(1)}h machine hours` : "No signed hours"}
-                color="#EF4444"
-              />
-              {expenseDashboard.pctRevenue != null && (
-                <Kpi
-                  label="% of Revenue"
-                  value={`${expenseDashboard.pctRevenue.toFixed(1)}%`}
-                  sub={money(expensePeriodRevenue)}
-                  color="#22C55E"
-                />
-              )}
-            </div>
-
-            {expenseByCategory.length > 0 && (
-              <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4">
-                <p className="font-ui text-sm font-semibold text-ops-muted mb-3">By category</p>
-                <div className="space-y-2">
-                  {expenseByCategory.map(([cat, catTotal]) => {
-                    const pct = expenseDashboard.total > 0 ? (catTotal / expenseDashboard.total) * 100 : 0;
-                    return (
-                      <div key={cat}>
-                        <div className="flex justify-between items-center gap-2 mb-1">
-                          <span className="font-logo text-xs text-[#F2F0EA]/80">{cat}</span>
-                          <span className="font-logo text-xs text-[#F5C518]">{money(catTotal)}</span>
-                        </div>
-                        <div className="h-1.5 bg-[#0A0A0A] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#F5C518]" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <ExpenseDays expenses={filteredExpenses} onEdit={setEditingExpense} />
+            <label className="block">
+              <span className="ops-field-label">Cycle</span>
+              <select
+                value={expenseCycles.some((cycle) => cycle.id === expenseFilter) ? expenseFilter : "all"}
+                onChange={(event) => setExpenseFilter(event.target.value)}
+                className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA]"
+              >
+                <option value="all">All expenses</option>
+                {expenseCycles.map((cycle) => (
+                  <option key={cycle.id} value={cycle.id}>{cycle.label}</option>
+                ))}
+              </select>
+            </label>
+            <p className="font-body text-sm text-ops-muted">{filteredExpenses.length} payments · {money(expenseTotal)}</p>
+            <ExpenseDays expenses={filteredExpenses} machines={machines} onEdit={setEditingExpense} />
           </div>
         )}
 
@@ -908,8 +833,10 @@ function managerDayLabel(iso) {
   return new Date(`${key}T12:00:00`).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
 }
 
-function ExpenseDays({ expenses, onEdit }) {
+function ExpenseDays({ expenses, machines = [], onEdit }) {
   const [openDay, setOpenDay] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  const machineName = (id) => machines.find((machine) => machine.id === id)?.name || "";
   if (!expenses.length) {
     return <p className="text-sm text-[#F2F0EA]/40 text-center py-8">No expenses for this period.</p>;
   }
@@ -919,63 +846,59 @@ function ExpenseDays({ expenses, onEdit }) {
     const key = expenseDayKey(iso);
     const last = days[days.length - 1];
     if (last?.key === key) last.rows.push(expense);
-    else days.push({ key, label: managerDayLabel(iso), rows: [expense] });
+    else days.push({ key, label: managerDayLabel(iso), total: 0, rows: [expense] });
   }
+  for (const day of days) day.total = day.rows.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   return (
-    <div className="space-y-2">
+    <div className="border border-[#2A2A2A] rounded-2xl overflow-hidden">
       {days.map((day) => {
         const open = openDay === day.key;
-        const count = day.rows.length;
         return (
-          <section key={day.key} className="bg-[#141414] border border-[#2A2A2A] rounded-2xl overflow-hidden">
+          <div key={day.key} className="border-b border-[#2A2A2A] last:border-b-0">
             <button
               type="button"
               aria-expanded={open}
-              onClick={() => setOpenDay(open ? null : day.key)}
-              className="w-full flex items-center justify-between gap-3 px-4 py-3 min-h-[64px] text-left"
+              onClick={() => { setOpenDay(open ? null : day.key); setOpenId(null); }}
+              className="w-full flex items-center justify-between gap-3 px-3 py-3 text-left bg-[#141414]"
             >
               <span className="font-ui font-semibold text-[#F5C518]">{day.label}</span>
-              <span className="flex items-center gap-2 shrink-0">
-                <span className="font-body text-sm text-[#F2F0EA]/55">{count} {count === 1 ? "entry" : "entries"}</span>
-                <span className={`text-[#F5C518] text-lg transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>›</span>
+              <span className="flex items-center gap-3 shrink-0">
+                <span className="font-ui text-sm text-[#F2F0EA]">{money(day.total)}</span>
+                <span className={`text-[#F5C518] transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>›</span>
               </span>
             </button>
-            {open && (
-              <div className="border-t border-[#2A2A2A]">
-                {day.rows.map((expense) => (
-                  <div key={expense.id} className="px-4 py-3 border-b border-[#2A2A2A] last:border-b-0">
-                    <button
-                      type="button"
-                      onClick={() => onEdit(expense)}
-                      className="w-full text-left flex justify-between gap-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-logo text-xs">{expense.category || "Expense"}</p>
-                        <p className="text-[10px] text-[#F2F0EA]/40 truncate">{expense.description || expense.vendor || "—"}</p>
-                        {!expenseReceiptRef(expense) && (
-                          <p className="text-[9px] text-[#F2F0EA]/30 mt-0.5">No receipt</p>
-                        )}
-                      </div>
-                      <p className="font-logo text-[#F5C518] shrink-0">{money(expense.amount)}</p>
-                    </button>
-                    <ViewReceiptButton expense={expense} className="mt-2" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+            {open && day.rows.map((expense) => {
+              const detailsOpen = openId === expense.id;
+              const machine = machineName(expense.machine_id);
+              return (
+                <div key={expense.id} className="border-t border-[#2A2A2A] bg-[#0A0A0A]">
+                  <button
+                    type="button"
+                    aria-expanded={detailsOpen}
+                    onClick={() => setOpenId(detailsOpen ? null : expense.id)}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left"
+                  >
+                    <span className="font-body text-sm text-[#F2F0EA] truncate">{expense.description || expense.vendor || expense.category || "Payment"}</span>
+                    <span className="font-ui text-sm text-[#F5C518] shrink-0">{money(expense.amount)}</span>
+                  </button>
+                  {detailsOpen && (
+                    <div className="px-3 pb-3 space-y-1">
+                      <p className="font-body text-xs text-[#F2F0EA]/55">{expense.category || "Other"}{machine ? ` · ${machine}` : ""}</p>
+                      {expense.vendor && expense.vendor !== expense.description && (
+                        <p className="font-body text-xs text-[#F2F0EA]/55">{expense.vendor}</p>
+                      )}
+                      <ViewReceiptButton expense={expense} className="block pt-1" />
+                      <button type="button" onClick={() => onEdit(expense)} className="font-ui text-sm text-[#F2F0EA]/70">
+                        Edit
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         );
       })}
-    </div>
-  );
-}
-
-function Kpi({ label, value, sub, color }) {
-  return (
-    <div className="rounded-2xl p-3 sm:p-4 border" style={{ background: "var(--ops-gold-wash)", borderColor: "var(--ops-gold-line)" }}>
-      <p className="font-logo text-[10px] text-[#F2F0EA]/50">{label}</p>
-      <p className="font-logo text-xl sm:text-2xl" style={{ color }}>{value}</p>
-      <p className="font-body text-[10px] text-[#F2F0EA]/40 mt-1">{sub}</p>
     </div>
   );
 }
