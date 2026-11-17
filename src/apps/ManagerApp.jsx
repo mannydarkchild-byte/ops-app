@@ -390,8 +390,8 @@ export function ManagerApp() {
     const rows = shifts.filter(
       (shift) => onSiteRecord(shift, user?.site_id, machines) && (!moneyMachineId || shift.machine_id === moneyMachineId)
     );
-    return expensePeriod ? shiftsStartedInPeriod(rows, expensePeriod) : dedupeShifts(rows);
-  }, [shifts, machines, user?.site_id, moneyMachineId, expensePeriod]);
+    return dedupeShifts(rows);
+  }, [shifts, machines, user?.site_id, moneyMachineId]);
   const moneyIn = useMemo(
     () => moneyShifts.reduce((sum, shift) => sum + shiftBillableValue(shift, machines, events, siteConfig), 0),
     [moneyShifts, machines, events, siteConfig]
@@ -633,7 +633,7 @@ export function ManagerApp() {
                 <p className="font-ui text-sm font-semibold text-[#F2F0EA] mt-1">{money(moneyIn - moneyOut)}</p>
               </div>
             </div>
-            <p className="font-body text-xs text-[#F2F0EA]/45">Billable hours times each machine rate, minus every payment in this window.</p>
+            <p className="font-body text-xs text-[#F2F0EA]/45">Revenue is every billable hour on record, times each machine rate. Expenses follow the cycle above.</p>
 
             <div className="grid grid-cols-2 gap-2">
               <Button variant="teal" onClick={() => setShowExpense(true)}>Log expense</Button>
