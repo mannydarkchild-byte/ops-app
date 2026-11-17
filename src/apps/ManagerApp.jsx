@@ -9,7 +9,7 @@ import { IssueInboxModal } from "../components/IssueInboxModal.jsx";
 import { ReportIssueModal } from "../components/ReportIssueModal.jsx";
 import { ReportPreviewModal } from "../components/ReportPreviewModal.jsx";
 import { AlertModal } from "../components/ui/Modal.jsx";
-import { ISSUE, SHIFT } from "../lib/constants.js";
+import { EXPENSE_CATEGORIES, ISSUE, SHIFT } from "../lib/constants.js";
 import { shiftNameLines } from "../lib/shiftPeople.js";
 import { formatDurationMinutes, formatDurationSeconds, HOUR_LABELS, shiftBillableHours } from "../lib/shiftMetrics.js";
 import { billableDetail, dieselDetail, downtimeDetail, expenseDetail, machineHourDetail, revenueDetail, shiftsStartedInPeriod, sumMeterHours } from "../lib/dashboardBreakdown.js";
@@ -38,13 +38,8 @@ const TABS = [
   { id: "today", label: "Today" },
   { id: "pulse", label: "Pulse" },
   { id: "money", label: "Money" },
+  { id: "reports", label: "Reports" },
   { id: "issues", label: "Problems" },
-];
-
-const REPORT_FILTERS = [
-  { id: "cycle", label: "This cycle" },
-  { id: "month", label: "This month" },
-  { id: "all", label: "All" },
 ];
 
 const MANAGER_REPORT_KINDS = [
@@ -53,6 +48,31 @@ const MANAGER_REPORT_KINDS = [
   REPORT_KIND.timesheet,
   REPORT_KIND.dispatch,
 ];
+
+function cycleSelectValue(value, cycles) {
+  if (value === "all") return "all";
+  if (cycles.some((cycle) => cycle.id === value)) return value;
+  if (value === "cycle") return cycles[0]?.id || "all";
+  return "all";
+}
+
+function CycleSelect({ value, cycles, onChange, allLabel }) {
+  return (
+    <label className="block">
+      <span className="ops-field-label">Cycle</span>
+      <select
+        value={cycleSelectValue(value, cycles)}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA]"
+      >
+        <option value="all">{allLabel}</option>
+        {cycles.map((cycle) => (
+          <option key={cycle.id} value={cycle.id}>{cycle.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 function listBillingCycles(cycleStartDay, count = 24) {
   const cycles = [];
@@ -77,7 +97,6 @@ export function ManagerApp() {
   } = useOps();
 
   const [tab, setTab] = useState("today");
-  const [moneyView, setMoneyView] = useState("spending");
   const [reportKind, setReportKind] = useState(null);
   const [reportMachineId, setReportMachineId] = useState(null);
   const [setupOpen, setSetupOpen] = useState(false);
@@ -85,6 +104,8 @@ export function ManagerApp() {
   const [timesheetFilter, setTimesheetFilter] = useState("cycle");
   const [signedFilter, setSignedFilter] = useState("cycle");
   const [expenseFilter, setExpenseFilter] = useState("all");
+  const [moneyMachineId, setMoneyMachineId] = useState("");
+  const [moneyCategory, setMoneyCategory] = useState("");
   const [showBackdate, setShowBackdate] = useState(false);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
@@ -136,10 +157,9 @@ export function ManagerApp() {
 
   const signedPeriod = useMemo(() => {
     if (signedFilter === "all") return null;
-    if (signedFilter === "cycle") return billingPeriod;
-    const preset = getDatePresets(siteConfig.billing_cycle_start_day).find((p) => p.id === signedFilter);
-    return preset ? { start: preset.start, end: preset.end, label: preset.label } : billingPeriod;
-  }, [signedFilter, billingPeriod, siteConfig.billing_cycle_start_day]);
+    if (signedFilter === "cycle") return expenseCycles[0] || billingPeriod;
+    return expenseCycles.find((cycle) => cycle.id === signedFilter) || expenseCycles[0] || billingPeriod;
+  }, [signedFilter, expenseCycles, billingPeriod]);
 
   const timesheetPeriod = useMemo(() => {
     if (timesheetFilter === "all") return null;
@@ -335,19 +355,42 @@ export function ManagerApp() {
     };
   }, [signedReports.length, timesheetRows]);
 
-  const dualSignedCount = useMemo(
-    () => signedReports.filter((s) => s.site_signature_name || s.site_signed_at).length,
-    [signedReports]
+  const siteExpenses = useMemo(
+    () => expenses.filter((e) => !e.site_id || onSiteRecord(e, user?.site_id, machines)),
+    [expenses, machines, user?.site_id]
   );
-
-  const filteredExpenses = useMemo(
-    () => expenses
-      .filter((e) => !e.site_id || onSiteRecord(e, user?.site_id, machines))
+  const expenseCategories = useMemo(() => {
+    const known = new Set(EXPENSE_CATEGORIES);
+    const extra = [];
+    for (const expense of siteExpenses) {
+      const name = expense.category || "Other";
+      if (!known.has(name) && !extra.includes(name)) extra.push(name);
+    }
+    return [...EXPENSE_CATEGORIES, ...extra];
+  }, [siteExpenses]);
+  const periodExpenses = useMemo(
+    () => siteExpenses
+      .filter((e) => !moneyMachineId || e.machine_id === moneyMachineId)
       .filter((e) => !expensePeriod || inPeriod(e.date || e.created_at, expensePeriod))
       .sort((a, b) => whenMs(b.date || b.created_at) - whenMs(a.date || a.created_at)),
-    [expenses, machines, user?.site_id, expensePeriod]
+    [siteExpenses, moneyMachineId, expensePeriod]
   );
-  const expenseTotal = filteredExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const filteredExpenses = useMemo(
+    () => periodExpenses.filter((e) => !moneyCategory || (e.category || "Other") === moneyCategory),
+    [periodExpenses, moneyCategory]
+  );
+  const moneyOut = periodExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const ledgerTotal = filteredExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const moneyShifts = useMemo(() => {
+    const rows = shifts.filter(
+      (shift) => onSiteRecord(shift, user?.site_id, machines) && (!moneyMachineId || shift.machine_id === moneyMachineId)
+    );
+    return expensePeriod ? shiftsStartedInPeriod(rows, expensePeriod) : dedupeShifts(rows);
+  }, [shifts, machines, user?.site_id, moneyMachineId, expensePeriod]);
+  const moneyIn = useMemo(
+    () => moneyShifts.reduce((sum, shift) => sum + shiftBillableValue(shift, machines, events, siteConfig), 0),
+    [moneyShifts, machines, events, siteConfig]
+  );
 
   const warriorActivity = useMemo(() => ({
     events: events.filter((e) => e.machine_id === primaryMachine?.id),
@@ -470,7 +513,7 @@ export function ManagerApp() {
           </div>
         )}
 
-        {tab !== "pulse" && tab !== "issues" && tab !== "money" && siteMachines.length > 1 && (
+        {tab === "today" && siteMachines.length > 1 && (
           <label className="block mb-4">
             <span className="ops-field-label">Machine</span>
             <select
@@ -553,40 +596,68 @@ export function ManagerApp() {
         )}
 
         {tab === "money" && (
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <Button variant={moneyView === "spending" ? "primary" : "secondary"} onClick={() => setMoneyView("spending")}>Spending</Button>
-            <Button variant={moneyView === "reports" ? "primary" : "secondary"} onClick={() => { setMoneyView("reports"); setReportKind(null); setReportMachineId(null); }}>Reports</Button>
-          </div>
-        )}
-
-        {tab === "money" && moneyView === "spending" && (
           <div className="space-y-3">
-            <Button variant="teal" className="w-full" size="lg" onClick={() => setShowExpense(true)}>
-              Log expense
-            </Button>
-            <Button variant="secondary" className="w-full" size="lg" onClick={() => setShowImportExpenses(true)}>
-              Upload bank recon
-            </Button>
+            <CycleSelect value={expenseFilter} cycles={expenseCycles} onChange={setExpenseFilter} allLabel="All expenses" />
+            {siteMachines.length > 1 && (
+              <label className="block">
+                <span className="ops-field-label">Machine</span>
+                <select
+                  value={moneyMachineId}
+                  onChange={(event) => setMoneyMachineId(event.target.value)}
+                  className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA]"
+                >
+                  <option value="">All machines</option>
+                  {siteMachines.map((machine) => (
+                    <option key={machine.id} value={machine.id}>{machine.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <div className="grid grid-cols-3 border border-[#2A2A2A] rounded-2xl overflow-hidden bg-[#141414]">
+              <div className="px-3 py-3 border-r border-[#2A2A2A]">
+                <p className="font-ui text-[11px] text-[#F2F0EA]/50">Revenue</p>
+                <p className="font-ui text-sm font-semibold text-[#22C55E] mt-1">{money(moneyIn)}</p>
+              </div>
+              <div className="px-3 py-3 border-r border-[#2A2A2A]">
+                <p className="font-ui text-[11px] text-[#F2F0EA]/50">Expenses</p>
+                <p className="font-ui text-sm font-semibold text-[#F5C518] mt-1">{money(moneyOut)}</p>
+              </div>
+              <div className="px-3 py-3">
+                <p className="font-ui text-[11px] text-[#F2F0EA]/50">Net</p>
+                <p className="font-ui text-sm font-semibold text-[#F2F0EA] mt-1">{money(moneyIn - moneyOut)}</p>
+              </div>
+            </div>
+            <p className="font-body text-xs text-[#F2F0EA]/45">Billable hours times each machine rate, minus every payment in this window.</p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="teal" onClick={() => setShowExpense(true)}>Log expense</Button>
+              <Button variant="secondary" onClick={() => setShowImportExpenses(true)}>Upload bank recon</Button>
+            </div>
 
             <label className="block">
-              <span className="ops-field-label">Cycle</span>
+              <span className="ops-field-label">Category</span>
               <select
-                value={expenseCycles.some((cycle) => cycle.id === expenseFilter) ? expenseFilter : "all"}
-                onChange={(event) => setExpenseFilter(event.target.value)}
+                value={moneyCategory}
+                onChange={(event) => setMoneyCategory(event.target.value)}
                 className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA]"
               >
-                <option value="all">All expenses</option>
-                {expenseCycles.map((cycle) => (
-                  <option key={cycle.id} value={cycle.id}>{cycle.label}</option>
+                <option value="">All categories</option>
+                {expenseCategories.map((category) => (
+                  <option key={category} value={category}>{category}</option>
                 ))}
               </select>
             </label>
-            <p className="font-body text-sm text-ops-muted">{filteredExpenses.length} payments · {money(expenseTotal)}</p>
+            {moneyCategory && (
+              <p className="font-body text-sm text-ops-muted">
+                {moneyCategory} · {filteredExpenses.length} {filteredExpenses.length === 1 ? "payment" : "payments"} · {money(ledgerTotal)}
+              </p>
+            )}
             <ExpenseDays expenses={filteredExpenses} machines={machines} onEdit={setEditingExpense} />
           </div>
         )}
 
-        {tab === "money" && moneyView === "reports" && (
+        {tab === "reports" && (
           <ReportsHub
             kinds={MANAGER_REPORT_KINDS}
             machines={siteMachines}
@@ -599,21 +670,7 @@ export function ManagerApp() {
           >
             {reportKind === "daily" && (
               <div className="space-y-3">
-                <div className="flex flex-wrap gap-1">
-                  {REPORT_FILTERS.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setSignedFilter(f.id)}
-                      className={`px-2 py-1 rounded-lg font-logo text-[9px] tracking-wider ${signedFilter === f.id ? "bg-[#F5C518] text-black" : "bg-[#141414] border border-[#2A2A2A] text-[#F2F0EA]/70"}`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-[#F2F0EA]/40">
-                  {dualSignedCount} dual-signed · {signedReports.length - dualSignedCount} legacy single-signed
-                </p>
+                <CycleSelect value={signedFilter} cycles={expenseCycles} onChange={setSignedFilter} allLabel="All reports" />
                 <SupervisorReports
                   machines={siteMachines}
                   machineId={reportMachineId || ""}
@@ -668,6 +725,8 @@ export function ManagerApp() {
             )}
 
             {reportKind === "dispatch" && (
+              <div className="space-y-3">
+              <CycleSelect value={signedFilter} cycles={expenseCycles} onChange={setSignedFilter} allLabel="All reports" />
               <SupervisorReports
                 group="dispatch"
                 period={signedPeriod}
@@ -681,6 +740,7 @@ export function ManagerApp() {
                   }
                 }}
               />
+              </div>
             )}
           </ReportsHub>
         )}
