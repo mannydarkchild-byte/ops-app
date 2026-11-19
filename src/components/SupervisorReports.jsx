@@ -24,6 +24,7 @@ export function SupervisorReports({
   dispatches,
   siteConfig,
   onView,
+  onEdit,
   onOpenDispatch,
 }) {
   const dispatchRows = (dispatches || []).filter((row) => dispatchStatus(row) === DISPATCH_STATUS.SIGNED && dispatchInPeriod(row, period));
@@ -61,6 +62,7 @@ export function SupervisorReports({
             siteConfig={siteConfig}
             periodLabel={periodLabel}
             onView={onView}
+            onEdit={onEdit}
           />
         </section>
       )}
@@ -72,7 +74,7 @@ export function SupervisorReports({
   );
 }
 
-function SignedReportDays({ reports, machines, dispatches, siteConfig, periodLabel, onView }) {
+function SignedReportDays({ reports, machines, dispatches, siteConfig, periodLabel, onView, onEdit }) {
   const [openDay, setOpenDay] = useState(null);
   const machineName = (id) => machines?.find((machine) => machine.id === id)?.name || "Machine";
   if (!reports.length) {
@@ -116,18 +118,20 @@ function SignedReportDays({ reports, machines, dispatches, siteConfig, periodLab
               const screened = production?.tonnes_screened;
               const hours = Number(row.hours_worked || 0).toFixed(1);
               return (
-                <button
-                  key={row.id}
-                  type="button"
-                  onClick={() => onView?.(row)}
-                  className="w-full text-left px-4 py-3 border-t border-[#2A2A2A]"
-                >
-                  <p className="font-ui font-semibold text-ops-text">{row.operator_name || "Operator"}</p>
-                  <p className="font-body text-xs text-ops-muted mt-1">
-                    {machineName(row.machine_id)} · {hours}h
-                    {screened == null ? "" : ` · ${tonnesLabel(screened)} screened`}
-                  </p>
-                </button>
+                <div key={row.id} className="px-4 py-3 border-t border-[#2A2A2A]">
+                  <button type="button" onClick={() => onView?.(row)} className="w-full text-left">
+                    <p className="font-ui font-semibold text-ops-text">{row.operator_name || "Operator"}</p>
+                    <p className="font-body text-xs text-ops-muted mt-1">
+                      {machineName(row.machine_id)} · {hours}h
+                      {screened == null ? "" : ` · ${tonnesLabel(screened)} screened`}
+                    </p>
+                  </button>
+                  {onEdit && (
+                    <button type="button" onClick={() => onEdit(row)} className="font-ui text-sm text-[#F5C518] mt-2">
+                      Edit times and stops
+                    </button>
+                  )}
+                </div>
               );
             })}
           </section>

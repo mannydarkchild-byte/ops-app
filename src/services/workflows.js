@@ -11,6 +11,7 @@ import { fetchServerOpenShift } from "../lib/machineStatus.js";
 import { bucketTonnes, DISPATCH_STATUS, dispatchStatus, previewFloor } from "../lib/dispatchMetrics.js";
 import { weighbridgePhotoFields, weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
 import { assertReasonableMeterHours, findOpenStopForShift, meterHoursWorked, shiftDowntimeMinutes, shiftRuntimeMinutes } from "../lib/shiftMetrics.js";
+import { canonicalStopReason, detailForStop } from "../lib/stopReasons.js";
 import { AUTO_CLOCK_OUT_NOTE, OVERTIME_ACK_TAG, hasOvertimeAck, standardClockOutAt } from "../lib/timesheet.js";
 
 const actionInflight = new Map();
@@ -1236,9 +1237,77 @@ export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, rea
 }
 
 /** Supervisor corrects a report directly, including after it is signed. The signature stays. */
+export async function listShiftStops(shiftId) {
+  if (!shiftId) return [];
+  const events = await readTable("events");
+  return events
+    .filter((event) => event.shift_id === shiftId && event.type === "STOP")
+    .sort((a, b) => new Date(a.stopped_at || a.timestamp || 0) - new Date(b.stopped_at || b.timestamp || 0))
+    .map((event) => {
+      const minutes = Number(event.downtime_minutes || 0);
+      const detail = detailForStop(event.reason, event.note);
+      const category = canonicalStopReason(event.reason);
+      return {
+        id: event.id,
+        reason: category,
+        note: detail && detail !== category ? detail : "",
+        hours: Math.round((minutes / 60) * 10) / 10,
+      };
+    });
+}
+
+/** Correct a saved stop's reason and how long it lasted. The report stays signed. */
+export async function saveShiftStops(actor, shift, edits = []) {
+  if (!shift?.id || !edits.length) return shift;
+  const role = String(actor?.role || "").toLowerCase();
+  const allowed = sameOperatorId(shift.operator_id, actor?.id) || [ROLES.MANAGER, ROLES.SUPERVISOR, ROLES.ADMIN].includes(role);
+  if (!allowed) throw new Error("You can only correct stops on your own shift");
+
+  const events = await readTable("events");
+  const now = nowISO();
+  for (const edit of edits) {
+    const row = events.find((event) => event.id === edit.id && event.shift_id === shift.id && event.type === "STOP");
+    if (!row) continue;
+    const hours = Number(edit.hours);
+    if (edit.hours === "" || edit.hours == null || !Number.isFinite(hours) || hours < 0) {
+      throw new Error("Enter how many hours the machine was stopped");
+    }
+    if (hours > 24 * 14) throw new Error("That stop is longer than 14 days. Enter the hours it was actually stopped.");
+    const reason = String(edit.reason || "").trim();
+    if (!reason) throw new Error("Choose a stop reason");
+    const minutes = Math.round(hours * 60);
+    const stoppedAt = row.stopped_at || row.timestamp || shift.started_at || now;
+    const restartedAt = new Date(new Date(stoppedAt).getTime() + minutes * 60000).toISOString();
+    await saveLocal("events", {
+      ...row,
+      reason,
+      note: String(edit.note || "").trim(),
+      stopped_at: stoppedAt,
+      restarted_at: restartedAt,
+      downtime_minutes: minutes,
+      status: "closed",
+      updated_at: now,
+    });
+  }
+
+  const fresh = await readTable("events");
+  const downtime = shiftDowntimeMinutes(fresh, shift.id);
+  const updated = {
+    ...shift,
+    downtime_minutes: downtime,
+    runtime_minutes: shiftRuntimeMinutes(shift.started_at, shift.ended_at, downtime),
+    updated_at: now,
+  };
+  await saveLocal("shifts", updated);
+  scheduleSync();
+  return updated;
+}
+
 export async function editShiftBeforeSign(actor, shift, {
   startHour,
   endHour,
+  startedAt,
+  endedAt,
   openingPhotoRef,
   closingPhotoRef,
   note,
@@ -1264,6 +1333,8 @@ export async function editShiftBeforeSign(actor, shift, {
     start_hour_meter: startMeter,
     end_hour_meter: endMeter,
     hours_worked: endMeter != null ? meterHoursWorked(startMeter, endMeter) : shift.hours_worked,
+    started_at: startedAt || shift.started_at,
+    ended_at: endedAt || shift.ended_at,
     notes: [shift.notes, note?.trim() ? `Supervisor edit: ${note.trim()}` : `Edited by ${actor?.name || "supervisor"}`].filter(Boolean).join(" | "),
     updated_at: now,
   };
@@ -1304,6 +1375,8 @@ export async function editShiftBeforeSign(actor, shift, {
         start_hour_meter: updated.start_hour_meter,
         end_hour_meter: updated.end_hour_meter,
         hours_worked: updated.hours_worked,
+        started_at: updated.started_at,
+        ended_at: updated.ended_at,
         notes: updated.notes,
         tonnes_dispatched: updated.tonnes_dispatched ?? null,
         trucks_dispatched: updated.trucks_dispatched ?? null,

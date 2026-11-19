@@ -36,6 +36,8 @@ import { BucketSizeEditor } from "../components/BucketSizeEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import { ShiftSignSheet, WaitingShiftDays } from "../components/ShiftSignSheet.jsx";
+import { SupervisorShiftEdit } from "../components/SupervisorShiftEdit.jsx";
+import { tonnesPerBucket } from "../lib/siteConfig.js";
 
 const TABS = [
   { id: "today", label: "Today" },
@@ -139,6 +141,7 @@ export function ManagerApp() {
   const [showBucketSize, setShowBucketSize] = useState(false);
   const [focusMachineId, setFocusMachineId] = useState("");
   const [signShift, setSignShift] = useState(null);
+  const [editShift, setEditShift] = useState(null);
   const [machineHourFilter, setMachineHourFilter] = useState("cycle");
   const showAlert = (title, message, type = "info") =>
     setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
@@ -771,6 +774,7 @@ export function ManagerApp() {
                   siteConfig={siteConfig}
                   dispatches={siteDispatch}
                   onView={handleViewReport}
+                  onEdit={setEditShift}
                 />
               </div>
             )}
@@ -929,6 +933,25 @@ export function ManagerApp() {
             showAlert={showAlert}
           />
         </Modal>
+      )}
+      {editShift && (
+        <SupervisorShiftEdit
+          shift={editShift}
+          user={user}
+          site={activeSite}
+          siteDispatch={siteDispatch}
+          factors={{
+            excavator_bucket_tonnes: tonnesPerBucket(siteConfig.excavator_bucket_tonnes),
+            fel_bucket_tonnes: tonnesPerBucket(siteConfig.fel_bucket_tonnes),
+          }}
+          onClose={() => setEditShift(null)}
+          onDone={async () => {
+            setEditShift(null);
+            await refreshLocal();
+            if (navigator.onLine) await syncNow();
+            showAlert("Saved", "The times and stops on this report are updated.", "success");
+          }}
+        />
       )}
       {signShift && (
         <ShiftSignSheet

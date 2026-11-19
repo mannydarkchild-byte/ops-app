@@ -9,7 +9,22 @@ import { tonnesPerBucket } from "../lib/siteConfig.js";
 import { weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
 import { resolveMediaUrl } from "../lib/media.js";
 import { ProductionReadout, ShiftDispatchFields } from "./ShiftDispatchFields.jsx";
-import { editShiftBeforeSign } from "../services/workflows.js";
+import { editShiftBeforeSign, saveShiftStops } from "../services/workflows.js";
+import { ShiftStopsEditor } from "./ShiftStopsEditor.jsx";
+
+function toLocalInput(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function fromLocalInput(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
 
 function textOf(value) {
   return value == null || value === "" ? "" : String(value);
@@ -27,6 +42,9 @@ export function SupervisorShiftEdit({ shift, user, site, siteDispatch = [], fact
   const [closingRef, setClosingRef] = useState(null);
   const [closingPreview, setClosingPreview] = useState(null);
   const [note, setNote] = useState("");
+  const [startedAt, setStartedAt] = useState(toLocalInput(shift.started_at));
+  const [endedAt, setEndedAt] = useState(toLocalInput(shift.ended_at));
+  const [stops, setStops] = useState([]);
   const [excavatorBuckets, setExcavatorBuckets] = useState(textOf(production.excavator_buckets ?? shift.excavator_buckets));
   const [felBuckets, setFelBuckets] = useState(textOf(production.fel_buckets ?? shift.fel_buckets));
   const [tonnes, setTonnes] = useState(textOf(production.tonnes_dispatched ?? shift.tonnes_dispatched));
@@ -59,9 +77,11 @@ export function SupervisorShiftEdit({ shift, user, site, siteDispatch = [], fact
     setBusy(true);
     setError("");
     try {
-      const updated = await editShiftBeforeSign(user, shift, {
+      let updated = await editShiftBeforeSign(user, shift, {
         startHour,
         endHour,
+        startedAt: fromLocalInput(startedAt) || shift.started_at,
+        endedAt: fromLocalInput(endedAt) || shift.ended_at,
         openingPhotoRef: openingRef,
         closingPhotoRef: closingRef,
         note,
@@ -75,6 +95,7 @@ export function SupervisorShiftEdit({ shift, user, site, siteDispatch = [], fact
         site,
         factors,
       });
+      if (stops.length) updated = await saveShiftStops(user, updated, stops);
       onDone?.(updated);
       onClose?.();
     } catch (e) {
@@ -87,7 +108,7 @@ export function SupervisorShiftEdit({ shift, user, site, siteDispatch = [], fact
   return (
     <Modal title="Edit report" color="yellow" onClose={onClose}>
       <p className="font-body text-sm text-[#F2F0EA]/70 mb-4">
-        Correct the hours, buckets, trucks and tonnes here. A signed report stays signed.
+        Correct the shift times, the stop reasons, and how long each stop lasted. A signed report stays signed.
       </p>
       <p className="font-ui text-sm font-semibold text-ops-text mb-2">Opening meter</p>
       <MeterPhoto
@@ -107,6 +128,17 @@ export function SupervisorShiftEdit({ shift, user, site, siteDispatch = [], fact
         required={false}
         hint="Leave the photo blank if only the number needs a fix."
       />
+      <label className="block mt-4">
+        <span className="ops-field-label">Started</span>
+        <input type="datetime-local" value={startedAt} onChange={(event) => setStartedAt(event.target.value)} className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA]" />
+      </label>
+      <label className="block mt-3">
+        <span className="ops-field-label">Ended</span>
+        <input type="datetime-local" value={endedAt} onChange={(event) => setEndedAt(event.target.value)} className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-xl text-[#F2F0EA]" />
+      </label>
+      <div className="mt-4">
+        <ShiftStopsEditor shiftId={shift.id} onChange={setStops} />
+      </div>
       <div className="mt-4 space-y-3">
         <p className="font-ui text-sm font-semibold text-[#F5C518]">Buckets, trucks and tonnes</p>
         <ProductionReadout

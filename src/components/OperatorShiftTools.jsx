@@ -5,7 +5,8 @@ import { bucketTonnes, previewFloor, productionForShift } from "../lib/dispatchM
 import { tonnesPerBucket } from "../lib/siteConfig.js";
 import { weighbridgePhotoRefs } from "../lib/dispatchPhotos.js";
 import { resolveMediaUrl } from "../lib/media.js";
-import { deleteOwnShift, replaceShiftMeterPhoto, submitOwnOpenShift, updateOwnShift } from "../services/workflows.js";
+import { deleteOwnShift, replaceShiftMeterPhoto, saveShiftStops, submitOwnOpenShift, updateOwnShift } from "../services/workflows.js";
+import { ShiftStopsEditor } from "./ShiftStopsEditor.jsx";
 import { MeterPhoto } from "./ui/MeterPhoto.jsx";
 import { SupervisorPicker } from "./SupervisorPicker.jsx";
 import { Button } from "./ui/Button.jsx";
@@ -56,6 +57,7 @@ export function OperatorShiftTools({ shift, user, supervisors = [], site, siteDi
   const [tonnes, setTonnes] = useState("");
   const [trucks, setTrucks] = useState("");
   const [photos, setPhotos] = useState([]);
+  const [stops, setStops] = useState([]);
 
   if (!shift) return null;
 
@@ -135,6 +137,7 @@ export function OperatorShiftTools({ shift, user, supervisors = [], site, siteDi
           reading: photoSide === "opening" ? startMeter : endMeter,
         });
       }
+      if (stops.length) updated = await saveShiftStops(user, updated, stops);
       setOpen(false);
       setPhotoSide("");
       setPhotoRef(null);
@@ -192,7 +195,7 @@ export function OperatorShiftTools({ shift, user, supervisors = [], site, siteDi
             {isOpenShift ? "Finish this leftover shift" : signed ? "Correct this signed report" : "Edit this shift"}
           </p>
           <p className="font-body text-sm text-[#F2F0EA]/60 mb-3">
-            Hours, buckets, trucks and tonnes can all be changed. Saving a signed report keeps the signature and updates the numbers.
+            Hours, stops, buckets, trucks and tonnes can all be changed. Saving a signed report keeps the signature and updates the numbers.
           </p>
           <label className="block mb-3">
             <span className="ops-field-label">Opening meter</span>
@@ -210,6 +213,9 @@ export function OperatorShiftTools({ shift, user, supervisors = [], site, siteDi
             <span className="ops-field-label">Ended</span>
             <input type="datetime-local" value={endedAt} onChange={(e) => setEndedAt(e.target.value)} className="w-full mt-1 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA]" />
           </label>
+          <div className="mb-3">
+            <ShiftStopsEditor shiftId={shift.id} onChange={setStops} />
+          </div>
           <label className="block mb-3">
             <span className="ops-field-label">Notes</span>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full mt-1 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-3 text-[#F2F0EA]" />
