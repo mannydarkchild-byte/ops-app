@@ -20,7 +20,7 @@ export function sumMeterHours(shifts) {
 
 function statusLabel(shift) {
   const status = getShiftStatus(shift);
-  if (status === SHIFT.VERIFIED) return "Signed";
+  if (status === SHIFT.VERIFIED || status === SHIFT.MACHINE_SIGNED) return "Signed";
   if (status === SHIFT.RUNNING) return "Still open";
   if (status === SHIFT.WAITING_FOR_VERIFICATION || status === SHIFT.RESUBMITTED || status === SHIFT.SUBMITTED) return "Awaiting sign-off";
   if (status === SHIFT.CORRECTION_REQUIRED) return "Sent back";

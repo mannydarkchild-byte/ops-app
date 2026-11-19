@@ -74,9 +74,9 @@ export function SupervisorVerifySheet({
 
       {!loading && html && mode === "send" && (
         <div className="shrink-0 border-t border-[#25D366]/40 bg-[#141414] px-4 py-4 space-y-3">
-          <p className="font-ui font-semibold text-[#25D366]">Signed — send to {ownerName}</p>
+          <p className="font-ui font-semibold text-[#22C55E]">Saved</p>
           <p className="font-body text-sm text-[#F2F0EA]/70">
-            WhatsApp this same report. They open the link, check the hours, and sign at the bottom.
+            Darkchild’s signature has saved this shift. Send {ownerName} the link when you want their signature. The shift stays saved if they do not sign.
           </p>
           <Button className="w-full" size="lg" variant="whatsapp" disabled={busy} onClick={onSendToOwner}>
             {busy ? "Opening…" : `WhatsApp ${ownerName}`}

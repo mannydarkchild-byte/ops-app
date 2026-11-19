@@ -33,17 +33,27 @@ export function meterHoursWorked(startMeter, endMeter) {
   return Math.max(0, end - start);
 }
 
+/** A same-day shift stays inside 24 hours. A shift left open longer may cover the hours it was actually open. */
+function meterLimitHours(startedAt, maxHours) {
+  if (!startedAt) return maxHours;
+  const opened = new Date(startedAt).getTime();
+  if (!Number.isFinite(opened)) return maxHours;
+  const openHours = Math.max(0, (Date.now() - opened) / 3600000);
+  return Math.max(maxHours, Math.min(openHours + 2, 24 * 14));
+}
+
 /** Reject blank, reversed, or impossible meter jumps before they become source-of-truth hours. */
-export function assertReasonableMeterHours(startMeter, endMeter, { maxHours = MAX_SHIFT_METER_HOURS } = {}) {
+export function assertReasonableMeterHours(startMeter, endMeter, { maxHours = MAX_SHIFT_METER_HOURS, startedAt = null } = {}) {
   const start = Number(startMeter);
   const end = Number(endMeter);
   if (!Number.isFinite(start) || start < 0) throw new Error("Enter a valid opening meter");
   if (!Number.isFinite(end) || end < 0) throw new Error("Enter a valid closing meter");
   if (end < start) throw new Error("Closing meter cannot be below opening");
   const delta = end - start;
-  if (delta > maxHours) {
+  const limit = meterLimitHours(startedAt, maxHours);
+  if (delta > limit) {
     throw new Error(
-      `That meter jump is ${delta.toFixed(1)} hours. A shift cannot add more than ${maxHours} hours. Check you typed the reading, not an extra digit.`
+      `That meter jump is ${delta.toFixed(1)} hours. Check you typed the reading, not an extra digit.`
     );
   }
   return delta;

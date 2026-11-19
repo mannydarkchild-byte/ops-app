@@ -313,8 +313,8 @@ async function startMachineOnce(user, machine, site, { hourMeter, photoRef, mach
   const now = nowISO();
   const run = {
     id: makeId("RUN"),
-    site_id: site?.id,
-    organization_id: site?.organization_id || user?.organization_id || null,
+    site_id: user?.site_id || site?.id,
+    organization_id: user?.organization_id || site?.organization_id || null,
     machine_id: machine.id,
     operator_id: user.id,
     operator_name: cabName,
@@ -464,7 +464,7 @@ async function endMachineDayOnce(user, machine, site, machineRun, { endHour, pho
   }
   if (!photoRef) throw new Error("Closing hour meter photo is required");
   const h = Number(endHour);
-  const hoursWorked = assertReasonableMeterHours(machineRun.start_hour_meter, h);
+  const hoursWorked = assertReasonableMeterHours(machineRun.start_hour_meter, h, { startedAt: machineRun.started_at });
   if (!assignedSupervisor?.id) throw new Error("Select the supervisor on duty for this shift");
 
   const now = nowISO();
@@ -474,8 +474,13 @@ async function endMachineDayOnce(user, machine, site, machineRun, { endHour, pho
   const downtimeMinutes = shiftDowntimeMinutes(events, machineRun.id);
   const runtimeMinutes = shiftRuntimeMinutes(machineRun.started_at, now, downtimeMinutes);
 
+  const siteId = user?.site_id || site?.id;
+  if (!siteId) throw new Error("Site is missing — contact admin to link your profile to a site");
+
   const ended = {
     ...machineRun,
+    site_id: siteId,
+    organization_id: user?.organization_id || site?.organization_id || machineRun.organization_id || null,
     end_hour_meter: h,
     hours_worked: hoursWorked,
     runtime_minutes: runtimeMinutes,
@@ -510,11 +515,10 @@ async function endMachineDayOnce(user, machine, site, machineRun, { endHour, pho
   });
   await addEvent(user, machine, site, "MACHINE_ENDED", { shift_id: ended.id, note: `Machine day ended at ${h}h` });
 
-  if (!site?.id) throw new Error("Site is missing — contact admin to link your profile to a site");
-
   const submission = {
     id: makeId("SUB"),
-    site_id: site.id,
+    site_id: siteId,
+    organization_id: user?.organization_id || site?.organization_id || null,
     machine_id: machine.id,
     shift_id: ended.id,
     operator_id: user.id,
@@ -535,7 +539,7 @@ async function endMachineDayOnce(user, machine, site, machineRun, { endHour, pho
 export async function closeOpenShift(supervisor, machine, shift, { endHour, note } = {}) {
   if (!shift || getShiftStatus(shift) !== SHIFT.RUNNING) throw new Error("That shift is not still open");
   const h = Number(endHour);
-  const hoursWorked = assertReasonableMeterHours(shift.start_hour_meter || 0, h);
+  const hoursWorked = assertReasonableMeterHours(shift.start_hour_meter || 0, h, { startedAt: shift.started_at });
   if (!navigator.onLine) {
     throw new Error("Need a connection to close this so the next operator can start");
   }
@@ -613,7 +617,7 @@ export async function updateOwnShift(user, shift, patch = {}, context = {}) {
   }
   const metersChanged = !sameMeter(startMeter, shift.start_hour_meter) || !sameMeter(endMeter, shift.end_hour_meter);
   if (metersChanged && endMeter != null && Number.isFinite(startMeter)) {
-    assertReasonableMeterHours(startMeter, endMeter);
+    assertReasonableMeterHours(startMeter, endMeter, { startedAt: patch.started_at || shift.started_at });
   }
   let updated = {
     ...shift,
@@ -683,7 +687,7 @@ export async function submitOwnOpenShift(user, shift, {
   }
   const startMeter = startHour != null && startHour !== "" ? Number(startHour) : Number(shift.start_hour_meter);
   const h = Number(endHour);
-  const hoursWorked = assertReasonableMeterHours(startMeter, h);
+  const hoursWorked = assertReasonableMeterHours(startMeter, h, { startedAt: startedAt || shift.started_at });
   const supervisor = assignedSupervisor || (shift.assigned_supervisor_id
     ? { id: shift.assigned_supervisor_id, name: shift.assigned_supervisor_name }
     : null);
@@ -1209,13 +1213,13 @@ export async function replaceShiftMeterPhoto(actor, shift, { side, photoRef, rea
   if (side === "opening" && h != null) {
     patch.start_hour_meter = h;
     if (shift.end_hour_meter != null) {
-      assertReasonableMeterHours(h, shift.end_hour_meter);
+      assertReasonableMeterHours(h, shift.end_hour_meter, { startedAt: shift.started_at });
       patch.hours_worked = meterHoursWorked(h, shift.end_hour_meter);
     }
   }
   if (side === "closing" && h != null) {
     patch.end_hour_meter = h;
-    assertReasonableMeterHours(shift.start_hour_meter, h);
+    assertReasonableMeterHours(shift.start_hour_meter, h, { startedAt: shift.started_at });
     patch.hours_worked = meterHoursWorked(shift.start_hour_meter, h);
   }
   await saveLocal("shifts", patch);
@@ -1253,7 +1257,7 @@ export async function editShiftBeforeSign(actor, shift, {
     throw new Error("Enter a valid closing meter");
   }
   const metersChanged = !sameMeter(startMeter, shift.start_hour_meter) || !sameMeter(endMeter, shift.end_hour_meter);
-  if (metersChanged && endMeter != null) assertReasonableMeterHours(startMeter, endMeter);
+  if (metersChanged && endMeter != null) assertReasonableMeterHours(startMeter, endMeter, { startedAt: shift.started_at });
 
   let updated = {
     ...shift,
@@ -1496,7 +1500,9 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
           }
         : action === "machine_sign"
           ? {
-              shift_status: SHIFT.MACHINE_SIGNED,
+              shift_status: SHIFT.VERIFIED,
+              verified_at: now,
+              verified_by: supervisor.id,
               verification_token: null,
               updated_at: now,
             }
@@ -1520,6 +1526,9 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
 
     if (action === "machine_sign") {
       const { error: signErr } = await supabase.from("shifts").update({
+        shift_status: SHIFT.VERIFIED,
+        verified_at: now,
+        verified_by: supervisor.id,
         machine_signature_ref: signatureRef,
         machine_signature_name: supervisor.name,
         machine_signed_at: now,
@@ -1538,7 +1547,9 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
   const updated = action === "machine_sign"
     ? {
         ...shift,
-        shift_status: SHIFT.MACHINE_SIGNED,
+        shift_status: SHIFT.VERIFIED,
+        verified_at: now,
+        verified_by: supervisor.id,
         machine_signature_ref: signatureRef || shift.machine_signature_ref,
         machine_signature_name: supervisor.name,
         machine_signed_at: now,
@@ -1576,7 +1587,9 @@ async function verifyShiftOnce(shift, supervisor, { action, reason, signatureDat
     } else if (action === "machine_sign") {
       await saveLocal("shift_submissions", {
         ...submission,
-        status: SHIFT.MACHINE_SIGNED,
+        status: SHIFT.VERIFIED,
+        verified_at: now,
+        verified_by: supervisor.id,
         updated_at: now,
       });
     } else {
@@ -1645,7 +1658,7 @@ export async function resubmitShiftAfterCorrection(user, machine, site, shift, {
   if (!photoRef) throw new Error("Closing hour meter photo is required");
   const startMeter = startHour != null && startHour !== "" ? Number(startHour) : Number(shift.start_hour_meter);
   const h = Number(endHour);
-  const hoursWorked = assertReasonableMeterHours(startMeter, h);
+  const hoursWorked = assertReasonableMeterHours(startMeter, h, { startedAt: shift.started_at });
 
   const now = nowISO();
   const events = await readTable("events");

@@ -14,8 +14,7 @@ import { tonnesPerBucket } from "../lib/siteConfig.js";
 
 export function reportBucket(shift) {
   const st = getShiftStatus(shift);
-  if (st === SHIFT.VERIFIED) return "signed";
-  if (st === SHIFT.MACHINE_SIGNED) return "with_site";
+  if (st === SHIFT.VERIFIED || st === SHIFT.MACHINE_SIGNED) return "signed";
   if (st === SHIFT.CORRECTION_REQUIRED) return "sent_back";
   if (st === SHIFT.RUNNING) return "not_sent";
   return "pending";

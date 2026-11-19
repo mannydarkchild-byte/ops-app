@@ -223,7 +223,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const signedReports = useMemo(() => (
     dedupeShifts(shifts
       .filter((s) => (
-        getShiftStatus(s) === SHIFT.VERIFIED &&
+        (getShiftStatus(s) === SHIFT.VERIFIED || getShiftStatus(s) === SHIFT.MACHINE_SIGNED) &&
         s.site_id === user?.site_id &&
         (s.supervisor_signature_ref || s.supervisor_signature_name || s.machine_signature_ref || s.machine_signature_name || s.verified_at)
       ))
@@ -289,7 +289,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
         const count = reportMachineCounts[machine.id] || {};
         const line = [
           count.waiting ? `${count.waiting} waiting` : "",
-          count.send ? `${count.send} to send` : "",
+          count.send ? `${count.send} Berlington not signed` : "",
         ].filter(Boolean).join(" · ");
         return line ? { machineId: machine.id, name: machine.name, line } : null;
       })
@@ -298,12 +298,12 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   );
 
   const hubCounts = useMemo(() => {
-    const waiting = pendingShifts.length + awaitingSiteShifts.length;
+    const waiting = pendingShifts.length;
     const hours = summarizeTimesheet(timesheetRows).hours;
     return {
       daily: {
         badge: waiting ? `${waiting} need you` : "",
-        sub: "Sign, send, and filed copies",
+        sub: "Sign and filed copies",
       },
       operations: { sub: "Weekly and monthly by machine" },
       timesheet: { sub: `${hours.toFixed(1)}h on site` },
@@ -312,7 +312,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
         sub: "Daily tonnes and trucks",
       },
     };
-  }, [pendingShifts.length, awaitingSiteShifts.length, timesheetRows, dispatchWaiting]);
+  }, [pendingShifts.length, timesheetRows, dispatchWaiting]);
 
   const billingPeriod = useMemo(
     () => getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day),
@@ -580,13 +580,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
       }
       const signed = await wf.verifyShift(verifyTarget, user, { action: "machine_sign", reason: null, signatureDataUrl: signature });
       await syncNow();
-      const locked = signed || { ...verifyTarget, shift_status: SHIFT.MACHINE_SIGNED };
+      const locked = signed || { ...verifyTarget, shift_status: SHIFT.VERIFIED };
       setVerifyTarget(null);
       setSignature(null);
       setLinkedShift(null);
       setLinkedDoc(null);
       onVerifyConsumed?.();
-      await sendToBerlington(locked);
+      setJustSigned(locked);
       await refreshLocal();
     } catch (e) {
       showAlert("Failed", e.message, "error");
@@ -639,9 +639,9 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
   const tabItems = useMemo(() => TABS.map((t) => ({
     ...t,
     badge: t.id === "reports"
-      ? myPendingVerify + dispatchWaiting + awaitingSiteShifts.length
+      ? myPendingVerify + dispatchWaiting
       : t.id === "issues" ? openSiteIssues.length : 0,
-  })), [myPendingVerify, dispatchWaiting, awaitingSiteShifts.length, openSiteIssues.length]);
+  })), [myPendingVerify, dispatchWaiting, openSiteIssues.length]);
 
   const viewTab = tab === "live" || tab === "today" ? "home" : tab === "verify" || tab === "dispatch" ? "reports" : tab;
   const headerContext = activeSite?.name || "Site";
@@ -980,11 +980,13 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
           loading={linkedLoading}
           error={linkedError}
           mode={
-            !linkedShift?.id || getShiftStatus(linkedShift) === SHIFT.VERIFIED
+            !linkedShift?.id
               ? "filed"
-              : needsBerlingtonSign(linkedShift)
-                ? "send"
-                : "sign"
+              : [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(getShiftStatus(linkedShift))
+                ? "sign"
+                : needsBerlingtonSign(linkedShift)
+                  ? "send"
+                  : "filed"
           }
           signature={signature}
           onSignature={setSignature}
@@ -1061,7 +1063,7 @@ export function SupervisorApp({ verifyShiftId = null, verifyToken = null, onVeri
       )}
 
       {justSigned && (
-        <Modal title={`Send to ${berlingtonName}`} color="green" onClose={() => setJustSigned(null)}>
+        <Modal title={`${berlingtonName} signature`} color="green" onClose={() => setJustSigned(null)}>
           <SiteSignShareCard
             shift={shifts.find((s) => s.id === justSigned.id) || justSigned}
             machineName={machineName(justSigned.machine_id)}
@@ -1133,7 +1135,7 @@ function reportStatus(shift, ownerName) {
   if ([SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(status)) {
     return { label: "Waiting for you", tone: "text-[#F5C518]" };
   }
-  if (needsBerlingtonSign(shift)) return { label: `Send to ${ownerName}`, tone: "text-[#25D366]" };
+  if (needsBerlingtonSign(shift)) return { label: `${ownerName} not signed`, tone: "text-[#F2F0EA]/60" };
   if (status === SHIFT.VERIFIED || status === SHIFT.MACHINE_SIGNED) return { label: "Signed", tone: "text-[#22C55E]" };
   return { label: "Report", tone: "text-ops-muted" };
 }
@@ -1195,7 +1197,7 @@ function DailyReportsByDate({
                   const open = openShiftId === row.id;
                   const status = reportStatus(row, berlingtonName);
                   const waiting = status.label === "Waiting for you";
-                  const sending = status.label.startsWith("Send to");
+                  const sending = status.label.endsWith("not signed");
                   return (
                     <div key={row.id} className="border-b border-ops-border last:border-b-0">
                       <button
@@ -1259,7 +1261,7 @@ function SiteSignShareCard({ shift, machineName, ownerName = "Berlington", onDis
   return (
     <div className={compact ? "bg-[#141414] border border-[#25D366]/40 rounded-xl p-4" : ""}>
       <p className="font-ui text-sm font-semibold text-[#25D366] mb-1">
-        {compact ? `Signed by you` : `WhatsApp this report to ${ownerName}`}
+        {compact ? `Saved by you` : `Shift saved. WhatsApp ${ownerName} if you want their signature`}
       </p>
       <p className="text-base text-[#F2F0EA]">
         {machineName} · {shift?.operator_name || "Operator"} · {Number(shift?.hours_worked || 0).toFixed(1)}h

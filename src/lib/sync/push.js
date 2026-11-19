@@ -69,9 +69,16 @@ export async function pushOneQueueItem(item) {
   resolved = stripUnresolvedMediaRefs(resolved);
   resolved = normalizeForSupabasePush(resolved, item.table);
 
-  if (item.table === "shift_submissions" && !resolved.site_id && resolved.shift_id) {
-    const shift = await db.shifts.get(resolved.shift_id);
-    if (shift?.site_id) resolved.site_id = shift.site_id;
+  if (item.table === "shift_submissions") {
+    const { data: { session } } = await supabase.auth.getSession();
+    const profile = session?.user?.id ? await db.profiles.get(session.user.id) : null;
+    if (profile?.site_id) resolved.site_id = profile.site_id;
+    else if (!resolved.site_id && resolved.shift_id) {
+      const shift = await db.shifts.get(resolved.shift_id);
+      if (shift?.site_id) resolved.site_id = shift.site_id;
+    }
+    if (session?.user?.id) resolved.operator_id = session.user.id;
+    if (profile?.organization_id) resolved.organization_id = profile.organization_id;
   }
   if ((item.table === "breakdowns" || item.table === "maintenance_jobs") && !resolved.site_id) {
     const { data: { session } } = await supabase.auth.getSession();

@@ -127,7 +127,7 @@ export function OperatorApp() {
   const machineHourMeter = useMemo(() => {
     if (!workMachine) return 0;
     const verified = shifts.filter((s) =>
-      s.machine_id === workMachine.id && getShiftStatus(s) === SHIFT.VERIFIED && s.end_hour_meter != null
+      s.machine_id === workMachine.id && (getShiftStatus(s) === SHIFT.VERIFIED || getShiftStatus(s) === SHIFT.MACHINE_SIGNED) && s.end_hour_meter != null
     );
     if (!verified.length) return Number(workMachine.start_hour_meter || 0);
     const latest = verified.reduce((a, b) => new Date(b.ended_at || 0) > new Date(a.ended_at || 0) ? b : a);

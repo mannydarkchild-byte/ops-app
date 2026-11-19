@@ -141,7 +141,7 @@ export function OpsProvider({ children }) {
   );
 
   const hourMeter = useMemo(() => {
-    const verified = shifts.filter((s) => s.machine_id === activeMachine?.id && s.shift_status === SHIFT.VERIFIED && s.end_hour_meter != null);
+    const verified = shifts.filter((s) => s.machine_id === activeMachine?.id && (s.shift_status === SHIFT.VERIFIED || s.shift_status === SHIFT.MACHINE_SIGNED) && s.end_hour_meter != null);
     if (verified.length) {
       const latest = verified.reduce((a, b) => new Date(b.ended_at || 0) > new Date(a.ended_at || 0) ? b : a);
       return Number(latest.end_hour_meter);

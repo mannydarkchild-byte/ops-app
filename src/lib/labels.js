@@ -10,6 +10,7 @@ export function shiftStatusLabel(shift) {
     case SHIFT.CORRECTION_REQUIRED: return "Operator fixing";
     case SHIFT.RESUBMITTED: return "Fixed — check again";
     case SHIFT.VERIFIED: return "Signed off";
+    case SHIFT.MACHINE_SIGNED: return "Signed off";
     default: return status?.replace(/_/g, " ") || "Unknown";
   }
 }
@@ -106,7 +107,7 @@ export function parseSyncError(raw) {
   if (/shift_submissions|row-level security/i.test(s) && /shift_submission|submission/i.test(s)) {
     return {
       title: "Shift sign-off record blocked",
-      body: "Server permissions blocked the submission row. Run migration 014 in Supabase, and confirm your profile has the correct site.",
+      body: "The sign-off row did not match this profile’s site. Tap Update again. If it still fails, the office must set your site and run migration 014 in Supabase.",
       technical: s,
     };
   }

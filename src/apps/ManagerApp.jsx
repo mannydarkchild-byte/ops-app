@@ -76,6 +76,23 @@ function CycleSelect({ value, cycles, onChange, allLabel }) {
   );
 }
 
+function listCalendarMonths(count = 24) {
+  const months = [];
+  const now = new Date();
+  for (let i = 0; i < count; i += 1) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+    months.push({
+      id: `month-${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+      label: start.toLocaleDateString("en-ZA", { month: "long", year: "numeric" }),
+      start,
+      end,
+    });
+  }
+  return months;
+}
+
 function listBillingCycles(cycleStartDay, count = 24) {
   const cycles = [];
   let cursor = new Date();
@@ -120,6 +137,7 @@ export function ManagerApp() {
   const [showStopOwners, setShowStopOwners] = useState(false);
   const [showBucketSize, setShowBucketSize] = useState(false);
   const [focusMachineId, setFocusMachineId] = useState("");
+  const [machineHourFilter, setMachineHourFilter] = useState("cycle");
   const showAlert = (title, message, type = "info") =>
     setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
@@ -148,6 +166,11 @@ export function ManagerApp() {
     () => getBillingPeriod(new Date(), siteConfig.billing_cycle_start_day),
     [siteConfig.billing_cycle_start_day]
   );
+  const calendarMonths = useMemo(() => listCalendarMonths(24), []);
+  const machineHourPeriod = useMemo(() => {
+    if (machineHourFilter === "cycle") return billingPeriod;
+    return calendarMonths.find((month) => month.id === machineHourFilter) || billingPeriod;
+  }, [machineHourFilter, calendarMonths, billingPeriod]);
 
   const expenseCycles = useMemo(
     () => listBillingCycles(siteConfig.billing_cycle_start_day, 24),
@@ -188,6 +211,12 @@ export function ManagerApp() {
     () => shiftsStartedInPeriod(warriorShifts, billingPeriod),
     [warriorShifts, billingPeriod]
   );
+  const machineHourShifts = useMemo(
+    () => shiftsStartedInPeriod(warriorShifts, machineHourPeriod),
+    [warriorShifts, machineHourPeriod]
+  );
+  const trackedMachineHours = sumMeterHours(machineHourShifts);
+  const trackedMeterCount = machineHourShifts.filter((shift) => shift.end_hour_meter != null && shift.start_hour_meter != null).length;
 
   const cycleStats = useMemo(() => {
     const machineHours = sumMeterHours(cycleShifts);
@@ -330,7 +359,7 @@ export function ManagerApp() {
       .filter(
         (s) =>
           onSiteRecord(s, user?.site_id, machines) &&
-          s.shift_status === SHIFT.VERIFIED &&
+          (s.shift_status === SHIFT.VERIFIED || s.shift_status === SHIFT.MACHINE_SIGNED) &&
           (s.supervisor_signature_ref || s.supervisor_signature_name || s.verified_at)
       )
       .filter((s) => !signedPeriod || inPeriod(s.verified_at || s.ended_at, signedPeriod))
@@ -438,8 +467,7 @@ export function ManagerApp() {
     partsRequests.length > 0 ||
     criticalWarriorIssues.length > 0 ||
     fleets.some((fleet) => fleet.isStopped) ||
-    pendingVerify > 0 ||
-    awaitingSiteCount > 0;
+    pendingVerify > 0;
 
   const tabItems = useMemo(
     () => TABS.map((t) => ({
@@ -504,11 +532,6 @@ export function ManagerApp() {
                 {pendingVerify} shift{pendingVerify !== 1 ? "s" : ""} awaiting machine sign-off
               </span>
             )}
-            {awaitingSiteCount > 0 && (
-              <span className="font-ui text-xs text-[#00A4A6]">
-                {awaitingSiteCount} shift{awaitingSiteCount !== 1 ? "s" : ""} awaiting site sign-off — with Berlington
-              </span>
-            )}
           </div>
         )}
 
@@ -539,9 +562,42 @@ export function ManagerApp() {
         {tab === "today" && (
           <div className="space-y-4">
             <p className="font-body text-xs text-[#F2F0EA]/50">{scopeName} · {billingPeriod.label} · {currentShift.label}</p>
+            {awaitingSiteCount > 0 && (
+              <p className="font-body text-xs text-[#F2F0EA]/50">
+                {awaitingSiteCount} saved {awaitingSiteCount === 1 ? "shift" : "shifts"} still without a Berlington signature
+              </p>
+            )}
+            <label className="block">
+              <span className="ops-field-label">Machine hours</span>
+              <select
+                value={machineHourFilter}
+                onChange={(event) => setMachineHourFilter(event.target.value)}
+                className="w-full mt-1 bg-[#0A0A0A] border border-[#2A2A2A] p-3 rounded-2xl text-[#F2F0EA]"
+              >
+                <option value="cycle">This cycle</option>
+                {calendarMonths.map((month) => (
+                  <option key={month.id} value={month.id}>{month.label}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setKpiDetail({
+                ...machineHourDetail(
+                  machineHourShifts,
+                  (id) => machines.find((machine) => machine.id === id)?.name || "Machine"
+                ),
+                scope: `${scopeName} · ${machineHourPeriod.label}`,
+              })}
+              className="w-full text-left bg-[#141414] border border-[#2A2A2A] rounded-2xl px-4 py-3"
+            >
+              <span className="block font-ui text-2xl font-semibold text-[#22C55E]">{trackedMachineHours.toFixed(1)}h</span>
+              <span className="block font-body text-xs text-[#F2F0EA]/50 mt-1">
+                {machineHourPeriod.label} · {trackedMeterCount} with a closing meter. Open for each shift.
+              </span>
+            </button>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <DashboardKpi label={HOUR_LABELS.billable} value={`${cycleStats.billableHours.toFixed(1)}h`} sub={`${cycleStats.shiftCount} shifts started · 8h minus Darkchild downtime`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.billable)} />
-              <DashboardKpi label={HOUR_LABELS.machine} value={`${cycleStats.machineHours.toFixed(1)}h`} sub={`${scopeName} · ${cycleStats.meterShiftCount} with a closing meter`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.machine)} />
               <DashboardKpi label={HOUR_LABELS.revenue} value={money(cycleStats.revenue)} sub={focusMachineId ? `${money(primaryMachine?.billable_rate)}/h on ${scopeName}` : `${scopeName} · each machine uses its own rate`} color="#22C55E" onClick={() => setKpiDetail(cycleStats.details.revenue)} />
               <DashboardKpi label={HOUR_LABELS.expenses} value={money(cycleStats.expenseTotal)} sub={`${scopeName} · this cycle`} color="#F5C518" onClick={() => setKpiDetail(cycleStats.details.expenses)} />
               <DashboardKpi label={HOUR_LABELS.downtime} value={formatDurationMinutes(cycleStats.downtimeMin)} sub="Stopped time on shifts this cycle" color="#EF4444" onClick={() => setKpiDetail(cycleStats.details.downtime)} />

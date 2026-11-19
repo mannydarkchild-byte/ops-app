@@ -28,9 +28,8 @@ export function currentShiftWindow(now = new Date()) {
 
 /**
  * Dual sign-off agreement for one shift.
- * Operator submits -> machine supervisor signs (MACHINE_SIGNED, version locked)
- * -> site supervisor signs via link (VERIFIED = dual-signed, billable).
- * Legacy single-signed VERIFIED shifts (no site signature) stay honest: flagged legacy.
+ * Operator submits -> Darkchild signs and the shift is saved.
+ * Berlington can sign later. A missing Berlington signature does not hold the shift.
  */
 export function getShiftAgreement(shift) {
   const status = shift?.shift_status || shift?.status || null;
@@ -64,9 +63,8 @@ export function getShiftAgreement(shift) {
 
 export function agreementLabel(shift) {
   const a = getShiftAgreement(shift);
-  if (a.dualSigned) return "Signed by both";
-  if (a.legacySingleSigned) return "Needs Berlington sign";
-  if (a.awaitingSite) return "Needs Berlington sign";
+  if (a.dualSigned) return "Darkchild and Berlington signed";
+  if (a.legacySingleSigned || a.awaitingSite) return "Saved · Berlington not signed";
   if (a.awaitingMachine) return "Needs your sign";
   if (a.status === SHIFT.CORRECTION_REQUIRED) return "Sent back for correction";
   if (a.status === SHIFT.RUNNING) return "Running";
