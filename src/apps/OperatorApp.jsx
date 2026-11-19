@@ -261,10 +261,9 @@ export function OperatorApp() {
   }, [workSession, siteSupervisors, suggestedSupervisor]);
 
   useEffect(() => {
-    if (!workSession && suggestedSupervisor?.id && !clockInSupervisorId) {
-      setClockInSupervisorId(suggestedSupervisor.id);
-    }
-  }, [workSession, suggestedSupervisor?.id, clockInSupervisorId]);
+    if (workSession || clockInSupervisorId || siteSupervisors.length !== 1) return;
+    setClockInSupervisorId(siteSupervisors[0].id);
+  }, [workSession, clockInSupervisorId, siteSupervisors]);
 
   const blockedByOther = machineRunForWork
     && machineRunForWork.operator_id
@@ -305,10 +304,10 @@ export function OperatorApp() {
     const sup = siteSupervisors.find((s) => s.id === clockInSupervisorId) || null;
     if (!sup) {
       showAlert(
-        siteSupervisors.length ? "Select a supervisor" : "No supervisor on this site",
+        siteSupervisors.length ? "Choose who signs" : "No one to sign",
         siteSupervisors.length
-          ? "Choose who will sign off this shift."
-          : "An admin must add a supervisor on this site. Then tap Update so the name appears here.",
+          ? "Choose the manager or the supervisor who will sign this shift."
+          : "An admin must add the manager or supervisor on this site. Then tap Update so the names appear here.",
         "warning"
       );
       return;
@@ -775,7 +774,7 @@ export function OperatorApp() {
               value={clockInSupervisorId}
               onChange={setClockInSupervisorId}
               suggestedId={suggestedSupervisor?.id}
-              label="Supervisor"
+              label="Who signs this shift"
             />
             <Button type="button" variant="primary" size="lg" className="w-full min-h-14 text-lg mt-4" onClick={handleClockIn} disabled={!!actionBusy || !clockInSupervisorId}>
               <IconClock /> {actionBusy === "clockin" ? "Clocking in…" : "Clock in"}

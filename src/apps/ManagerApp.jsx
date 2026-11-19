@@ -35,6 +35,7 @@ import { updateSiteSettings } from "../services/admin.js";
 import { BucketSizeEditor } from "../components/BucketSizeEditor.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
 import { Button } from "../components/ui/Button.jsx";
+import { ShiftSignSheet, WaitingShiftDays } from "../components/ShiftSignSheet.jsx";
 
 const TABS = [
   { id: "today", label: "Today" },
@@ -137,6 +138,7 @@ export function ManagerApp() {
   const [showStopOwners, setShowStopOwners] = useState(false);
   const [showBucketSize, setShowBucketSize] = useState(false);
   const [focusMachineId, setFocusMachineId] = useState("");
+  const [signShift, setSignShift] = useState(null);
   const [machineHourFilter, setMachineHourFilter] = useState("cycle");
   const showAlert = (title, message, type = "info") =>
     setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
@@ -354,6 +356,14 @@ export function ManagerApp() {
 
   const currentShift = useMemo(() => currentShiftWindow(), []);
 
+  const waitingShifts = useMemo(
+    () => dedupeShifts(shifts.filter((shift) =>
+      onSiteRecord(shift, user?.site_id, machines)
+      && [SHIFT.WAITING_FOR_VERIFICATION, SHIFT.RESUBMITTED, SHIFT.SUBMITTED].includes(shift.shift_status)
+    )).sort((a, b) => new Date(b.ended_at || b.started_at || 0) - new Date(a.ended_at || a.started_at || 0)),
+    [shifts, machines, user?.site_id]
+  );
+
   const signedReports = useMemo(
     () => dedupeShifts(shifts
       .filter(
@@ -370,22 +380,28 @@ export function ManagerApp() {
 
   const reportMachineCounts = useMemo(() => {
     const counts = {};
-    for (const machine of siteMachines) counts[machine.id] = { signed: 0 };
+    for (const machine of siteMachines) counts[machine.id] = { signed: 0, waiting: 0 };
+    for (const shift of waitingShifts) {
+      if (counts[shift.machine_id]) counts[shift.machine_id].waiting += 1;
+    }
     for (const shift of signedReports) {
       if (!reportMachineId && counts[shift.machine_id]) counts[shift.machine_id].signed += 1;
     }
     return counts;
-  }, [siteMachines, signedReports, reportMachineId]);
+  }, [siteMachines, signedReports, reportMachineId, waitingShifts]);
 
   const hubCounts = useMemo(() => {
     const hours = summarizeTimesheet(timesheetRows).hours;
     return {
-      daily: { sub: `${signedReports.length} signed this period` },
+      daily: {
+        badge: waitingShifts.length ? `${waitingShifts.length} to sign` : "",
+        sub: `${signedReports.length} signed this period`,
+      },
       operations: { sub: "Weekly and monthly by machine" },
       timesheet: { sub: `${hours.toFixed(1)}h on site` },
       dispatch: { sub: "Daily tonnes and trucks" },
     };
-  }, [signedReports.length, timesheetRows]);
+  }, [signedReports.length, timesheetRows, waitingShifts.length]);
 
   const siteExpenses = useMemo(
     () => expenses.filter((e) => !e.site_id || onSiteRecord(e, user?.site_id, machines)),
@@ -528,9 +544,13 @@ export function ManagerApp() {
               </button>
             )}
             {pendingVerify > 0 && (
-              <span className="font-ui text-xs text-[#F2F0EA]/50">
-                {pendingVerify} shift{pendingVerify !== 1 ? "s" : ""} awaiting machine sign-off
-              </span>
+              <button
+                type="button"
+                onClick={() => { setTab("reports"); setReportKind("daily"); setReportMachineId(siteMachines.length === 1 ? siteMachines[0].id : null); }}
+                className="btn-link font-ui text-xs text-[#F5C518] hover:underline"
+              >
+                {pendingVerify} shift{pendingVerify !== 1 ? "s" : ""} to sign
+              </button>
             )}
           </div>
         )}
@@ -735,6 +755,11 @@ export function ManagerApp() {
             {reportKind === "daily" && (
               <div className="space-y-3">
                 <CycleSelect value={signedFilter} cycles={expenseCycles} onChange={setSignedFilter} allLabel="All reports" />
+                <WaitingShiftDays
+                  shifts={reportMachineId ? waitingShifts.filter((shift) => shift.machine_id === reportMachineId) : waitingShifts}
+                  machineName={(id) => siteMachines.find((machine) => machine.id === id)?.name || "Machine"}
+                  onOpen={setSignShift}
+                />
                 <SupervisorReports
                   machines={siteMachines}
                   machineId={reportMachineId || ""}
@@ -904,6 +929,26 @@ export function ManagerApp() {
             showAlert={showAlert}
           />
         </Modal>
+      )}
+      {signShift && (
+        <ShiftSignSheet
+          shift={signShift}
+          user={user}
+          machines={siteMachines}
+          reportContext={reportContext}
+          onClose={() => setSignShift(null)}
+          onDone={async (saved) => {
+            setSignShift(null);
+            await refreshLocal();
+            if (navigator.onLine) await syncNow();
+            const sentBack = saved?.shift_status === SHIFT.CORRECTION_REQUIRED;
+            showAlert(
+              sentBack ? "Sent back" : "Saved",
+              sentBack ? "The operator can fix the report." : "Your signature is on this report.",
+              "success"
+            );
+          }}
+        />
       )}
       <KpiDetailModal detail={kpiDetail} onClose={() => setKpiDetail(null)} />
     </AppPage>

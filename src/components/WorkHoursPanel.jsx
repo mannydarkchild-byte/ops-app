@@ -3,7 +3,7 @@ import { useOps } from "../context/OpsContext.jsx";
 import { AlertModal } from "./ui/Modal.jsx";
 import { ReportPreviewModal } from "./ReportPreviewModal.jsx";
 import { SupervisorPicker } from "./SupervisorPicker.jsx";
-import { getBillingPeriod, getDatePresets, getSiteSupervisors, hoursBetween, inPeriod, localDayKey, suggestSupervisor } from "../lib/utils.js";
+import { getBillingPeriod, getDatePresets, getSiteSupervisors, hoursBetween, inPeriod, localDayKey } from "../lib/utils.js";
 import { buildTimesheetRows, summarizeTimesheet } from "../lib/timesheet.js";
 import { printTimesheetReport } from "../services/reports.js";
 import * as wf from "../services/workflows.js";
@@ -46,7 +46,7 @@ export function WorkHoursPanel({ variant = "full" }) {
   const site = activeSite?.id ? activeSite : { id: siteId, name: activeSite?.name || "Site" };
   const cycleStart = getSettingsForSite(siteId).billing_cycle_start_day;
   const supervisors = useMemo(() => getSiteSupervisors(profiles, siteId), [profiles, siteId]);
-  const suggested = useMemo(() => suggestSupervisor(supervisors, new Date()), [supervisors]);
+  const onlySignerId = supervisors.length === 1 ? supervisors[0].id : "";
   const showAlert = (title, message, type = "info") => setAlert({ isOpen: true, title, message, type, onConfirm: () => setAlert({ isOpen: false }) });
 
   const period = useMemo(() => periodFor(filter, cycleStart), [filter, cycleStart]);
@@ -59,7 +59,7 @@ export function WorkHoursPanel({ variant = "full" }) {
   const summary = useMemo(() => summarizeTimesheet(mine), [mine]);
 
   const clockIn = async () => {
-    const id = supervisorId || suggested?.id;
+    const id = supervisorId || onlySignerId;
     const supervisor = supervisors.find((person) => person.id === id);
     setBusy(true);
     try {
@@ -116,12 +116,11 @@ export function WorkHoursPanel({ variant = "full" }) {
           <p className="font-body text-sm text-[#F2F0EA]/70">Clock in when you arrive and clock out when you leave. This is your time at work.</p>
           <SupervisorPicker
             supervisors={supervisors}
-            value={supervisorId || suggested?.id || ""}
+            value={supervisorId || onlySignerId}
             onChange={setSupervisorId}
-            suggestedId={suggested?.id || null}
-            label="Supervisor on duty"
+            label="Who signs this shift"
           />
-          <button type="button" disabled={busy || !(supervisorId || suggested?.id)} onClick={clockIn} className="w-full py-3 rounded-full bg-[#22C55E] text-black font-logo disabled:opacity-40">
+          <button type="button" disabled={busy || !(supervisorId || onlySignerId)} onClick={clockIn} className="w-full py-3 rounded-full bg-[#22C55E] text-black font-logo disabled:opacity-40">
             {busy ? "Clocking in…" : "Clock in"}
           </button>
         </>

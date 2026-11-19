@@ -2,13 +2,11 @@ import { Button } from "./ui/Button.jsx";
 import { FieldSelect } from "./ui/FieldSelect.jsx";
 import { buildSupervisorVerifyWhatsApp, openWhatsApp } from "../lib/whatsapp.js";
 
-const BAND_LABEL = { day: "Day shift", night: "Night shift", any: "All shifts" };
+const ROLE_LABEL = { manager: "Manager", supervisor: "Supervisor" };
 
-function optionText(sup, suggestedId) {
-  const band = BAND_LABEL[sup.shift_band] || "";
-  const suggested = sup.id === suggestedId ? "suggested" : "";
-  const extra = [band, suggested].filter(Boolean).join(" · ");
-  return extra ? `${sup.name} — ${extra}` : sup.name;
+function optionText(sup) {
+  const role = ROLE_LABEL[String(sup.role || "").toLowerCase()] || "";
+  return role ? `${sup.name} — ${role}` : sup.name;
 }
 
 /** Visible dropdown — pick the supervisor who will sign this shift. */
@@ -16,15 +14,14 @@ export function SupervisorPicker({
   supervisors,
   value,
   onChange,
-  suggestedId = null,
-  label = "Supervisor",
+  label = "Who signs this shift",
   title,
 }) {
   const fieldLabel = label || title || "Supervisor";
   if (!supervisors.length) {
     return (
       <p className="font-body text-sm text-ops-text py-2">
-        No supervisor is saved on this phone for this site. An admin adds one with Add user, role Supervisor, on the same site. Then tap Update while this phone has signal.
+        No one is saved on this phone who can sign. An admin adds the supervisor and the manager on this site, then tap Update while this phone has signal.
       </p>
     );
   }
@@ -38,17 +35,17 @@ export function SupervisorPicker({
       <FieldSelect
         value={value}
         onChange={onChange}
-        placeholder="Select supervisor…"
+        placeholder="Choose who signs…"
       >
         {supervisors.map((sup) => (
           <option key={sup.id} value={sup.id}>
-            {optionText(sup, suggestedId)}
+            {optionText(sup)}
           </option>
         ))}
       </FieldSelect>
       {selected && !hasPhone && (
         <p className="font-body text-sm text-ops-red mt-2">
-          No WhatsApp number — admin must add a phone.
+          No WhatsApp number on this profile. They can still sign the report in the app.
         </p>
       )}
     </label>

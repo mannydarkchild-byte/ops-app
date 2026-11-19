@@ -136,16 +136,19 @@ export function onSiteRecord(row, siteId, machines = []) {
   return !!machine && (!machine.site_id || machine.site_id === siteId);
 }
 
-function isSupervisorRole(role) {
-  return String(role || "").toLowerCase() === ROLES.SUPERVISOR;
+function canSignOperatorShift(role) {
+  const value = String(role || "").toLowerCase();
+  return value === ROLES.SUPERVISOR || value === ROLES.MANAGER;
 }
 
-/** Supervisors the operator can pick — same site first, then any supervisor already on this phone. */
+/** Supervisors and managers the operator can choose to sign the shift. Same site first. */
 export function getSiteSupervisors(profiles, siteId) {
-  const all = (profiles || []).filter((p) => isSupervisorRole(p.role) && p.active !== false);
-  if (!siteId) return all;
-  const onSite = all.filter((p) => !p.site_id || p.site_id === siteId);
-  return onSite.length ? onSite : all;
+  const all = (profiles || []).filter((p) => canSignOperatorShift(p.role) && p.active !== false);
+  const list = !siteId ? all : (() => {
+    const onSite = all.filter((p) => !p.site_id || p.site_id === siteId);
+    return onSite.length ? onSite : all;
+  })();
+  return [...list].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
 /** Suggest day (06–18) or night supervisor from shift_band on profile */
